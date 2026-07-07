@@ -123,6 +123,10 @@ pub const Engine = struct {
         return self.mixer.startTestVoice(desc, &self.telemetry);
     }
 
+    pub fn startSampleVoice(self: *Engine, desc: mixer.SampleVoiceDesc) BuguError!void {
+        return self.mixer.startSampleVoice(desc, &self.telemetry);
+    }
+
     pub fn stopAllVoices(self: *Engine, release_frames: u32) void {
         self.mixer.stopAll(release_frames);
     }

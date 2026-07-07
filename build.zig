@@ -42,6 +42,21 @@ pub fn build(b: *std.Build) void {
     }
     const tone_step = b.step("tone", "Run the P0 backend tone demo");
     tone_step.dependOn(&run_tone.step);
+
+    const asset_exe = b.addExecutable(.{
+        .name = "bugu-asset-demo",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/asset_demo.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    asset_exe.root_module.addImport("bugu_audio", bugu_audio);
+    b.installArtifact(asset_exe);
+
+    const run_asset = b.addRunArtifact(asset_exe);
+    const asset_step = b.step("asset-demo", "Run the WAV import and bank playback demo");
+    asset_step.dependOn(&run_asset.step);
 }
 
 fn addMiniaudio(module: *std.Build.Module, target: std.Target) void {

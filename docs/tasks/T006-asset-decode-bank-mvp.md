@@ -1,6 +1,6 @@
 # T006 Asset import、Decode、Bank MVP
 
-状态：TODO  
+状态：DONE  
 类型：Implementation  
 优先级：P0/P1  
 依赖：T001，T003，T005  
@@ -59,6 +59,55 @@ P1 设计但可不实现：
 - 不能让运行时直接读取源 wav 来绕过 Bank/manifest。
 - 不能把空 blob 或固定 sine 当作导入资产。
 
-## 7. Activity Log
+## 7. Deliverables
+
+- `src/assets/bank.zig`：P0 WAV/PCM importer, TOML-style manifest writer/parser, raw float32 mono blob writer/loader, `Bank`/`SoundEntry` runtime structures, preload-only bank unload via `Bank.deinit`.
+- `src/mixer/mixer.zig` and `src/core/engine.zig`：sample-backed voices via `SampleVoiceDesc`, so loaded bank entries can render through the existing mixer path.
+- `examples/asset_demo.zig`：generates three real WAV files, imports them into `bugu-bank.toml` + `bugu-bank.blob`, loads the bank, starts sample voices, and offline-renders `bugu-bank-render.wav`.
+- `build.zig`: adds `zig build asset-demo`.
+
+## 8. Evidence
+
+- Build/test command:
+  - `zig build test`
+  - Result: passed.
+- Asset demo command:
+  - `zig build asset-demo`
+  - Generated real input WAV files:
+    - `bugu-asset-a.wav`: `24044` bytes, mono, 48 kHz, 12000 frames.
+    - `bugu-asset-b.wav`: `48044` bytes, stereo, 48 kHz, 12000 frames.
+    - `bugu-asset-c.wav`: `24044` bytes, mono, 48 kHz, 12000 frames.
+  - Generated bank files:
+    - `bugu-bank.toml`: `424` bytes.
+    - `bugu-bank.blob`: `144000` bytes, float32 mono samples.
+  - Generated playback output:
+    - `bugu-bank-render.wav`: `38444` bytes, real offline render through Bank -> sample voice -> Mixer -> OfflineBackend.
+- Asset demo output:
+  - `asset demo imported=3 total_frames=36000 blob_bytes=144000 import_peak=0.249969`
+  - `sound id=tone_a_mono rate=48000 source_channels=1 frames=12000 offset=0 peak=0.249969 rms=0.176758`
+  - `sound id=tone_b_stereo rate=48000 source_channels=2 frames=12000 offset=48000 peak=0.249969 rms=0.176757`
+  - `sound id=tone_c_mono rate=48000 source_channels=1 frames=12000 offset=96000 peak=0.249969 rms=0.176758`
+  - `render callbacks=38 frames=9728 active=3 peak=0.128414 rms=0.069680 stolen=0 clipping=0`
+- Manifest excerpt:
+  - `[[sounds]] id = "tone_a_mono" sample_rate = 48000 source_channels = 1 frames = 12000 offset_bytes = 0 peak = 0.24996948 rms = 0.17675766`
+  - `[[sounds]] id = "tone_b_stereo" sample_rate = 48000 source_channels = 2 frames = 12000 offset_bytes = 48000 peak = 0.24996948 rms = 0.17675728`
+  - `[[sounds]] id = "tone_c_mono" sample_rate = 48000 source_channels = 1 frames = 12000 offset_bytes = 96000 peak = 0.24996948 rms = 0.17675819`
+- Input behavior:
+  - P0 supports RIFF/WAVE PCM16 and float32 at 48 kHz, 1 or 2 channels.
+  - Mono is imported directly.
+  - Stereo is downmixed to mono for the P0 mixer/sample voice path; this is the intended behavior for later 3D sounds.
+- Bank runtime behavior:
+  - Runtime loads from manifest/blob, not source WAV files.
+  - Small sound data is preloaded into immutable `Bank.samples`.
+  - Active sample voices hold slices into the loaded bank; callers must delay `Bank.deinit` until voices are stopped or finished. Full ref-counted bank lifetime remains for later runtime tasks.
+- Limitations:
+  - No resampling; non-48 kHz input is rejected.
+  - No streaming, seek table, compressed Vorbis/Opus, hash/dependency graph, or waveform preview is claimed.
+  - No third-party decoder was introduced for P0; the WAV PCM subset is implemented in Zig, so no new submodule is needed.
+
+## 9. Activity Log
 
 - 2026-07-07：任务创建。
+- 2026-07-08：开始 T006，读取 T001/T003/T005 产物并 scope 为 P0 WAV/PCM preload bank。
+- 2026-07-08：实现 WAV metadata/PCM decode、TOML manifest/blob generation, runtime Bank load/unload, sample voice playback and asset demo.
+- 2026-07-08：通过 `zig build test` and `zig build asset-demo`; 状态置为 DONE。

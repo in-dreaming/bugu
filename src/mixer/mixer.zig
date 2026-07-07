@@ -27,10 +27,20 @@ pub const TestVoiceDesc = struct {
     bus: BusId = .sfx,
 };
 
+pub const SampleVoiceDesc = struct {
+    samples: []const f32,
+    gain: f32 = 0.2,
+    priority: f32 = 1.0,
+    bus: BusId = .sfx,
+};
+
 const Voice = struct {
     state: VoiceState = .free,
+    source: enum { test_tone, sample } = .test_tone,
     phase: f32 = 0.0,
     phase_step: f32 = 0.0,
+    samples: []const f32 = &.{},
+    cursor: usize = 0,
     gain_current: f32 = 0.0,
     gain_target: f32 = 0.0,
     gain_step: f32 = 0.0,
@@ -60,8 +70,30 @@ pub const Mixer = struct {
         const voice = &self.voices[index];
         voice.* = .{
             .state = .starting,
+            .source = .test_tone,
             .phase = 0.0,
             .phase_step = (2.0 * std.math.pi * desc.frequency_hz) / @as(f32, @floatFromInt(self.sample_rate)),
+            .gain_current = 0.0,
+            .gain_target = desc.gain,
+            .gain_step = desc.gain / 128.0,
+            .priority = desc.priority,
+            .bus = desc.bus,
+        };
+    }
+
+    pub fn startSampleVoice(self: *Mixer, desc: SampleVoiceDesc, telemetry: *core.TelemetryCounters) core.BuguError!void {
+        if (desc.samples.len == 0) return core.BuguError.InvalidArgument;
+        const index = self.findFreeVoice() orelse self.stealVoice(.{
+            .gain = desc.gain,
+            .priority = desc.priority,
+            .bus = desc.bus,
+        }, telemetry);
+        const voice = &self.voices[index];
+        voice.* = .{
+            .state = .starting,
+            .source = .sample,
+            .samples = desc.samples,
+            .cursor = 0,
             .gain_current = 0.0,
             .gain_target = desc.gain,
             .gain_step = desc.gain / 128.0,
@@ -117,9 +149,24 @@ pub const Mixer = struct {
                     .virtual, .paused => {},
                     .starting, .real, .releasing => {
                         if (voice.state == .starting) voice.state = .real;
-                        const sample = @sin(voice.phase) * voice.gain_current;
-                        voice.phase += voice.phase_step;
-                        if (voice.phase >= 2.0 * std.math.pi) voice.phase -= 2.0 * std.math.pi;
+                        const source_sample = switch (voice.source) {
+                            .test_tone => tone: {
+                                const value = @sin(voice.phase);
+                                voice.phase += voice.phase_step;
+                                if (voice.phase >= 2.0 * std.math.pi) voice.phase -= 2.0 * std.math.pi;
+                                break :tone value;
+                            },
+                            .sample => sample: {
+                                if (voice.cursor >= voice.samples.len) {
+                                    voice.state = .free;
+                                    break :sample 0.0;
+                                }
+                                const value = voice.samples[voice.cursor];
+                                voice.cursor += 1;
+                                break :sample value;
+                            },
+                        };
+                        const sample = source_sample * voice.gain_current;
                         self.advanceVoiceRamp(voice);
 
                         const bus_gain = switch (voice.bus) {
