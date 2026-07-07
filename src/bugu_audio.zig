@@ -37,10 +37,12 @@ pub const Cone = spatial.Cone;
 pub const SpatialParams = spatial.SpatialParams;
 pub const evaluateSpatial = spatial.evaluate;
 pub const AcousticResponse = acoustic.AcousticResponse;
+pub const AcousticMixerSnapshot = acoustic.AcousticMixerSnapshot;
 pub const AcousticMaterial = acoustic.AcousticMaterial;
 pub const AcousticPortal = acoustic.AcousticPortal;
 pub const AcousticTestScene = acoustic.TestScene;
 pub const solveAcoustic = acoustic.solve;
+pub const mapAcousticResponseToSnapshot = acoustic.mapResponseToSnapshot;
 
 pub const OfflineBackend = device.OfflineBackend;
 pub const MiniaudioBackend = device.MiniaudioBackend;

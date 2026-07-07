@@ -102,6 +102,21 @@ pub fn build(b: *std.Build) void {
     const run_acoustic = b.addRunArtifact(acoustic_exe);
     const acoustic_step = b.step("acoustic-demo", "Run the CPU acoustic propagation demo");
     acoustic_step.dependOn(&run_acoustic.step);
+
+    const acoustic_mapping_exe = b.addExecutable(.{
+        .name = "bugu-acoustic-mapping-demo",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/acoustic_mapping_demo.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    acoustic_mapping_exe.root_module.addImport("bugu_audio", bugu_audio);
+    b.installArtifact(acoustic_mapping_exe);
+
+    const run_acoustic_mapping = b.addRunArtifact(acoustic_mapping_exe);
+    const acoustic_mapping_step = b.step("acoustic-mapping-demo", "Run AcousticResponse to mixer mapping demo");
+    acoustic_mapping_step.dependOn(&run_acoustic_mapping.step);
 }
 
 fn addMiniaudio(module: *std.Build.Module, target: std.Target) void {

@@ -95,6 +95,33 @@ pub const AcousticResponse = struct {
     confidence: f32 = 1.0,
 };
 
+pub const AcousticLayerParams = struct {
+    valid: bool = false,
+    gain: f32 = 0.0,
+    lowpass_hz: f32 = 20_000.0,
+    pan: f32 = 0.0,
+    delay_frames: u32 = 0,
+};
+
+pub const AcousticMixerSnapshot = struct {
+    direct: AcousticLayerParams = .{},
+    transmission: AcousticLayerParams = .{},
+    portal: AcousticLayerParams = .{},
+    early_reflections: [4]AcousticLayerParams = [_]AcousticLayerParams{.{}} ** 4,
+    late_reverb_send: f32 = 0.0,
+    openness: f32 = 1.0,
+    confidence: f32 = 1.0,
+    smoothing_ms: f32 = 20.0,
+};
+
+pub const MappingConfig = struct {
+    sample_rate: u32 = 48_000,
+    base_gain: f32 = 0.35,
+    listener_right: Vec3 = .{ .x = 1, .y = 0, .z = 0 },
+    min_smoothing_ms: f32 = 20.0,
+    max_smoothing_ms: f32 = 100.0,
+};
+
 pub const SolveConfig = struct {
     sample_rate: u32 = 48_000,
     max_escape_distance_m: f32 = 24.0,
@@ -118,6 +145,75 @@ pub const TemporalSmoother = struct {
         return smoothed;
     }
 };
+
+pub const AcousticSnapshotSmoother = struct {
+    initialized: bool = false,
+    previous: AcousticMixerSnapshot = .{},
+
+    pub fn step(self: *AcousticSnapshotSmoother, target: AcousticMixerSnapshot, delta_ms: f32) AcousticMixerSnapshot {
+        if (!self.initialized) {
+            self.initialized = true;
+            self.previous = target;
+            return target;
+        }
+        const alpha = std.math.clamp(delta_ms / @max(target.smoothing_ms, 0.001), 0.0, 1.0);
+        const smoothed = blendSnapshot(self.previous, target, alpha);
+        self.previous = smoothed;
+        return smoothed;
+    }
+};
+
+pub fn mapResponseToSnapshot(response: AcousticResponse, config: MappingConfig) AcousticMixerSnapshot {
+    var snapshot: AcousticMixerSnapshot = .{
+        .late_reverb_send = std.math.clamp(response.late_reverb_send, 0.0, 1.0),
+        .openness = std.math.clamp(response.openness, 0.0, 1.0),
+        .confidence = std.math.clamp(response.confidence, 0.0, 1.0),
+        .smoothing_ms = lerp(config.max_smoothing_ms, config.min_smoothing_ms, std.math.clamp(response.confidence, 0.0, 1.0)),
+    };
+
+    if (response.direct_gain > 0.0001) {
+        snapshot.direct = .{
+            .valid = true,
+            .gain = std.math.clamp(response.direct_gain * config.base_gain, 0.0, 1.0),
+            .lowpass_hz = std.math.clamp(response.direct_lowpass_hz, 80.0, 20_000.0),
+            .pan = 0.0,
+            .delay_frames = secondsToFrames(response.direct_delay, config.sample_rate),
+        };
+    }
+
+    if (response.transmission_gain > 0.0001) {
+        snapshot.transmission = .{
+            .valid = true,
+            .gain = std.math.clamp(response.transmission_gain * config.base_gain * 0.85, 0.0, 1.0),
+            .lowpass_hz = std.math.clamp(@min(response.transmission_lowpass_hz, response.direct_lowpass_hz), 80.0, 12_000.0),
+            .pan = 0.0,
+            .delay_frames = secondsToFrames(response.direct_delay + 0.006, config.sample_rate),
+        };
+    }
+
+    if (response.diffraction_or_portal_gain > 0.0001) {
+        snapshot.portal = .{
+            .valid = true,
+            .gain = std.math.clamp(response.diffraction_or_portal_gain * config.base_gain, 0.0, 1.0),
+            .lowpass_hz = 12_000.0,
+            .pan = directionToPan(response.diffraction_or_portal_direction, config.listener_right),
+            .delay_frames = secondsToFrames(response.direct_delay + 0.012, config.sample_rate),
+        };
+    }
+
+    for (response.early_reflection_taps, 0..) |tap, index| {
+        if (tap.gain <= 0.0001) continue;
+        snapshot.early_reflections[index] = .{
+            .valid = true,
+            .gain = std.math.clamp(tap.gain * config.base_gain * 0.65, 0.0, 0.7),
+            .lowpass_hz = 8_000.0,
+            .pan = directionToPan(tap.direction, config.listener_right),
+            .delay_frames = secondsToFrames(tap.delay_seconds, config.sample_rate),
+        };
+    }
+
+    return snapshot;
+}
 
 const AcousticVoxel = struct {
     solid: bool = false,
@@ -413,6 +509,31 @@ fn blendResponse(a: AcousticResponse, b: AcousticResponse, t: f32) AcousticRespo
     return out;
 }
 
+fn blendSnapshot(a: AcousticMixerSnapshot, b: AcousticMixerSnapshot, t: f32) AcousticMixerSnapshot {
+    var out = b;
+    out.direct = blendLayer(a.direct, b.direct, t);
+    out.transmission = blendLayer(a.transmission, b.transmission, t);
+    out.portal = blendLayer(a.portal, b.portal, t);
+    for (&out.early_reflections, 0..) |*layer, i| {
+        layer.* = blendLayer(a.early_reflections[i], b.early_reflections[i], t);
+    }
+    out.late_reverb_send = lerp(a.late_reverb_send, b.late_reverb_send, t);
+    out.openness = lerp(a.openness, b.openness, t);
+    out.confidence = lerp(a.confidence, b.confidence, t);
+    out.smoothing_ms = lerp(a.smoothing_ms, b.smoothing_ms, t);
+    return out;
+}
+
+fn blendLayer(a: AcousticLayerParams, b: AcousticLayerParams, t: f32) AcousticLayerParams {
+    return .{
+        .valid = a.valid or b.valid,
+        .gain = lerp(a.gain, b.gain, t),
+        .lowpass_hz = lerp(a.lowpass_hz, b.lowpass_hz, t),
+        .pan = lerp(a.pan, b.pan, t),
+        .delay_frames = @intFromFloat(lerp(@floatFromInt(a.delay_frames), @floatFromInt(b.delay_frames), t)),
+    };
+}
+
 pub const TestScenes = struct {
     pub const concrete_id: u16 = 1;
     pub const rock_id: u16 = 2;
@@ -542,6 +663,17 @@ fn normalize(a: Vec3) Vec3 {
     return scale(a, 1.0 / len);
 }
 
+fn directionToPan(direction: Vec3, listener_right: Vec3) f32 {
+    const dir = normalize(direction);
+    const right = normalize(listener_right);
+    return std.math.clamp(dir.x * right.x + dir.y * right.y + dir.z * right.z, -1.0, 1.0);
+}
+
+fn secondsToFrames(seconds: f32, sample_rate: u32) u32 {
+    const frames = @max(seconds, 0.0) * @as(f32, @floatFromInt(sample_rate));
+    return @intFromFloat(@min(frames, @as(f32, @floatFromInt(std.math.maxInt(u32)))));
+}
+
 fn lerp(a: f32, b: f32, t: f32) f32 {
     return a + (b - a) * t;
 }
@@ -612,4 +744,32 @@ test "temporal smoothing is optional and changes abrupt portal updates" {
     try std.testing.expect(raw_open.diffraction_or_portal_gain > raw_closed.diffraction_or_portal_gain);
     try std.testing.expect(smoothed_open.diffraction_or_portal_gain > raw_closed.diffraction_or_portal_gain);
     try std.testing.expect(smoothed_open.diffraction_or_portal_gain < raw_open.diffraction_or_portal_gain);
+}
+
+test "acoustic response maps to mixer snapshot layers" {
+    const response: AcousticResponse = .{
+        .direct_gain = 0.5,
+        .direct_delay = 0.02,
+        .direct_lowpass_hz = 18_000,
+        .transmission_gain = 0.1,
+        .transmission_lowpass_hz = 1_200,
+        .diffraction_or_portal_gain = 0.25,
+        .diffraction_or_portal_direction = .{ .x = 1, .y = 0, .z = 0 },
+        .early_reflection_taps = [_]ReflectionTap{
+            .{ .gain = 0.1, .delay_seconds = 0.035, .direction = .{ .x = -1, .y = 0, .z = 0 } },
+            .{}, .{}, .{},
+        },
+        .late_reverb_send = 0.4,
+        .openness = 0.6,
+        .confidence = 0.5,
+    };
+    const snapshot = mapResponseToSnapshot(response, .{ .sample_rate = 48_000 });
+    try std.testing.expect(snapshot.direct.valid);
+    try std.testing.expect(snapshot.transmission.valid);
+    try std.testing.expect(snapshot.portal.valid);
+    try std.testing.expect(snapshot.early_reflections[0].valid);
+    try std.testing.expect(snapshot.transmission.lowpass_hz < snapshot.direct.lowpass_hz);
+    try std.testing.expect(snapshot.portal.pan > 0.9);
+    try std.testing.expect(snapshot.early_reflections[0].delay_frames > snapshot.direct.delay_frames);
+    try std.testing.expect(snapshot.smoothing_ms > 20.0 and snapshot.smoothing_ms < 100.0);
 }

@@ -1,10 +1,10 @@
 # T011 AcousticResponse 到 mixer 的映射
 
-状态：TODO  
+状态：DONE  
 类型：Design+Implementation  
 优先级：P2  
 依赖：T010，T005  
-预计产物：AcousticSnapshot 到 voice/bus/effect 参数的映射实现和听感 demo。
+预计产物：AcousticSnapshot 到 voice/bus/effect 参数的映射实现、听感 demo、[mapping snapshot](../validation/acoustic-t011-mapping-snapshot.json)。
 
 ## 1. 背景
 
@@ -58,3 +58,9 @@ Acoustic solver 输出的是物理或近似物理响应；mixer 需要的是 gai
 ## 6. Activity Log
 
 - 2026-07-07：任务创建。
+- 2026-07-08：开始实现；已阅读 T010 `AcousticResponse`、T005 mixer 能力和 `docs/design/audio-engine-design.md` 第 9-12 节。
+- 2026-07-08：新增 `AcousticMixerSnapshot`、`AcousticLayerParams`、`mapResponseToSnapshot` 和 `AcousticSnapshotSmoother`。映射 direct gain/filter/delay、transmission gain/strong low-pass、portal direction -> pan、4 个 early reflection delay layers、late reverb send、openness、confidence -> 20-100 ms smoothing。
+- 2026-07-08：扩展 mixer voice 描述支持 `start_delay_frames`，用于 T011 的 direct/transmission/portal/reflection layer 延迟渲染；默认 0，不改变既有调用。
+- 2026-07-08：新增 `examples/acoustic_mapping_demo.zig` 与 `zig build acoustic-mapping-demo`，将 T010 response 先转为 snapshot，再通过 `Engine.startTestVoice`/mixer 离线渲染并输出 telemetry。
+- 2026-07-08：验证命令：`zig build test` 通过；`zig build acoustic-mapping-demo` 通过。输出保存到 [acoustic-t011-mapping-snapshot.json](../validation/acoustic-t011-mapping-snapshot.json)。墙洞 portal_pan=0.894，来自洞口方向；door_open portal_gain=0.07408 > door_closed 0.00201；所有场景 clipping=0。
+- 2026-07-08：限制：当前 reverb 为 send scalar，尚无专用 reverb DSP；reflection 以 delayed tone layers 验证 mixer path；AcousticSnapshot 中未激活 layer 显式 `valid=false`/gain 0，而不是静默忽略。

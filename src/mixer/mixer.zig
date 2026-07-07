@@ -27,6 +27,7 @@ pub const TestVoiceDesc = struct {
     bus: BusId = .sfx,
     pan: f32 = 0.0,
     lowpass_hz: f32 = 20_000.0,
+    start_delay_frames: u32 = 0,
 };
 
 pub const SampleVoiceDesc = struct {
@@ -38,6 +39,7 @@ pub const SampleVoiceDesc = struct {
     loop: bool = false,
     pan: f32 = 0.0,
     lowpass_hz: f32 = 20_000.0,
+    start_delay_frames: u32 = 0,
 };
 
 const Voice = struct {
@@ -57,6 +59,7 @@ const Voice = struct {
     pan: f32 = 0.0,
     lowpass_hz: f32 = 20_000.0,
     lowpass_z: f32 = 0.0,
+    start_delay_frames: u32 = 0,
 
     fn audibility(self: Voice) f32 {
         return self.priority * @max(self.gain_current, self.gain_target);
@@ -91,6 +94,7 @@ pub const Mixer = struct {
             .bus = desc.bus,
             .pan = desc.pan,
             .lowpass_hz = desc.lowpass_hz,
+            .start_delay_frames = desc.start_delay_frames,
         };
     }
 
@@ -116,6 +120,7 @@ pub const Mixer = struct {
             .bus = desc.bus,
             .pan = desc.pan,
             .lowpass_hz = desc.lowpass_hz,
+            .start_delay_frames = desc.start_delay_frames,
         };
     }
 
@@ -166,6 +171,10 @@ pub const Mixer = struct {
                     .virtual, .paused => {},
                     .starting, .real, .releasing => {
                         if (voice.state == .starting) voice.state = .real;
+                        if (voice.start_delay_frames > 0) {
+                            voice.start_delay_frames -= 1;
+                            continue;
+                        }
                         const source_sample = switch (voice.source) {
                             .test_tone => tone: {
                                 const value = @sin(voice.phase);
