@@ -42,7 +42,7 @@
 | ID | 状态 | 任务 | 类型 | 依赖 | 产物 |
 |---|---|---|---|---|---|
 | T001 | TODO | [后端、decoder、codec 选型补充调研](T001-backend-decoder-codec-research.md) | Research | 无 | 调研文档、推荐矩阵、ADR 输入 |
-| T002 | TODO | [实时运行时 contract 与线程模型设计](T002-realtime-runtime-contract.md) | Design | T001 可并行 | 线程模型、队列、snapshot、红线 |
+| T002 | DONE | [实时运行时 contract 与线程模型设计](T002-realtime-runtime-contract.md) | Design | T001 可并行 | [线程模型、队列、snapshot、红线](../design/audio-runtime-contract.md) |
 | T003 | TODO | [Zig API、可选 C ABI 与模块边界设计](T003-zig-api-module-boundaries.md) | Design | T002 | API 草案、模块依赖图、生命周期 |
 | T004 | TODO | [P0 Zig 设备后端实现](T004-zig-p0-backend.md) | Implementation | T002,T003 | 可播放 sine/demo 的 backend，依赖 submodule 化 |
 | T005 | TODO | [Mixer、Voice、Bus core 实现](T005-mixer-voice-bus-core.md) | Implementation | T002,T003,T004 | 固定 quantum mixer、voice pool、bus |

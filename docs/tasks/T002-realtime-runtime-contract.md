@@ -1,6 +1,6 @@
 # T002 实时运行时 contract 与线程模型设计
 
-状态：TODO  
+状态：DONE  
 类型：Design  
 优先级：P0  
 依赖：T001 可并行  
@@ -63,11 +63,35 @@
 - 明确哪些测试证据可证明没有 alloc/lock/I/O/GPU wait 进入 audio render thread。
 - 更新 docs/tasks/tasks.md。
 
-## 7. 不得越界
+## 7. Deliverables
+
+- [docs/design/audio-runtime-contract.md](../design/audio-runtime-contract.md)：实时线程模型、跨线程队列、snapshot swap、fixed quantum 适配、fallback/device lost/shutdown 边界、测试证据要求。
+
+## 8. Evidence
+
+- 执行命令：
+  - `Get-Content -LiteralPath docs\tasks\asetup.md -Encoding UTF8`
+  - `Get-Content -LiteralPath docs\tasks\tasks.md -Encoding UTF8`
+  - `Get-Content -LiteralPath docs\tasks\T002-realtime-runtime-contract.md -Encoding UTF8`
+  - `Get-Content -LiteralPath docs\design\audio-engine-design.md -Encoding UTF8`
+- 输入数据：docs/tasks/asetup.md 实时安全红线；docs/design/audio-engine-design.md 第 4、5、10、11、12 节的 backend、mixer、propagation、threading 和 realtime safety 设计。
+- 输出摘要：新增 runtime contract，覆盖 Game -> Control、Worker -> Control、Propagation -> Control、Control -> Render、Render -> Telemetry 的 producer/consumer/所有权/生命周期；定义 AudioCommand、AudioCommandQueue、RenderSnapshot、SnapshotSwap、WorkerCompletionQueue、AcousticSnapshot、TelemetryCounters；定义 variable callback 到 fixed quantum FIFO 适配和 device lost/offline fallback/GPU missing 边界。
+- 失败或限制：本任务是设计任务，未实现 backend、queue、snapshot 或 mixer；真实 alloc/lock/I/O/GPU wait 审计证据从 T004 起由实现任务提供。
+- 验收对应：
+  - 跨线程数据流：见 runtime contract 第 3 节。
+  - render thread 无锁/无分配/无等待：见第 1、2、7 节。
+  - fixed quantum 适配：见第 5 节。
+  - telemetry：见第 4.7 节。
+  - fallback/device lost/GPU missing：见第 6、7 节。
+  - 测试证据：见第 9 节。
+
+## 9. 不得越界
 
 - 不开始实现 backend。
 - 不设计复杂声学算法，只定义 AcousticSnapshot 的线程边界。
 
-## 8. Activity Log
+## 10. Activity Log
 
 - 2026-07-07：任务创建。
+- 2026-07-08：开始设计实时运行时 contract，范围限定为线程模型、跨线程队列、snapshot、callback quantum 适配和生命周期边界。
+- 2026-07-08：完成 docs/design/audio-runtime-contract.md，更新 Deliverables/Evidence，状态置为 DONE。
