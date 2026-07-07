@@ -5,6 +5,7 @@ pub const device = @import("device/device.zig");
 pub const mixer = @import("mixer/mixer.zig");
 pub const assets = @import("assets/bank.zig");
 pub const events = @import("events/runtime.zig");
+pub const spatial = @import("spatial/spatial.zig");
 
 pub const EngineConfig = core.EngineConfig;
 pub const Engine = core.Engine;
@@ -27,6 +28,13 @@ pub const SwitchCase = events.SwitchCase;
 pub const SoundRef = events.SoundRef;
 pub const RtpcCurve = events.RtpcCurve;
 pub const hashEventName = events.hashName;
+pub const Vec3 = spatial.Vec3;
+pub const Transform = spatial.Transform;
+pub const AttenuationProfile = spatial.AttenuationProfile;
+pub const DistanceCurve = spatial.DistanceCurve;
+pub const Cone = spatial.Cone;
+pub const SpatialParams = spatial.SpatialParams;
+pub const evaluateSpatial = spatial.evaluate;
 
 pub const OfflineBackend = device.OfflineBackend;
 pub const MiniaudioBackend = device.MiniaudioBackend;

@@ -25,6 +25,8 @@ pub const TestVoiceDesc = struct {
     gain: f32 = 0.2,
     priority: f32 = 1.0,
     bus: BusId = .sfx,
+    pan: f32 = 0.0,
+    lowpass_hz: f32 = 20_000.0,
 };
 
 pub const SampleVoiceDesc = struct {
@@ -34,6 +36,8 @@ pub const SampleVoiceDesc = struct {
     priority: f32 = 1.0,
     bus: BusId = .sfx,
     loop: bool = false,
+    pan: f32 = 0.0,
+    lowpass_hz: f32 = 20_000.0,
 };
 
 const Voice = struct {
@@ -50,6 +54,9 @@ const Voice = struct {
     gain_step: f32 = 0.0,
     priority: f32 = 0.0,
     bus: BusId = .sfx,
+    pan: f32 = 0.0,
+    lowpass_hz: f32 = 20_000.0,
+    lowpass_z: f32 = 0.0,
 
     fn audibility(self: Voice) f32 {
         return self.priority * @max(self.gain_current, self.gain_target);
@@ -82,6 +89,8 @@ pub const Mixer = struct {
             .gain_step = desc.gain / 128.0,
             .priority = desc.priority,
             .bus = desc.bus,
+            .pan = desc.pan,
+            .lowpass_hz = desc.lowpass_hz,
         };
     }
 
@@ -105,6 +114,8 @@ pub const Mixer = struct {
             .gain_step = desc.gain / 128.0,
             .priority = desc.priority,
             .bus = desc.bus,
+            .pan = desc.pan,
+            .lowpass_hz = desc.lowpass_hz,
         };
     }
 
@@ -186,9 +197,13 @@ pub const Mixer = struct {
                             .music => self.music_gain,
                             .master => 1.0,
                         };
-                        const out_sample = sample * bus_gain * self.master_gain_current;
-                        mixed_l += out_sample;
-                        mixed_r += out_sample;
+                        const filtered = self.applyLowpass(voice, sample);
+                        const out_sample = filtered * bus_gain * self.master_gain_current;
+                        const pan = std.math.clamp(voice.pan, -1.0, 1.0);
+                        const left = @cos((pan + 1.0) * std.math.pi * 0.25);
+                        const right = @sin((pan + 1.0) * std.math.pi * 0.25);
+                        mixed_l += out_sample * left;
+                        mixed_r += out_sample * right;
                     },
                 }
             }
@@ -284,6 +299,17 @@ pub const Mixer = struct {
         } else {
             self.master_gain_current = next;
         }
+    }
+
+    fn applyLowpass(self: *Mixer, voice: *Voice, sample: f32) f32 {
+        const nyquist = @as(f32, @floatFromInt(self.sample_rate)) * 0.5;
+        if (voice.lowpass_hz >= nyquist) return sample;
+        const cutoff = std.math.clamp(voice.lowpass_hz, 20.0, nyquist);
+        const dt = 1.0 / @as(f32, @floatFromInt(self.sample_rate));
+        const rc = 1.0 / (2.0 * std.math.pi * cutoff);
+        const alpha = dt / (rc + dt);
+        voice.lowpass_z += alpha * (sample - voice.lowpass_z);
+        return voice.lowpass_z;
     }
 };
 
