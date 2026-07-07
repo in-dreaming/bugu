@@ -1,6 +1,6 @@
 # T001 后端、decoder、codec 选型补充调研
 
-状态：TODO  
+状态：DONE  
 类型：Research  
 优先级：P0  
 依赖：无  
@@ -69,6 +69,22 @@
 - 不引入依赖到仓库。
 - 不修改核心设计结论，除非同时新增 ADR 草案并标记需要 review。
 
-## 8. Activity Log
+## 8. Deliverables
+
+- [docs/research/audio-backend-decoder-codec.md](../research/audio-backend-decoder-codec.md)：完成后端、decoder、codec 选型补充调研。
+- ADR 结论：不需要新增 ADR；现有 ADR-002、ADR-003 方向保持成立，本文仅补充可执行选型依据。
+
+## 9. Evidence
+
+- 覆盖范围：miniaudio、SDL3 Audio（in-dreaming fork/branch）、SDL_sound、dr_wav、dr_flac、dr_mp3、stb_vorbis、libvorbis、Opus/libopus、ADPCM、WASAPI、CoreAudio、AAudio、PipeWire/ALSA、submodule 策略。
+- 权威来源：research 文档 `Source links and applicability` 表列出官方文档、官方代码仓库、访问日期、适用版本/branch/commit。
+- 关键结论：P0 miniaudio device backend + PCM/WAV/ADPCM 子集；P1 SDL3 对照/editor/fallback backend + Vorbis streaming；P2 native WASAPI/CoreAudio/AAudio 与 Opus 验证。
+- 边界确认：SDL_sound 明确只作为可选 decoder/import adapter，不作为底层音频系统。
+- 后续影响：research 文档明确列出对 T003、T004、T006 的 API、backend 和 Bank 格式影响。
+- 验证命令：research 文档 `Verification commands` 记录 `git ls-remote` 核验的分支/tag/commit。
+
+## 10. Activity Log
 
 - 2026-07-07：任务创建。
+- 2026-07-08：开始 T001，阅读任务总览、T001 任务文件和 audio-engine-design 相关章节，准备补充官方来源核验与 research 产物。
+- 2026-07-08：完成官方/权威来源核验，新增 research 产物，更新 T001 Deliverables/Evidence，并将状态标记为 DONE。
