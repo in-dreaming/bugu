@@ -1,0 +1,203 @@
+const std = @import("std");
+const core = @import("../core/engine.zig");
+
+const c = @cImport({
+    @cInclude("miniaudio.h");
+});
+
+pub const DeviceConfig = struct {
+    sample_rate: u32 = 48_000,
+    channels: u32 = 2,
+    period_frames: u32 = 256,
+};
+
+const max_quantum_frames = 1024;
+const max_channels = 2;
+const max_pending_samples = max_quantum_frames * max_channels;
+
+const FixedQuantumAdapter = struct {
+    engine: *core.Engine,
+    pending: [max_pending_samples]f32 = undefined,
+    pending_start: usize = 0,
+    pending_len: usize = 0,
+
+    fn init(engine: *core.Engine) FixedQuantumAdapter {
+        return .{ .engine = engine };
+    }
+
+    fn render(self: *FixedQuantumAdapter, output: []f32, frame_count: u32) void {
+        _ = self.engine.telemetry.callback_count.fetchAdd(1, .monotonic);
+
+        const channels = self.engine.config.channels;
+        const quantum_frames = self.engine.config.quantum_frames;
+        const quantum_samples = @as(usize, quantum_frames) * channels;
+        const requested_samples = @as(usize, frame_count) * channels;
+        var written: usize = 0;
+
+        if (self.pending_len > 0) {
+            const take = @min(self.pending_len, requested_samples);
+            @memcpy(output[0..take], self.pending[self.pending_start..][0..take]);
+            self.pending_start += take;
+            self.pending_len -= take;
+            written += take;
+            if (self.pending_len == 0) {
+                self.pending_start = 0;
+            }
+        }
+
+        while (written < requested_samples) {
+            const remaining = requested_samples - written;
+            if (remaining >= quantum_samples) {
+                self.engine.render(output[written..][0..quantum_samples], quantum_frames);
+                written += quantum_samples;
+            } else {
+                self.engine.render(self.pending[0..quantum_samples], quantum_frames);
+                @memcpy(output[written..][0..remaining], self.pending[0..remaining]);
+                self.pending_start = remaining;
+                self.pending_len = quantum_samples - remaining;
+                written += remaining;
+            }
+        }
+    }
+};
+
+pub const OfflineBackend = struct {
+    engine: *core.Engine,
+    adapter: FixedQuantumAdapter,
+
+    pub fn init(engine: *core.Engine) OfflineBackend {
+        return .{
+            .engine = engine,
+            .adapter = .init(engine),
+        };
+    }
+
+    pub fn renderFrames(self: *OfflineBackend, allocator: std.mem.Allocator, frame_count: u32) ![]f32 {
+        const sample_count = @as(usize, frame_count) * self.engine.config.channels;
+        const buffer = try allocator.alloc(f32, sample_count);
+        self.adapter.render(buffer, frame_count);
+        return buffer;
+    }
+
+    pub fn renderWavFile(self: *OfflineBackend, io: std.Io, path: []const u8, seconds: f32) !void {
+        const frame_count: u32 = @intFromFloat(@as(f32, @floatFromInt(self.engine.config.sample_rate)) * seconds);
+        const file = try std.Io.Dir.cwd().createFile(io, path, .{ .truncate = true });
+        defer file.close(io);
+
+        var writer_buffer: [4096]u8 = undefined;
+        var writer = file.writer(io, &writer_buffer);
+        try writeWavHeader(&writer.interface, frame_count, self.engine.config.sample_rate, self.engine.config.channels);
+
+        var frame_buffer: [256 * 2]f32 = undefined;
+        var frames_remaining = frame_count;
+        while (frames_remaining > 0) {
+            const frames_this_chunk = @min(frames_remaining, self.engine.config.quantum_frames);
+            const sample_count = @as(usize, frames_this_chunk) * self.engine.config.channels;
+            self.adapter.render(frame_buffer[0..sample_count], frames_this_chunk);
+            for (frame_buffer[0..sample_count]) |sample| {
+                const clamped = std.math.clamp(sample, -1.0, 1.0);
+                const pcm: i16 = @intFromFloat(clamped * 32767.0);
+                try writer.interface.writeInt(i16, pcm, .little);
+            }
+            frames_remaining -= frames_this_chunk;
+        }
+        try writer.interface.flush();
+    }
+};
+
+pub const MiniaudioBackend = struct {
+    engine: *core.Engine,
+    adapter: FixedQuantumAdapter,
+    device: c.ma_device = undefined,
+    initialized: bool = false,
+    started: bool = false,
+
+    pub fn init(engine: *core.Engine) MiniaudioBackend {
+        return .{
+            .engine = engine,
+            .adapter = .init(engine),
+        };
+    }
+
+    pub fn open(self: *MiniaudioBackend, config: DeviceConfig) core.BuguError!void {
+        if (self.initialized) return;
+        var ma_config = c.ma_device_config_init(c.ma_device_type_playback);
+        ma_config.playback.format = c.ma_format_f32;
+        ma_config.playback.channels = config.channels;
+        ma_config.sampleRate = config.sample_rate;
+        ma_config.periodSizeInFrames = config.period_frames;
+        ma_config.dataCallback = dataCallback;
+        ma_config.pUserData = self;
+
+        if (c.ma_device_init(null, &ma_config, &self.device) != c.MA_SUCCESS) {
+            return core.BuguError.DeviceUnavailable;
+        }
+        self.initialized = true;
+    }
+
+    pub fn start(self: *MiniaudioBackend) core.BuguError!void {
+        if (self.started) return;
+        if (!self.initialized) return core.BuguError.InvalidState;
+        if (c.ma_device_start(&self.device) != c.MA_SUCCESS) {
+            return core.BuguError.DeviceStartFailed;
+        }
+        self.started = true;
+    }
+
+    pub fn stop(self: *MiniaudioBackend) void {
+        if (self.started) {
+            _ = c.ma_device_stop(&self.device);
+            self.started = false;
+        }
+    }
+
+    pub fn deinit(self: *MiniaudioBackend) void {
+        self.stop();
+        if (self.initialized) {
+            c.ma_device_uninit(&self.device);
+            self.initialized = false;
+        }
+    }
+};
+
+fn dataCallback(device: [*c]c.ma_device, output: ?*anyopaque, input: ?*const anyopaque, frame_count: c.ma_uint32) callconv(.c) void {
+    _ = input;
+    if (device == null or output == null) return;
+    const backend: *MiniaudioBackend = @ptrCast(@alignCast(device.*.pUserData));
+    const sample_count = @as(usize, frame_count) * backend.engine.config.channels;
+    const out: [*]f32 = @ptrCast(@alignCast(output));
+    backend.adapter.render(out[0..sample_count], frame_count);
+}
+
+fn writeWavHeader(writer: *std.Io.Writer, frame_count: u32, sample_rate: u32, channels: u16) !void {
+    const bits_per_sample: u16 = 16;
+    const block_align: u16 = channels * (bits_per_sample / 8);
+    const byte_rate: u32 = sample_rate * block_align;
+    const data_bytes: u32 = frame_count * block_align;
+    const riff_size: u32 = 36 + data_bytes;
+
+    try writer.writeAll("RIFF");
+    try writer.writeInt(u32, riff_size, .little);
+    try writer.writeAll("WAVE");
+    try writer.writeAll("fmt ");
+    try writer.writeInt(u32, 16, .little);
+    try writer.writeInt(u16, 1, .little);
+    try writer.writeInt(u16, channels, .little);
+    try writer.writeInt(u32, sample_rate, .little);
+    try writer.writeInt(u32, byte_rate, .little);
+    try writer.writeInt(u16, block_align, .little);
+    try writer.writeInt(u16, bits_per_sample, .little);
+    try writer.writeAll("data");
+    try writer.writeInt(u32, data_bytes, .little);
+}
+
+test "offline backend writes samples" {
+    var engine = try core.Engine.init(.{});
+    var backend = OfflineBackend.init(&engine);
+    const samples = try backend.renderFrames(std.testing.allocator, 127);
+    defer std.testing.allocator.free(samples);
+    try std.testing.expect(samples.len == 254);
+    try std.testing.expectEqual(@as(u64, 1), engine.telemetrySnapshot().callback_count);
+    try std.testing.expectEqual(@as(u64, 256), engine.telemetrySnapshot().rendered_frames);
+    try std.testing.expect(engine.telemetrySnapshot().peak_abs > 0.0);
+}
