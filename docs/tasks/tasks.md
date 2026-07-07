@@ -50,7 +50,7 @@
 | T007 | DONE | [Event、Parameter、State、Switch runtime](T007-event-parameter-runtime.md) | Design+Implementation | T003,T005,T006 | post_event -> event resolve -> sample voice, random/switch/RTPC |
 | T008 | DONE | [基础空间音频：attenuation、cone、Doppler](T008-spatial-baseline.md) | Design+Implementation | T005,T007 | AttenuationProfile、cone、Doppler、pan/filter/pitch demo |
 | T009 | DONE | [Acoustic scene、voxel、materials、portal 设计](T009-acoustic-scene-voxel-materials.md) | Research+Design | T008 | [声学场景表示和数据结构](../design/acoustic-scene.md) |
-| T010 | TODO | [CPU 复合声学传播 MVP](T010-cpu-acoustic-propagation-mvp.md) | Implementation | T009 | direct、penetration、reflection、escape rays |
+| T010 | DONE | [CPU 复合声学传播 MVP](T010-cpu-acoustic-propagation-mvp.md) | Implementation | T009 | CPU solver、AcousticResponse、[six-scene snapshot](../validation/acoustic-t010-response-snapshot.json) |
 | T011 | TODO | [AcousticResponse 到 mixer 的映射](T011-acoustic-response-mixer-mapping.md) | Design+Implementation | T010,T005 | gain/filter/delay/reverb 映射 |
 | T012 | TODO | [验证、profile、debug visualization](T012-validation-profile-debug.md) | Validation+Tooling | T004-T011 | 测试矩阵、profile、可视化 |
 | T013 | TODO | [GPU propagation 设计与 spike](T013-gpu-propagation-design-spike.md) | Research+Prototype | T010,T012 | GPU compute/ray query 设计和 spike 结论 |

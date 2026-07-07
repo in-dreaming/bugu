@@ -6,6 +6,7 @@ pub const mixer = @import("mixer/mixer.zig");
 pub const assets = @import("assets/bank.zig");
 pub const events = @import("events/runtime.zig");
 pub const spatial = @import("spatial/spatial.zig");
+pub const acoustic = @import("acoustic/acoustic.zig");
 
 pub const EngineConfig = core.EngineConfig;
 pub const Engine = core.Engine;
@@ -35,6 +36,11 @@ pub const DistanceCurve = spatial.DistanceCurve;
 pub const Cone = spatial.Cone;
 pub const SpatialParams = spatial.SpatialParams;
 pub const evaluateSpatial = spatial.evaluate;
+pub const AcousticResponse = acoustic.AcousticResponse;
+pub const AcousticMaterial = acoustic.AcousticMaterial;
+pub const AcousticPortal = acoustic.AcousticPortal;
+pub const AcousticTestScene = acoustic.TestScene;
+pub const solveAcoustic = acoustic.solve;
 
 pub const OfflineBackend = device.OfflineBackend;
 pub const MiniaudioBackend = device.MiniaudioBackend;

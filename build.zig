@@ -87,6 +87,21 @@ pub fn build(b: *std.Build) void {
     const run_spatial = b.addRunArtifact(spatial_exe);
     const spatial_step = b.step("spatial-demo", "Run the spatial baseline demo");
     spatial_step.dependOn(&run_spatial.step);
+
+    const acoustic_exe = b.addExecutable(.{
+        .name = "bugu-acoustic-demo",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/acoustic_demo.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    acoustic_exe.root_module.addImport("bugu_audio", bugu_audio);
+    b.installArtifact(acoustic_exe);
+
+    const run_acoustic = b.addRunArtifact(acoustic_exe);
+    const acoustic_step = b.step("acoustic-demo", "Run the CPU acoustic propagation demo");
+    acoustic_step.dependOn(&run_acoustic.step);
 }
 
 fn addMiniaudio(module: *std.Build.Module, target: std.Target) void {
