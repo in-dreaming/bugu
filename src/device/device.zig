@@ -88,7 +88,7 @@ pub const OfflineBackend = struct {
         var writer = file.writer(io, &writer_buffer);
         try writeWavHeader(&writer.interface, frame_count, self.engine.config.sample_rate, self.engine.config.channels);
 
-        var frame_buffer: [256 * 2]f32 = undefined;
+        var frame_buffer: [max_pending_samples]f32 = undefined;
         var frames_remaining = frame_count;
         while (frames_remaining > 0) {
             const frames_this_chunk = @min(frames_remaining, self.engine.config.quantum_frames);
@@ -121,6 +121,9 @@ pub const MiniaudioBackend = struct {
 
     pub fn open(self: *MiniaudioBackend, config: DeviceConfig) core.BuguError!void {
         if (self.initialized) return;
+        if (config.sample_rate != self.engine.config.sample_rate or config.channels != self.engine.config.channels) {
+            return core.BuguError.InvalidArgument;
+        }
         var ma_config = c.ma_device_config_init(c.ma_device_type_playback);
         ma_config.playback.format = c.ma_format_f32;
         ma_config.playback.channels = config.channels;
@@ -193,6 +196,7 @@ fn writeWavHeader(writer: *std.Io.Writer, frame_count: u32, sample_rate: u32, ch
 
 test "offline backend writes samples" {
     var engine = try core.Engine.init(.{});
+    try engine.startTestVoice(.{ .frequency_hz = 330.0, .gain = 0.2 });
     var backend = OfflineBackend.init(&engine);
     const samples = try backend.renderFrames(std.testing.allocator, 127);
     defer std.testing.allocator.free(samples);

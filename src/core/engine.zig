@@ -1,5 +1,5 @@
 const std = @import("std");
-const ToneRenderer = @import("../mixer/tone_renderer.zig").ToneRenderer;
+const mixer = @import("../mixer/mixer.zig");
 
 pub const BuguError = error{
     InvalidState,
@@ -8,6 +8,7 @@ pub const BuguError = error{
     DeviceStartFailed,
     DeviceStopFailed,
     FileWriteFailed,
+    NoVoiceAvailable,
 };
 
 pub const EngineConfig = struct {
@@ -26,6 +27,12 @@ pub const TelemetrySnapshot = struct {
     dropout_count: u64,
     max_callback_nanos: u64,
     peak_abs: f32,
+    rms: f32,
+    active_voices: u32,
+    virtual_voices: u32,
+    stolen_voices: u64,
+    clipping_count: u64,
+    mixer_time_nanos: u64,
 };
 
 pub const TelemetryCounters = struct {
@@ -36,6 +43,12 @@ pub const TelemetryCounters = struct {
     dropout_count: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
     max_callback_nanos: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
     peak_abs_bits: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
+    rms_bits: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
+    active_voices: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
+    virtual_voices: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
+    stolen_voices: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
+    clipping_count: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
+    mixer_time_nanos: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
 
     pub fn snapshot(self: *const TelemetryCounters) TelemetrySnapshot {
         return .{
@@ -46,6 +59,12 @@ pub const TelemetryCounters = struct {
             .dropout_count = self.dropout_count.load(.monotonic),
             .max_callback_nanos = self.max_callback_nanos.load(.monotonic),
             .peak_abs = @bitCast(self.peak_abs_bits.load(.monotonic)),
+            .rms = @bitCast(self.rms_bits.load(.monotonic)),
+            .active_voices = self.active_voices.load(.monotonic),
+            .virtual_voices = self.virtual_voices.load(.monotonic),
+            .stolen_voices = self.stolen_voices.load(.monotonic),
+            .clipping_count = self.clipping_count.load(.monotonic),
+            .mixer_time_nanos = self.mixer_time_nanos.load(.monotonic),
         };
     }
 
@@ -75,11 +94,15 @@ pub const TelemetryCounters = struct {
             ) orelse return;
         }
     }
+
+    pub fn storeRms(self: *TelemetryCounters, rms: f32) void {
+        self.rms_bits.store(@bitCast(rms), .monotonic);
+    }
 };
 
 pub const Engine = struct {
     config: EngineConfig,
-    renderer: ToneRenderer,
+    mixer: mixer.Mixer,
     telemetry: TelemetryCounters = .{},
 
     pub fn init(config: EngineConfig) BuguError!Engine {
@@ -88,12 +111,28 @@ pub const Engine = struct {
         }
         return .{
             .config = config,
-            .renderer = ToneRenderer.init(config.sample_rate, config.frequency_hz, config.amplitude),
+            .mixer = mixer.Mixer.init(config.sample_rate),
         };
     }
 
     pub fn render(self: *Engine, output: []f32, frame_count: u32) void {
-        self.renderer.render(output, frame_count, self.config.channels, &self.telemetry);
+        self.mixer.render(output, frame_count, self.config.channels, &self.telemetry);
+    }
+
+    pub fn startTestVoice(self: *Engine, desc: mixer.TestVoiceDesc) BuguError!void {
+        return self.mixer.startTestVoice(desc, &self.telemetry);
+    }
+
+    pub fn stopAllVoices(self: *Engine, release_frames: u32) void {
+        self.mixer.stopAll(release_frames);
+    }
+
+    pub fn setBusGain(self: *Engine, bus: mixer.BusId, gain: f32) void {
+        self.mixer.setBusGain(bus, gain);
+    }
+
+    pub fn setMasterGain(self: *Engine, gain: f32, ramp_frames: u32) void {
+        self.mixer.setMasterGain(gain, ramp_frames);
     }
 
     pub fn telemetrySnapshot(self: *const Engine) TelemetrySnapshot {
@@ -103,10 +142,13 @@ pub const Engine = struct {
 
 test "engine renders nonzero stereo samples" {
     var engine = try Engine.init(.{});
+    try engine.startTestVoice(.{ .frequency_hz = 440.0, .gain = 0.2 });
     var buffer: [512]f32 = undefined;
     engine.render(&buffer, 256);
     const telemetry = engine.telemetrySnapshot();
     try std.testing.expectEqual(@as(u64, 256), telemetry.rendered_frames);
     try std.testing.expectEqual(@as(u64, 1), telemetry.rendered_quantums);
+    try std.testing.expectEqual(@as(u32, 1), telemetry.active_voices);
     try std.testing.expect(telemetry.peak_abs > 0.0);
+    try std.testing.expect(telemetry.rms > 0.0);
 }

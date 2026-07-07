@@ -45,7 +45,7 @@
 | T002 | DONE | [实时运行时 contract 与线程模型设计](T002-realtime-runtime-contract.md) | Design | T001 可并行 | [线程模型、队列、snapshot、红线](../design/audio-runtime-contract.md) |
 | T003 | DONE | [Zig API、可选 C ABI 与模块边界设计](T003-zig-api-module-boundaries.md) | Design | T002 | [API 草案、模块依赖图、生命周期](../design/audio-zig-api.md) |
 | T004 | DONE | [P0 Zig 设备后端实现](T004-zig-p0-backend.md) | Implementation | T002,T003 | Zig miniaudio/offline backend、fixed quantum tone demo、submodule |
-| T005 | TODO | [Mixer、Voice、Bus core 实现](T005-mixer-voice-bus-core.md) | Implementation | T002,T003,T004 | 固定 quantum mixer、voice pool、bus |
+| T005 | DONE | [Mixer、Voice、Bus core 实现](T005-mixer-voice-bus-core.md) | Implementation | T002,T003,T004 | fixed quantum mixer、64 voice pool、SFX/Music/Master bus、telemetry |
 | T006 | TODO | [Asset import、Decode、Bank MVP](T006-asset-decode-bank-mvp.md) | Implementation | T001,T003,T005 | WAV/PCM import、临时 manifest、stream stub |
 | T007 | TODO | [Event、Parameter、State、Switch runtime](T007-event-parameter-runtime.md) | Design+Implementation | T003,T005,T006 | 事件到 voice 的最小链路 |
 | T008 | TODO | [基础空间音频：attenuation、cone、Doppler](T008-spatial-baseline.md) | Design+Implementation | T005,T007 | 3D 参数和听感 demo |
