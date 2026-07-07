@@ -1,7 +1,7 @@
 # Bugu 音频引擎任务总览
 
 状态：Draft v0.1  
-最后更新：2026-07-07  
+最后更新：2026-07-08  
 使用方式：agent pick 任务前，先读 docs/tasks/asetup.md，再读本文件，再读具体任务文件。
 
 最近审查：[task-review-2026-07-07.md](task-review-2026-07-07.md)
@@ -49,7 +49,7 @@
 | T006 | DONE | [Asset import、Decode、Bank MVP](T006-asset-decode-bank-mvp.md) | Implementation | T001,T003,T005 | WAV/PCM importer、TOML manifest、float32 blob、preload Bank |
 | T007 | DONE | [Event、Parameter、State、Switch runtime](T007-event-parameter-runtime.md) | Design+Implementation | T003,T005,T006 | post_event -> event resolve -> sample voice, random/switch/RTPC |
 | T008 | DONE | [基础空间音频：attenuation、cone、Doppler](T008-spatial-baseline.md) | Design+Implementation | T005,T007 | AttenuationProfile、cone、Doppler、pan/filter/pitch demo |
-| T009 | TODO | [Acoustic scene、voxel、materials、portal 设计](T009-acoustic-scene-voxel-materials.md) | Research+Design | T008 | 声学场景表示和数据结构 |
+| T009 | DONE | [Acoustic scene、voxel、materials、portal 设计](T009-acoustic-scene-voxel-materials.md) | Research+Design | T008 | [声学场景表示和数据结构](../design/acoustic-scene.md) |
 | T010 | TODO | [CPU 复合声学传播 MVP](T010-cpu-acoustic-propagation-mvp.md) | Implementation | T009 | direct、penetration、reflection、escape rays |
 | T011 | TODO | [AcousticResponse 到 mixer 的映射](T011-acoustic-response-mixer-mapping.md) | Design+Implementation | T010,T005 | gain/filter/delay/reverb 映射 |
 | T012 | TODO | [验证、profile、debug visualization](T012-validation-profile-debug.md) | Validation+Tooling | T004-T011 | 测试矩阵、profile、可视化 |

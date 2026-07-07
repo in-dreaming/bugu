@@ -1,10 +1,10 @@
 # T009 Acoustic scene、voxel、materials、portal 设计
 
-状态：TODO  
+状态：DONE  
 类型：Research+Design  
 优先级：P1/P2  
 依赖：T008  
-预计产物：docs/design/acoustic-scene.md
+预计产物：[docs/design/acoustic-scene.md](../design/acoustic-scene.md)
 
 ## 1. 背景
 
@@ -56,3 +56,7 @@
 ## 6. Activity Log
 
 - 2026-07-07：任务创建。
+- 2026-07-08：阅读 `docs/tasks/asetup.md`、`docs/tasks/tasks.md`、本任务文件、`docs/design/audio-engine-design.md` 第 10 节；验证 Steam Audio、Project Acoustics、Back2Gaming/Vericidium 参考方向。
+- 2026-07-08：产出 [acoustic-scene.md](../design/acoustic-scene.md)，定义 `AcousticScene`、voxel/LOD、3-band material、portal/opening、dynamic overlay、room/zone/probe、更新流程和 CPU/GPU 共享语义。
+- 2026-07-08：覆盖 no-wall、thick-wall、wall-hole/window、door open/close、cave、open-field 六类 case；明确 render/physics 同步边界和 fallback 规则。
+- 2026-07-08：给出 T010 可直接消费的最小 `TestScene`/`SolidBox` 数据格式和 required scenes，避免 T010 重新发明输入。
