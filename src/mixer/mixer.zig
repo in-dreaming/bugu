@@ -30,8 +30,10 @@ pub const TestVoiceDesc = struct {
 pub const SampleVoiceDesc = struct {
     samples: []const f32,
     gain: f32 = 0.2,
+    pitch: f32 = 1.0,
     priority: f32 = 1.0,
     bus: BusId = .sfx,
+    loop: bool = false,
 };
 
 const Voice = struct {
@@ -40,7 +42,9 @@ const Voice = struct {
     phase: f32 = 0.0,
     phase_step: f32 = 0.0,
     samples: []const f32 = &.{},
-    cursor: usize = 0,
+    cursor: f32 = 0.0,
+    cursor_step: f32 = 1.0,
+    loop: bool = false,
     gain_current: f32 = 0.0,
     gain_target: f32 = 0.0,
     gain_step: f32 = 0.0,
@@ -93,7 +97,9 @@ pub const Mixer = struct {
             .state = .starting,
             .source = .sample,
             .samples = desc.samples,
-            .cursor = 0,
+            .cursor = 0.0,
+            .cursor_step = desc.pitch,
+            .loop = desc.loop,
             .gain_current = 0.0,
             .gain_target = desc.gain,
             .gain_step = desc.gain / 128.0,
@@ -157,12 +163,18 @@ pub const Mixer = struct {
                                 break :tone value;
                             },
                             .sample => sample: {
-                                if (voice.cursor >= voice.samples.len) {
-                                    voice.state = .free;
-                                    break :sample 0.0;
+                                var index: usize = @intFromFloat(voice.cursor);
+                                if (index >= voice.samples.len) {
+                                    if (voice.loop) {
+                                        voice.cursor = 0.0;
+                                        index = 0;
+                                    } else {
+                                        voice.state = .free;
+                                        break :sample 0.0;
+                                    }
                                 }
-                                const value = voice.samples[voice.cursor];
-                                voice.cursor += 1;
+                                const value = voice.samples[index];
+                                voice.cursor += @max(voice.cursor_step, 0.01);
                                 break :sample value;
                             },
                         };

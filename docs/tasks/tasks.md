@@ -47,7 +47,7 @@
 | T004 | DONE | [P0 Zig 设备后端实现](T004-zig-p0-backend.md) | Implementation | T002,T003 | Zig miniaudio/offline backend、fixed quantum tone demo、submodule |
 | T005 | DONE | [Mixer、Voice、Bus core 实现](T005-mixer-voice-bus-core.md) | Implementation | T002,T003,T004 | fixed quantum mixer、64 voice pool、SFX/Music/Master bus、telemetry |
 | T006 | DONE | [Asset import、Decode、Bank MVP](T006-asset-decode-bank-mvp.md) | Implementation | T001,T003,T005 | WAV/PCM importer、TOML manifest、float32 blob、preload Bank |
-| T007 | TODO | [Event、Parameter、State、Switch runtime](T007-event-parameter-runtime.md) | Design+Implementation | T003,T005,T006 | 事件到 voice 的最小链路 |
+| T007 | DONE | [Event、Parameter、State、Switch runtime](T007-event-parameter-runtime.md) | Design+Implementation | T003,T005,T006 | post_event -> event resolve -> sample voice, random/switch/RTPC |
 | T008 | TODO | [基础空间音频：attenuation、cone、Doppler](T008-spatial-baseline.md) | Design+Implementation | T005,T007 | 3D 参数和听感 demo |
 | T009 | TODO | [Acoustic scene、voxel、materials、portal 设计](T009-acoustic-scene-voxel-materials.md) | Research+Design | T008 | 声学场景表示和数据结构 |
 | T010 | TODO | [CPU 复合声学传播 MVP](T010-cpu-acoustic-propagation-mvp.md) | Implementation | T009 | direct、penetration、reflection、escape rays |

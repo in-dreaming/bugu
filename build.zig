@@ -57,6 +57,21 @@ pub fn build(b: *std.Build) void {
     const run_asset = b.addRunArtifact(asset_exe);
     const asset_step = b.step("asset-demo", "Run the WAV import and bank playback demo");
     asset_step.dependOn(&run_asset.step);
+
+    const event_exe = b.addExecutable(.{
+        .name = "bugu-event-demo",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/event_demo.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    event_exe.root_module.addImport("bugu_audio", bugu_audio);
+    b.installArtifact(event_exe);
+
+    const run_event = b.addRunArtifact(event_exe);
+    const event_step = b.step("event-demo", "Run the event runtime demo");
+    event_step.dependOn(&run_event.step);
 }
 
 fn addMiniaudio(module: *std.Build.Module, target: std.Target) void {
