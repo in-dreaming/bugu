@@ -1,10 +1,10 @@
 # T012 验证、profile、debug visualization
 
-状态：TODO  
+状态：DONE  
 类型：Validation+Tooling  
 优先级：P1/P2  
 依赖：T004-T011 可逐步补齐  
-预计产物：测试矩阵、profile 工具、基于 in-dreaming/gpu 的 debug visualization 方案或实现。
+预计产物：[测试矩阵/profile/debug 计划](../validation/audio-validation-plan.md)、profile 工具、基于 in-dreaming/gpu 的 debug visualization 方案。
 
 ## 1. 背景
 
@@ -66,3 +66,8 @@
 ## 6. Activity Log
 
 - 2026-07-07：任务创建。
+- 2026-07-08：开始实现；已阅读 `docs/tasks/asetup.md`、T012 文件、`docs/design/audio-engine-design.md` 第 13-16 节和 T004-T011 任务证据。
+- 2026-07-08：新增 [audio-validation-plan.md](../validation/audio-validation-plan.md)，定义自动化命令、测试矩阵、T010 六个声学场景 pass/fail、profile 规则、CI/本地设备拆分、mock/fallback gate 和未来 in-dreaming/gpu 可视化接入方案。
+- 2026-07-08：新增 `examples/validation_report.zig` 与 `zig build validation-report`，输出真实 mixer telemetry、render p50/p99/p999、stolen/clipping/peak/RMS 和六个 acoustic case 的 response/mapping 摘要。
+- 2026-07-08：验证命令：`zig build test` 通过；`zig build validation-report` 通过。样例输出保存到 [t012-validation-report-sample.txt](../validation/t012-validation-report-sample.txt)，本次报告显示 96 voice stress -> active=64、stolen=32、clipping=0，并覆盖 open_air/thick_wall/wall_hole/door_open/cave/open_field。
+- 2026-07-08：限制：T012 未实现图形可视化；计划明确未来如果实现必须通过 `third_party/in_dreaming_gpu` submodule 和 `build.zig` 接入，当前仅提供文本/JSON debug，不声称有运行截图。

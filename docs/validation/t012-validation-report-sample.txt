@@ -1,0 +1,8 @@
+bugu validation report v0.1
+mixer_stress rendered_frames=24576 active=64 stolen=32 clipping=0 peak=0.152858 rms=0.001779 render_ns_p50=757900 render_ns_p99=838500 render_ns_p999=1119500
+acoustic_case name=open_air direct=0.51020 transmission=0.00000 portal=0.00000 portal_pan=0.000 reverb=0.00000 openness=1.00000 confidence=0.938 smoothing_ms=25.00
+acoustic_case name=thick_wall direct=0.44643 transmission=0.01442 portal=0.00000 portal_pan=0.000 reverb=0.22638 openness=0.85938 confidence=0.938 smoothing_ms=25.00
+acoustic_case name=wall_hole direct=0.44643 transmission=0.01442 portal=0.06960 portal_pan=0.894 reverb=0.22638 openness=0.85938 confidence=0.938 smoothing_ms=25.00
+acoustic_case name=door_open direct=0.44643 transmission=0.01442 portal=0.07408 portal_pan=1.000 reverb=0.22638 openness=0.85938 confidence=0.938 smoothing_ms=25.00
+acoustic_case name=cave direct=0.51020 transmission=0.00000 portal=0.00000 portal_pan=0.000 reverb=1.00000 openness=0.32094 confidence=0.938 smoothing_ms=25.00
+acoustic_case name=open_field direct=0.51020 transmission=0.00000 portal=0.00000 portal_pan=0.000 reverb=0.08213 openness=1.00000 confidence=0.938 smoothing_ms=25.00

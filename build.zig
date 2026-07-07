@@ -117,6 +117,21 @@ pub fn build(b: *std.Build) void {
     const run_acoustic_mapping = b.addRunArtifact(acoustic_mapping_exe);
     const acoustic_mapping_step = b.step("acoustic-mapping-demo", "Run AcousticResponse to mixer mapping demo");
     acoustic_mapping_step.dependOn(&run_acoustic_mapping.step);
+
+    const validation_report_exe = b.addExecutable(.{
+        .name = "bugu-validation-report",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/validation_report.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    validation_report_exe.root_module.addImport("bugu_audio", bugu_audio);
+    b.installArtifact(validation_report_exe);
+
+    const run_validation_report = b.addRunArtifact(validation_report_exe);
+    const validation_report_step = b.step("validation-report", "Run text validation and profile report");
+    validation_report_step.dependOn(&run_validation_report.step);
 }
 
 fn addMiniaudio(module: *std.Build.Module, target: std.Target) void {
