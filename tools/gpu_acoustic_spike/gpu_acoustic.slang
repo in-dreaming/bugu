@@ -24,6 +24,7 @@ void acousticMain(uint3 tid : SV_DispatchThreadID)
     float portalRadius = gAcoustic[base + 11u];
     float materialTransmissionMid = saturate(gAcoustic[base + 12u]);
     float materialTransmissionHigh = saturate(gAcoustic[base + 13u]);
+    float opennessSolidCells = gAcoustic[base + 15u];
 
     float dx = sourceX - listenerX;
     float dy = sourceY - listenerY;
@@ -65,7 +66,12 @@ void acousticMain(uint3 tid : SV_DispatchThreadID)
         portalDirY = lpY / listenerDist;
     }
 
-    float openness = saturate(1.0 - solidDepth / max((float)cellCount * cellSize, cellSize));
+    float opennessDepth = solidDepth;
+    if (opennessSolidCells >= 0.0)
+    {
+        opennessDepth = opennessSolidCells * cellSize;
+    }
+    float openness = saturate(1.0 - opennessDepth / max((float)cellCount * cellSize, cellSize));
 
     gAcoustic[base + OUT_BASE + 0u] = directGain;
     gAcoustic[base + OUT_BASE + 1u] = transmissionGain;

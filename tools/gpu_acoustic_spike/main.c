@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define SCENE_COUNT 4u
+#define SCENE_COUNT 7u
 #define STRIDE 40u
 #define CELL_BASE 16u
 #define OUT_BASE 32u
@@ -40,7 +40,7 @@ static void emit(const char* fmt, ...)
     }
 }
 
-static void fill_scene(float* data, unsigned scene, float solid_a, float solid_b, float portal_area, float portal_y)
+static void fill_scene(float* data, unsigned scene, float solid_a, float solid_b, float portal_area, float portal_y, float portal_radius, float openness_solid_cells)
 {
     const unsigned base = scene * STRIDE;
     data[base + 0] = -4.0f;
@@ -54,10 +54,11 @@ static void fill_scene(float* data, unsigned scene, float solid_a, float solid_b
     data[base + 8] = portal_y;
     data[base + 9] = portal_area;
     data[base + 10] = 2.0f;
-    data[base + 11] = 1.0f;
+    data[base + 11] = portal_radius;
     data[base + 12] = 0.14f;
     data[base + 13] = 0.04f;
     data[base + 14] = 0.65f;
+    data[base + 15] = openness_solid_cells;
 
     for (unsigned i = 0; i < 16; i++) {
         data[base + CELL_BASE + i] = (i == (unsigned)solid_a || i == (unsigned)solid_b) ? 1.0f : 0.0f;
@@ -110,15 +111,21 @@ int main(void)
     float data[FLOAT_COUNT];
     memset(data, 0, sizeof(data));
 
-    fill_scene(data, 0, 100.0f, 101.0f, 0.0f, 0.0f);  // open_air
-    fill_scene(data, 1, 7.0f, 8.0f, 0.0f, 0.0f);      // thick_wall
-    fill_scene(data, 2, 7.0f, 8.0f, 1.8f, 2.0f);      // wall_hole
-    fill_scene(data, 3, 100.0f, 101.0f, 0.0f, 0.0f);  // open_field
+    fill_scene(data, 0, 100.0f, 101.0f, 0.0f, 0.0f, 1.0f, -1.0f);  // open_air
+    fill_scene(data, 1, 7.0f, 8.0f, 0.0f, 0.0f, 1.0f, -1.0f);      // thick_wall
+    fill_scene(data, 2, 7.0f, 8.0f, 1.8f, 2.0f, 1.0f, -1.0f);      // wall_hole
+    fill_scene(data, 3, 7.0f, 8.0f, 0.0f, 0.0f, 0.9f, -1.0f);      // door_closed
+    fill_scene(data, 4, 7.0f, 8.0f, 2.0f, 0.0f, 0.9f, -1.0f);      // door_open
+    fill_scene(data, 5, 100.0f, 101.0f, 0.0f, 0.0f, 1.0f, 11.0f);  // cave
+    fill_scene(data, 6, 100.0f, 101.0f, 0.0f, 0.0f, 1.0f, -1.0f);  // open_field
 
     const Expected expected[SCENE_COUNT] = {
         { "open_air", 0.51020f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 20000.0f },
         { "thick_wall", 0.44643f, 0.01442f, 0.0f, 0.0f, 0.0f, 0.875f, 1380.0f },
         { "wall_hole", 0.44643f, 0.01442f, 0.19884f, 0.894f, 0.447f, 0.875f, 1380.0f },
+        { "door_closed", 0.44643f, 0.01442f, 0.0f, 0.0f, 0.0f, 0.875f, 1380.0f },
+        { "door_open", 0.44643f, 0.01442f, 0.22959f, 1.0f, 0.0f, 0.875f, 1380.0f },
+        { "cave", 0.51020f, 0.0f, 0.0f, 0.0f, 0.0f, 0.3125f, 20000.0f },
         { "open_field", 0.51020f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 20000.0f },
     };
 

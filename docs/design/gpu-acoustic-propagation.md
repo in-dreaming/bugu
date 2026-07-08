@@ -19,7 +19,7 @@ The required RHI dependency is now present as a git submodule at `third_party/in
 
 After running `E:\env\activate-dong-build.ps1`, the RHI can configure and build locally. Bugu now has a repo-owned spike target under `tools/gpu_acoustic_spike` that compiles a Slang compute shader, dispatches it through `in-dreaming/gpu`, reads back GPU-written response values, and validates those values against the T010 CPU baseline tolerances.
 
-The spike covers open_air, thick_wall, wall_hole, and open_field. It does not replace the CPU propagation backend and does not touch the audio render thread.
+The T013 spike covered open_air, thick_wall, wall_hole, and open_field. T018 expanded the same real GPU dispatch/readback path to seven scenes: open_air, thick_wall, wall_hole, door_closed, door_open, cave, and open_field. It does not replace the CPU propagation backend and does not touch the audio render thread.
 
 ## 2. Capability Probe
 
@@ -75,7 +75,7 @@ Initial GPU correctness tolerance:
 | direction vectors | dot product >= 0.90 when valid |
 | confidence | must decrease when GPU uses coarser data or stale readback |
 
-T013 GPU results were produced by `bugu_gpu_acoustic_spike.exe` and passed the comparison contract for the four target scenes.
+T013 GPU results were produced by `bugu_gpu_acoustic_spike.exe` and passed the comparison contract for the first four target scenes. T018 results passed the same subset contract for seven scenes, with cave limited to direct/transmission/portal/openness/lowpass coverage and no GPU reverb/reflection claim.
 
 ## 4. Architecture
 
@@ -180,7 +180,7 @@ Per-frame controls:
 Post-T013 formal backend work should:
 
 1. Split the packed spike buffer into production scene/input/output buffers after RHI multi-buffer binding is mature enough.
-2. Add cave/door dynamic update coverage.
+2. Extend cave coverage from openness subset to reflection/reverb terms and add door dynamic update history beyond closed/open one-shot inputs.
 3. Move from one-shot spike executable to a backend object owned by the audio control/worker side.
 4. Add asynchronous readback ring integration and age/confidence smoothing.
 5. Keep CPU as correctness reference and fallback for unsupported/late GPU work.

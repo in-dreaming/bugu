@@ -40,6 +40,7 @@
 15. T015：Event-driven acoustic runtime integration。
 16. T016：Effect bus abstraction。
 17. T017：Validation wrapper。
+18. T018：GPU spike scene coverage。
 
 ## 3. 任务列表
 
@@ -62,6 +63,7 @@
 | T015 | DONE | [Event-driven acoustic runtime integration](T015-event-driven-acoustic-runtime.md) | Implementation | T007,T010,T011,T014 | `postAcousticEvent`、`AcousticEventInstance.update`、[event acoustic snapshot](../validation/acoustic-t015-event-runtime-snapshot.txt) |
 | T016 | DONE | [Effect bus abstraction](T016-effect-bus-abstraction.md) | Implementation | T005,T014,T015 | fixed `EffectBuses`、public controls、[effect bus snapshot](../validation/acoustic-t016-effect-bus-snapshot.txt) |
 | T017 | DONE | [Validation wrapper](T017-validation-wrapper.md) | Validation+Tooling | T012-T016 | `tools/run_validation.ps1`、[wrapper snapshot](../validation/t017-validation-wrapper-snapshot.txt) |
+| T018 | DONE | [GPU spike scene coverage](T018-gpu-spike-scene-coverage.md) | Research+Prototype | T013,T017 | [expanded seven-scene GPU spike](../validation/gpu-acoustic-spike-t018-report.txt) |
 
 ## 4. 任务依赖图
 
@@ -83,6 +85,7 @@
 - T015 依赖 T007 event runtime 和 T014 voice update path，将 posted event 返回的 handles 接入 acoustic snapshot 更新。
 - T016 依赖 T014/T015 的 reverb send 使用者，将 ad hoc reverb delay line 固化为 effect bus abstraction。
 - T017 依赖 T012-T016 的验证命令，将真实 CPU/offline gate 和显式 GPU gate 集中到脚本。
+- T018 依赖 T013 GPU spike 和 T017 validation wrapper，扩展 GPU scene matrix 但不声明 production backend 完成。
 
 ## 5. 当前建议 pick
 
@@ -141,6 +144,7 @@
 | 事件驱动 acoustic runtime | T015 | post_event -> sample voice handles -> AcousticSnapshot update -> offline render telemetry |
 | effect bus abstraction | T016 | voice sends -> fixed effect bus -> return bus -> master telemetry |
 | validation wrapper | T017 | one script runs real validation commands and optional explicit GPU spike |
+| GPU scene coverage | T018 | real in-dreaming/gpu spike covers door/cave subset with CPU semantic tolerances |
 
 ## 10. 更新规则
 
