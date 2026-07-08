@@ -1,0 +1,23 @@
+Command:
+zig build effect-bus-demo
+
+Input:
+- Engine sample rate 48000 Hz, stereo offline render.
+- Two real test voices with nonzero reverb_send routed into the fixed reverb effect bus.
+- Effect bus controls: return_gain=0.42, feedback=0.38, crossfeed=0.06.
+
+Output:
+effect bus demo frames=12032 peak=0.202914 rms=0.091415 active=2 clipping=0 reverb_send_peak=0.158288 reverb_return_peak=0.066481 return_gain=0.42 feedback=0.38
+
+Additional regression commands:
+- zig build test
+- zig build acoustic-effects-demo
+- zig build acoustic-event-demo
+- zig build acoustic-mapping-demo
+- zig build validation-report
+
+Pass criteria:
+- Effect bus send and return peaks are nonzero.
+- Effect bus controls are visible in the measured snapshot.
+- Offline render produced nonzero peak/RMS and clipping=0.
+- Acoustic demos that use reverb_send still pass.

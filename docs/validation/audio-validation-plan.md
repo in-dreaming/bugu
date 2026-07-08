@@ -22,6 +22,7 @@ Visualization is not implemented in T012. Any future visual debug tool must use 
 | `zig build acoustic-mapping-demo` | CI or local, no device required | Responses map through `AcousticMixerSnapshot` into mixer render telemetry with `clipping=0`. |
 | `zig build acoustic-effects-demo` | CI or local, no device required | Acoustic snapshots drive real voice handle updates, delayed layers, reverb send, and offline render telemetry with `clipping=0`. |
 | `zig build acoustic-event-demo` | CI or local, no device required | `postAcousticEvent` resolves a real sample event, starts snapshot layers, updates handles from a later snapshot, and renders nonzero telemetry with `clipping=0`. |
+| `zig build effect-bus-demo` | CI or local, no device required | Voices route sends through the fixed reverb effect bus; send/return peaks are nonzero and `clipping=0`. |
 | `zig build validation-report` | CI or local, no device required | Produces a text report from real counters, render timing samples, and acoustic scene outputs. |
 | `cmake -S tools/gpu_acoustic_spike -B build/gpu_acoustic_spike -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build/gpu_acoustic_spike --target bugu_gpu_acoustic_spike && build/gpu_acoustic_spike/bugu_gpu_acoustic_spike.exe` | Local with `E:\env\activate-dong-build.ps1` and GPU/RHI available | Dispatches Bugu acoustic compute shader through `in-dreaming/gpu`, reads back response values, and validates GPU vs CPU tolerances. |
 | `zig build tone -- --device --seconds 2` | Local real device only | Miniaudio backend opens/starts/stops a real device; no callback failure or clipping evidence. |
@@ -32,7 +33,7 @@ Visualization is not implemented in T012. Any future visual debug tool must use 
 | Area | Cases | Evidence source | Failure criteria |
 |---|---|---|---|
 | Backend | offline render, fixed quantum adapter, local device start/stop | T004 task evidence, `tone`, `validation-report` | Empty callback success, missing rendered frames, device run marked DONE without real device or allowed offline fallback. |
-| Mixer | 64 real voices, stealing beyond limit, ramps, delayed reflection starts | `zig build test`, `validation-report` | Peak/RMS zero for active voices, clipping in nominal demos, active/stolen counts inconsistent. |
+| Mixer | 64 real voices, stealing beyond limit, ramps, delayed reflection starts, fixed effect bus routing | `zig build test`, `validation-report`, `effect-bus-demo` | Peak/RMS zero for active voices, clipping in nominal demos, active/stolen counts inconsistent, effect send/return meters stay zero. |
 | Stream/underrun | fixed quantum partial callback buffering | offline backend tests | Underrun/dropout counters rise in deterministic offline render. |
 | Asset | WAV PCM16/float32 import, manifest/blob, preload bank | `asset-demo` | No real file read, unsupported codec claimed, metadata/blob absent. |
 | Event | event resolve to sample voice, random/switch/RTPC, event-owned acoustic voice handles | `event-demo`, `acoustic-event-demo` | Direct voice internals used instead of event runtime path. |

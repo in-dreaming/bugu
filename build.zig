@@ -162,6 +162,21 @@ pub fn build(b: *std.Build) void {
     const run_acoustic_event = b.addRunArtifact(acoustic_event_exe);
     const acoustic_event_step = b.step("acoustic-event-demo", "Run event-driven acoustic voice update demo");
     acoustic_event_step.dependOn(&run_acoustic_event.step);
+
+    const effect_bus_exe = b.addExecutable(.{
+        .name = "bugu-effect-bus-demo",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/effect_bus_demo.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    effect_bus_exe.root_module.addImport("bugu_audio", bugu_audio);
+    b.installArtifact(effect_bus_exe);
+
+    const run_effect_bus = b.addRunArtifact(effect_bus_exe);
+    const effect_bus_step = b.step("effect-bus-demo", "Run fixed effect bus routing demo");
+    effect_bus_step.dependOn(&run_effect_bus.step);
 }
 
 fn addMiniaudio(module: *std.Build.Module, target: std.Target) void {

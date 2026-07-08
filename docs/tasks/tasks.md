@@ -38,6 +38,7 @@
 13. T013：GPU propagation 设计与 spike。
 14. T014：Runtime acoustic effects integration。
 15. T015：Event-driven acoustic runtime integration。
+16. T016：Effect bus abstraction。
 
 ## 3. 任务列表
 
@@ -58,6 +59,7 @@
 | T013 | DONE | [GPU propagation 设计与 spike](T013-gpu-propagation-design-spike.md) | Research+Prototype | T010,T012 | [GPU acoustic propagation design](../design/gpu-acoustic-propagation.md)、[validated GPU spike](../validation/gpu-acoustic-spike-report.txt) |
 | T014 | DONE | [Runtime acoustic effects integration](T014-runtime-acoustic-effects.md) | Implementation | T011,T012,T013 | VoiceHandle/update、real reverb send、[effects snapshot](../validation/acoustic-t014-effects-snapshot.txt) |
 | T015 | DONE | [Event-driven acoustic runtime integration](T015-event-driven-acoustic-runtime.md) | Implementation | T007,T010,T011,T014 | `postAcousticEvent`、`AcousticEventInstance.update`、[event acoustic snapshot](../validation/acoustic-t015-event-runtime-snapshot.txt) |
+| T016 | DONE | [Effect bus abstraction](T016-effect-bus-abstraction.md) | Implementation | T005,T014,T015 | fixed `EffectBuses`、public controls、[effect bus snapshot](../validation/acoustic-t016-effect-bus-snapshot.txt) |
 
 ## 4. 任务依赖图
 
@@ -77,6 +79,7 @@
 - T013 必须在 T010 CPU correctness 成立后开始。
 - T014 依赖 T011 snapshot mapping，并将 acoustic layer 参数接入真实 mixer effect path。
 - T015 依赖 T007 event runtime 和 T014 voice update path，将 posted event 返回的 handles 接入 acoustic snapshot 更新。
+- T016 依赖 T014/T015 的 reverb send 使用者，将 ad hoc reverb delay line 固化为 effect bus abstraction。
 
 ## 5. 当前建议 pick
 
@@ -133,6 +136,7 @@
 | 验证/profile | T012 | 测试矩阵、p99/p999、dropout、声学 case |
 | 真实 runtime effects | T014 | AcousticSnapshot -> VoiceHandle/update -> delayed layers/reverb send -> offline render telemetry |
 | 事件驱动 acoustic runtime | T015 | post_event -> sample voice handles -> AcousticSnapshot update -> offline render telemetry |
+| effect bus abstraction | T016 | voice sends -> fixed effect bus -> return bus -> master telemetry |
 
 ## 10. 更新规则
 

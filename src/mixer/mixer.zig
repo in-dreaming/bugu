@@ -21,6 +21,10 @@ pub const BusId = enum {
     master,
 };
 
+pub const EffectBusId = enum {
+    reverb,
+};
+
 pub const VoiceHandle = struct {
     index: u16,
     generation: u16,
@@ -59,6 +63,24 @@ pub const VoiceControlParams = struct {
     reverb_send: ?f32 = null,
 };
 
+pub const EffectBusControlParams = struct {
+    return_gain: ?f32 = null,
+    feedback: ?f32 = null,
+    crossfeed: ?f32 = null,
+};
+
+pub const EffectBusSnapshot = struct {
+    reverb_send_peak: f32,
+    reverb_return_peak: f32,
+    reverb_return_gain: f32,
+    reverb_feedback: f32,
+};
+
+const StereoSample = struct {
+    l: f32,
+    r: f32,
+};
+
 const Voice = struct {
     generation: u16 = 0,
     state: VoiceState = .free,
@@ -86,6 +108,64 @@ const Voice = struct {
     }
 };
 
+const ReverbEffectBus = struct {
+    delay_l: [reverb_delay_frames]f32 = [_]f32{0.0} ** reverb_delay_frames,
+    delay_r: [reverb_delay_frames]f32 = [_]f32{0.0} ** reverb_delay_frames,
+    delay_index: usize = 0,
+    return_gain: f32 = 0.25,
+    feedback: f32 = 0.45,
+    crossfeed: f32 = 0.08,
+    send_peak: f32 = 0.0,
+    return_peak: f32 = 0.0,
+
+    fn setParams(self: *ReverbEffectBus, params: EffectBusControlParams) void {
+        if (params.return_gain) |gain| self.return_gain = std.math.clamp(gain, 0.0, 2.0);
+        if (params.feedback) |feedback| self.feedback = std.math.clamp(feedback, 0.0, 0.98);
+        if (params.crossfeed) |crossfeed| self.crossfeed = std.math.clamp(crossfeed, 0.0, 0.5);
+    }
+
+    fn process(self: *ReverbEffectBus, send_l: f32, send_r: f32) StereoSample {
+        const wet_l = self.delay_l[self.delay_index];
+        const wet_r = self.delay_r[self.delay_index];
+        self.delay_l[self.delay_index] = send_l + wet_l * self.feedback + wet_r * self.crossfeed;
+        self.delay_r[self.delay_index] = send_r + wet_r * self.feedback + wet_l * self.crossfeed;
+        self.delay_index = (self.delay_index + 1) % reverb_delay_frames;
+
+        const out_l = wet_l * self.return_gain;
+        const out_r = wet_r * self.return_gain;
+        self.send_peak = @max(self.send_peak, @max(@abs(send_l), @abs(send_r)));
+        self.return_peak = @max(self.return_peak, @max(@abs(out_l), @abs(out_r)));
+        return .{ .l = out_l, .r = out_r };
+    }
+
+    fn snapshot(self: *const ReverbEffectBus) EffectBusSnapshot {
+        return .{
+            .reverb_send_peak = self.send_peak,
+            .reverb_return_peak = self.return_peak,
+            .reverb_return_gain = self.return_gain,
+            .reverb_feedback = self.feedback,
+        };
+    }
+};
+
+const EffectBuses = struct {
+    reverb: ReverbEffectBus = .{},
+
+    fn setParams(self: *EffectBuses, bus: EffectBusId, params: EffectBusControlParams) void {
+        switch (bus) {
+            .reverb => self.reverb.setParams(params),
+        }
+    }
+
+    fn processReverb(self: *EffectBuses, send_l: f32, send_r: f32) StereoSample {
+        return self.reverb.process(send_l, send_r);
+    }
+
+    fn snapshot(self: *const EffectBuses) EffectBusSnapshot {
+        return self.reverb.snapshot();
+    }
+};
+
 pub const Mixer = struct {
     sample_rate: u32,
     voices: [max_real_voices]Voice = [_]Voice{.{}} ** max_real_voices,
@@ -94,11 +174,7 @@ pub const Mixer = struct {
     master_gain_current: f32 = 1.0,
     master_gain_target: f32 = 1.0,
     master_gain_step: f32 = 0.0,
-    reverb_l: [reverb_delay_frames]f32 = [_]f32{0.0} ** reverb_delay_frames,
-    reverb_r: [reverb_delay_frames]f32 = [_]f32{0.0} ** reverb_delay_frames,
-    reverb_index: usize = 0,
-    reverb_return_gain: f32 = 0.25,
-    reverb_feedback: f32 = 0.45,
+    effect_buses: EffectBuses = .{},
 
     pub fn init(sample_rate: u32) Mixer {
         return .{ .sample_rate = sample_rate };
@@ -221,6 +297,14 @@ pub const Mixer = struct {
         self.master_gain_step = (gain - self.master_gain_current) / @as(f32, @floatFromInt(@max(ramp_frames, 1)));
     }
 
+    pub fn setEffectBus(self: *Mixer, bus: EffectBusId, params: EffectBusControlParams) void {
+        self.effect_buses.setParams(bus, params);
+    }
+
+    pub fn effectBusSnapshot(self: *const Mixer) EffectBusSnapshot {
+        return self.effect_buses.snapshot();
+    }
+
     pub fn render(self: *Mixer, output: []f32, frame_count: u32, channels: u16, telemetry: *core.TelemetryCounters) void {
         const start_ns = nowNanos();
         @memset(output, 0.0);
@@ -235,8 +319,8 @@ pub const Mixer = struct {
         while (frame < frame_count) : (frame += 1) {
             self.advanceMasterRamp();
 
-            var mixed_l: f32 = 0.0;
-            var mixed_r: f32 = 0.0;
+            var dry_l_sum: f32 = 0.0;
+            var dry_r_sum: f32 = 0.0;
             var reverb_send_l: f32 = 0.0;
             var reverb_send_r: f32 = 0.0;
 
@@ -282,23 +366,23 @@ pub const Mixer = struct {
                             .master => 1.0,
                         };
                         const filtered = self.applyLowpass(voice, sample);
-                        const out_sample = filtered * bus_gain * self.master_gain_current;
+                        const out_sample = filtered * bus_gain;
                         const pan = std.math.clamp(voice.pan, -1.0, 1.0);
                         const left = @cos((pan + 1.0) * std.math.pi * 0.25);
                         const right = @sin((pan + 1.0) * std.math.pi * 0.25);
                         const dry_l = out_sample * left;
                         const dry_r = out_sample * right;
-                        mixed_l += dry_l;
-                        mixed_r += dry_r;
+                        dry_l_sum += dry_l;
+                        dry_r_sum += dry_r;
                         reverb_send_l += dry_l * voice.reverb_send;
                         reverb_send_r += dry_r * voice.reverb_send;
                     },
                 }
             }
 
-            const wet = self.processReverb(reverb_send_l, reverb_send_r);
-            mixed_l += wet.l;
-            mixed_r += wet.r;
+            const wet = self.effect_buses.processReverb(reverb_send_l, reverb_send_r);
+            var mixed_l = (dry_l_sum + wet.l) * self.master_gain_current;
+            var mixed_r = (dry_r_sum + wet.r) * self.master_gain_current;
 
             if (mixed_l > 1.0 or mixed_l < -1.0) clipping += 1;
             if (mixed_r > 1.0 or mixed_r < -1.0) clipping += 1;
@@ -402,18 +486,6 @@ pub const Mixer = struct {
         const alpha = dt / (rc + dt);
         voice.lowpass_z += alpha * (sample - voice.lowpass_z);
         return voice.lowpass_z;
-    }
-
-    fn processReverb(self: *Mixer, send_l: f32, send_r: f32) struct { l: f32, r: f32 } {
-        const wet_l = self.reverb_l[self.reverb_index];
-        const wet_r = self.reverb_r[self.reverb_index];
-        self.reverb_l[self.reverb_index] = send_l + wet_l * self.reverb_feedback + wet_r * 0.08;
-        self.reverb_r[self.reverb_index] = send_r + wet_r * self.reverb_feedback + wet_l * 0.08;
-        self.reverb_index = (self.reverb_index + 1) % reverb_delay_frames;
-        return .{
-            .l = wet_l * self.reverb_return_gain,
-            .r = wet_r * self.reverb_return_gain,
-        };
     }
 };
 
@@ -520,12 +592,18 @@ test "voice handle updates gain pan lowpass pitch and reverb send" {
 test "reverb send produces real delayed tail" {
     var mixer = Mixer.init(48_000);
     var telemetry: core.TelemetryCounters = .{};
+    mixer.setEffectBus(.reverb, .{ .return_gain = 0.5, .feedback = 0.2, .crossfeed = 0.03 });
     try mixer.startTestVoice(.{ .frequency_hz = 440.0, .gain = 0.2, .reverb_send = 1.0 }, &telemetry);
     var buffer: [reverb_delay_frames * 2]f32 = undefined;
     mixer.render(&buffer, reverb_delay_frames, 2, &telemetry);
     mixer.stopAll(1);
     mixer.render(&buffer, reverb_delay_frames, 2, &telemetry);
     const snap = telemetry.snapshot();
+    const bus = mixer.effectBusSnapshot();
     try std.testing.expect(snap.rms > 0.0);
     try std.testing.expect(snap.clipping_count == 0);
+    try std.testing.expect(bus.reverb_send_peak > 0.0);
+    try std.testing.expect(bus.reverb_return_peak > 0.0);
+    try std.testing.expect(bus.reverb_return_gain == 0.5);
+    try std.testing.expect(bus.reverb_feedback == 0.2);
 }

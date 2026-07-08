@@ -35,6 +35,8 @@ pub const TelemetrySnapshot = struct {
     mixer_time_nanos: u64,
 };
 
+pub const EffectBusSnapshot = mixer.EffectBusSnapshot;
+
 pub const TelemetryCounters = struct {
     callback_count: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
     rendered_frames: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
@@ -149,6 +151,14 @@ pub const Engine = struct {
 
     pub fn setMasterGain(self: *Engine, gain: f32, ramp_frames: u32) void {
         self.mixer.setMasterGain(gain, ramp_frames);
+    }
+
+    pub fn setEffectBus(self: *Engine, bus: mixer.EffectBusId, params: mixer.EffectBusControlParams) void {
+        self.mixer.setEffectBus(bus, params);
+    }
+
+    pub fn effectBusSnapshot(self: *const Engine) mixer.EffectBusSnapshot {
+        return self.mixer.effectBusSnapshot();
     }
 
     pub fn telemetrySnapshot(self: *const Engine) TelemetrySnapshot {
