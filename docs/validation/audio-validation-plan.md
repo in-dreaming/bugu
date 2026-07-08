@@ -14,6 +14,8 @@ Visualization is not implemented in T012. Any future visual debug tool must use 
 
 | Command | Environment | Pass criteria |
 |---|---|---|
+| `pwsh -ExecutionPolicy Bypass -File tools/run_validation.ps1` | CI or local, no device required | Runs the CPU/offline validation matrix and fails on first failed command. |
+| `pwsh -ExecutionPolicy Bypass -File tools/run_validation.ps1 -Gpu -DongBuildEnv E:\env\activate-dong-build.ps1` | Local with dong build env and GPU/RHI available | Runs CPU/offline validation, configures/builds/runs the GPU acoustic spike, and fails instead of falling back if the GPU environment is missing. |
 | `zig build test` | CI or local, no device required | All unit tests pass; no mock-only success checks. |
 | `zig build asset-demo` | CI or local, no device required | WAV import reads a real generated WAV, builds metadata/blob, renders nonzero samples. |
 | `zig build event-demo` | CI or local, no device required | `postEvent` path creates sample voices; random/switch/RTPC behavior appears in output. |

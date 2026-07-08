@@ -1,0 +1,33 @@
+Command:
+powershell -ExecutionPolicy Bypass -File tools\run_validation.ps1
+
+Input coverage:
+- Zig unit tests.
+- Asset import demo with generated WAV files and bank blob/manifest.
+- Event runtime demo.
+- Spatial demo.
+- CPU acoustic propagation demo.
+- Acoustic mapping/effects/event demos.
+- Fixed effect bus demo.
+- Validation report.
+- Offline tone render to bugu-validation-tone.wav.
+
+Output summary:
+- unit tests: passed
+- asset demo: imported=3 total_frames=36000 render frames=9728 peak=0.090721 rms=0.049226 clipping=0
+- event demo: random/switch path passed, before_stop active=1 peak=0.058278 rms=0.025430 clipping=0
+- spatial demo: render frames=9728 peak=0.028260 rms=0.019421 clipping=0
+- acoustic mapping demo: open_air/thick_wall/wall_hole/door/cave/open_field rendered with clipping=0
+- acoustic effects demo: frames=28928 peak=0.318379 rms=0.082150 active=7 clipping=0
+- acoustic event demo: frames=20992 peak=0.036913 rms=0.021240 active=4 clipping=0
+- effect bus demo: frames=12032 peak=0.202914 rms=0.091415 reverb_send_peak=0.158288 reverb_return_peak=0.066481 clipping=0
+- validation report: mixer_stress active=64 stolen=32 clipping=0 p99=909900ns
+- offline tone render: callbacks=47 frames=12032 active=16 peak_abs=0.236778 rms=0.010242 clipping=0
+
+Result:
+Bugu validation passed.
+
+GPU note:
+The default command does not run the GPU spike. GPU validation is explicit:
+`powershell -ExecutionPolicy Bypass -File tools\run_validation.ps1 -Gpu -DongBuildEnv E:\env\activate-dong-build.ps1`
+When `-Gpu` is used, missing dong build environment is a hard failure, not a CPU fallback.
