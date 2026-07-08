@@ -194,7 +194,8 @@ fn decodeWavPcmToMono(allocator: std.mem.Allocator, id: []const u8, path: []cons
         offset = payload_end + (size & 1);
     }
 
-    if (sample_rate != 48_000 or channels == 0 or channels > 2 or data.len == 0) return AssetError.UnsupportedWav;
+    const target_sample_rate: u32 = 48_000;
+    if (sample_rate == 0 or channels == 0 or channels > 2 or data.len == 0) return AssetError.UnsupportedWav;
     if (!((format == 1 and bits_per_sample == 16) or (format == 3 and bits_per_sample == 32))) {
         return AssetError.UnsupportedWav;
     }
@@ -202,7 +203,10 @@ fn decodeWavPcmToMono(allocator: std.mem.Allocator, id: []const u8, path: []cons
     const bytes_per_sample = bits_per_sample / 8;
     const frame_bytes = @as(usize, channels) * bytes_per_sample;
     if (frame_bytes == 0 or data.len % frame_bytes != 0) return AssetError.CorruptWav;
-    const frames: u32 = @intCast(data.len / frame_bytes);
+    const source_frames: u32 = @intCast(data.len / frame_bytes);
+    const output_frames_u64 = (@as(u64, source_frames) * target_sample_rate + sample_rate / 2) / sample_rate;
+    if (output_frames_u64 == 0 or output_frames_u64 > std.math.maxInt(u32)) return AssetError.UnsupportedWav;
+    const frames: u32 = @intCast(output_frames_u64);
     const samples = try allocator.alloc(f32, frames);
     errdefer allocator.free(samples);
 
@@ -210,17 +214,7 @@ fn decodeWavPcmToMono(allocator: std.mem.Allocator, id: []const u8, path: []cons
     var sum_squares: f64 = 0.0;
     var frame: usize = 0;
     while (frame < frames) : (frame += 1) {
-        var mono: f32 = 0.0;
-        var channel: usize = 0;
-        while (channel < channels) : (channel += 1) {
-            const sample_offset = frame * frame_bytes + channel * bytes_per_sample;
-            const sample = if (format == 1)
-                @as(f32, @floatFromInt(std.mem.readInt(i16, data[sample_offset..][0..2], .little))) / 32768.0
-            else
-                @as(f32, @bitCast(std.mem.readInt(u32, data[sample_offset..][0..4], .little)));
-            mono += sample;
-        }
-        mono /= @floatFromInt(channels);
+        const mono = readResampledMonoFrame(data, frame_bytes, channels, bytes_per_sample, format, source_frames, sample_rate, target_sample_rate, frame);
         samples[frame] = mono;
         peak = @max(peak, @abs(mono));
         sum_squares += @as(f64, @floatCast(mono * mono));
@@ -230,15 +224,55 @@ fn decodeWavPcmToMono(allocator: std.mem.Allocator, id: []const u8, path: []cons
         .metadata = .{
             .id = id,
             .path = path,
-            .sample_rate = sample_rate,
+            .sample_rate = target_sample_rate,
             .source_channels = channels,
             .frames = frames,
-            .duration_seconds = @as(f32, @floatFromInt(frames)) / @as(f32, @floatFromInt(sample_rate)),
+            .duration_seconds = @as(f32, @floatFromInt(frames)) / @as(f32, @floatFromInt(target_sample_rate)),
             .peak = peak,
             .rms = @floatCast(@sqrt(sum_squares / @as(f64, @floatFromInt(frames)))),
         },
         .samples = samples,
     };
+}
+
+fn readResampledMonoFrame(
+    data: []const u8,
+    frame_bytes: usize,
+    channels: u16,
+    bytes_per_sample: u16,
+    format: u16,
+    source_frames: u32,
+    source_sample_rate: u32,
+    target_sample_rate: u32,
+    output_frame: usize,
+) f32 {
+    if (source_sample_rate == target_sample_rate) {
+        return readMonoFrame(data, frame_bytes, channels, bytes_per_sample, format, output_frame);
+    }
+
+    const source_rate_f: f32 = @floatFromInt(source_sample_rate);
+    const target_rate_f: f32 = @floatFromInt(target_sample_rate);
+    const source_pos = @as(f32, @floatFromInt(output_frame)) * (source_rate_f / target_rate_f);
+    const frame_a: usize = @intFromFloat(@floor(source_pos));
+    const frame_b = @min(frame_a + 1, @as(usize, source_frames - 1));
+    const t = source_pos - @as(f32, @floatFromInt(frame_a));
+    const a = readMonoFrame(data, frame_bytes, channels, bytes_per_sample, format, frame_a);
+    const b = readMonoFrame(data, frame_bytes, channels, bytes_per_sample, format, frame_b);
+    return a + (b - a) * t;
+}
+
+fn readMonoFrame(data: []const u8, frame_bytes: usize, channels: u16, bytes_per_sample: u16, format: u16, frame: usize) f32 {
+    var mono: f32 = 0.0;
+    var channel: usize = 0;
+    while (channel < channels) : (channel += 1) {
+        const sample_offset = frame * frame_bytes + channel * bytes_per_sample;
+        const sample = if (format == 1)
+            @as(f32, @floatFromInt(std.mem.readInt(i16, data[sample_offset..][0..2], .little))) / 32768.0
+        else
+            @as(f32, @bitCast(std.mem.readInt(u32, data[sample_offset..][0..4], .little)));
+        mono += sample;
+    }
+    return mono / @as(f32, @floatFromInt(channels));
 }
 
 fn writeManifest(io: std.Io, sounds: []const ImportedSound, path: []const u8) !void {

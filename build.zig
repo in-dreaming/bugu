@@ -100,6 +100,9 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(acoustic_exe);
 
     const run_acoustic = b.addRunArtifact(acoustic_exe);
+    if (b.args) |args| {
+        run_acoustic.addArgs(args);
+    }
     const acoustic_step = b.step("acoustic-demo", "Run the CPU acoustic propagation demo");
     acoustic_step.dependOn(&run_acoustic.step);
 
