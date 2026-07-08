@@ -17,6 +17,7 @@ The project is not product-ready yet. It has a working CPU/offline validation pa
 - CPU acoustic propagation MVP using scene, voxel, material, portal, room/probe data.
 - Acoustic response mapping into mixer snapshots, delayed layers, reverb sends, and runtime voice updates.
 - GPU acoustic propagation spike through `in-dreaming/gpu` and Slang compute, currently validated on seven scenes.
+- Interactive GPU acoustic ray visualizer using the `in-dreaming/gpu` SDL-backed window path, Slang compute tracing, and visual response metrics.
 - Repeatable validation wrapper for CPU/offline tests and explicit GPU validation.
 
 ## Repository Layout
@@ -26,6 +27,7 @@ src/                         Zig engine modules
 examples/                    Runnable demos and validation programs
 tools/run_validation.ps1     CPU/offline validation wrapper, optional GPU mode
 tools/gpu_acoustic_spike/    in-dreaming/gpu Slang compute spike
+tools/acoustic_visualizer/    Interactive GPU acoustic ray visualizer
 docs/design/                 Architecture and subsystem designs
 docs/tasks/                  Completed task records and evidence links
 docs/validation/             Captured validation snapshots
@@ -40,11 +42,11 @@ Core Zig path:
 - PowerShell on Windows for the validation wrapper.
 - Git submodules initialized.
 
-GPU spike path:
+GPU spike and visualizer path:
 
 - `E:\env\activate-dong-build.ps1` or an equivalent CMake/Ninja/MSVC/SDK environment.
 - `third_party/in_dreaming_gpu` submodule and nested dependencies initialized.
-- A machine capable of running the selected `in-dreaming/gpu` compute backend.
+- A machine capable of running the selected `in-dreaming/gpu` compute/render backend.
 
 ## Quick Start
 
@@ -82,6 +84,18 @@ powershell -ExecutionPolicy Bypass -File tools\run_validation.ps1 -Gpu -DongBuil
 
 The GPU path is explicit by design. If the requested GPU build environment is missing, validation fails instead of silently falling back to CPU.
 
+Build and run the interactive acoustic ray visualizer:
+
+```powershell
+& E:\env\activate-dong-build.ps1
+cmake -S tools/acoustic_visualizer -B build/acoustic_visualizer -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build/acoustic_visualizer --target bugu_acoustic_visualizer
+cd build/acoustic_visualizer
+.\bugu_acoustic_visualizer.exe
+```
+
+Visualizer controls: `W/A/S/D` move the listener, arrow keys move the source, mouse drag places the source, `Space` toggles the door, `1/2/3` switch material presets, `R` resets, and `Esc` quits.
+
 ## Validation
 
 The main validation entry point is:
@@ -106,6 +120,7 @@ Recorded evidence lives in `docs/validation/`, including:
 
 - `t017-validation-wrapper-snapshot.txt`
 - `gpu-acoustic-spike-t018-report.txt`
+- `acoustic-ray-visualizer-report.txt`
 - `acoustic-t015-event-runtime-snapshot.txt`
 - `acoustic-t016-effect-bus-snapshot.txt`
 
@@ -135,4 +150,4 @@ The next recommended work is:
 
 ## Status
 
-As of 2026-07-08, tasks T001-T018 are complete and committed. The current baseline has real CPU/offline validation and a real GPU spike, but it should still be treated as an engine prototype moving toward product readiness.
+As of 2026-07-09, tasks T001-T019 are complete. The current baseline has real CPU/offline validation, a real GPU spike, and an interactive GPU acoustic ray visualizer, but it should still be treated as an engine prototype moving toward product readiness.

@@ -1,0 +1,26 @@
+Bugu Acoustic Ray Visualizer validation report
+Date: 2026-07-08
+
+Build:
+  configure: cmake -S tools/acoustic_visualizer -B build/acoustic_visualizer -G Ninja -DCMAKE_BUILD_TYPE=Release
+  build: cmake --build build/acoustic_visualizer --target bugu_acoustic_visualizer
+  result: passed
+
+Automated runtime smoke:
+  command: .\bugu_acoustic_visualizer.exe --once --report acoustic-ray-visualizer-runtime-report.txt
+  result: passed
+  window: 1280x720, title "Bugu Acoustic Ray Visualizer"
+  graphics_queue: support=2, Dedicated graphics queue
+  compute_queue: support=2, Dedicated compute queue
+  compute_shader: compiled, acoustic_trace.slang entry traceMain
+  render_shader: compiled, acoustic_draw.slang entries vertexMain/fragmentMain
+  rays_traced: 96
+
+Metric samples:
+  frame=0 material=concrete door=closed direct=0.000 occlusion=1.000 reflection=0.370 portal=0.000 reverb_send=0.286 confidence=0.910 vertices=8424
+  frame=1 material=concrete door=open direct=0.434 occlusion=0.000 reflection=0.572 portal=0.369 reverb_send=0.649 confidence=0.970 vertices=8256
+  frame=2 material=wood door=open direct=0.434 occlusion=0.000 reflection=0.237 portal=0.369 reverb_send=0.450 confidence=0.970 vertices=8256
+
+Notes:
+  The automated run verified window/surface creation, shader compilation, compute dispatch, buffer readback, render submission, and clean shutdown.
+  Manual visual inspection was not performed in this agent session; run the executable interactively to confirm live movement and ray updates on a visible display.
