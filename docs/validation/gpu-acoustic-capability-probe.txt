@@ -1,7 +1,7 @@
 in_dreaming_gpu.present=true
 in_dreaming_gpu.commit=8b0f2bc657775d899dc4d724918a1e6be9ffa450
-cmake.available=False
-nested.slang_rhi.initialized=False
+cmake.available=True
+nested.slang_rhi.initialized=True
 api.compute_binding_dispatch=True
 api.queue_info=True
 api.independent_queues=True

@@ -17,13 +17,9 @@ The required RHI dependency is now present as a git submodule at `third_party/in
 - readback buffer/map APIs,
 - experimental ray tracing headers.
 
-However, this environment cannot execute a real RHI dispatch spike because:
+After running `E:\env\activate-dong-build.ps1`, the RHI can configure and build locally. The `25_async_compute_graph` target builds and exits successfully, and `07_compute_pipeline` creates a device, compiles a compute shader, creates a compute pipeline, obtains the compute queue, and submits a command buffer.
 
-- `cmake` is not installed;
-- nested RHI submodule directories under `third_party/in_dreaming_gpu/modules/3rd` exist but are empty/not initialized;
-- upstream `examples/07_compute_pipeline/main.c` explicitly reports validation as skipped because full resource binding is pending in that example.
-
-T013 therefore stops at a capability-gated design and source-level probe. It must remain `REVIEW` until a GPU dispatch/readback run produces GPU `AcousticResponse` subset values comparable to T010 CPU output.
+T013 still stops at `REVIEW` because the available RHI example explicitly reports result validation as skipped, and no acoustic GPU response subset has been dispatched, read back, and compared against the T010 CPU baseline. It must remain `REVIEW` until a GPU dispatch/readback run produces GPU `AcousticResponse` subset values comparable to T010 CPU output.
 
 ## 2. Capability Probe
 
@@ -40,14 +36,16 @@ Key findings:
 | Capability | Probe result | T013 impact |
 |---|---:|---|
 | RHI submodule | present | dependency policy satisfied |
-| CMake | missing | cannot build/run RHI examples here |
-| nested slang-rhi/SDL/slang submodules | directories present but not initialized | cannot link RHI here |
+| CMake | available after `E:\env\activate-dong-build.ps1` | RHI examples can configure/build |
+| nested slang-rhi/SDL/slang submodules | initialized | RHI links locally |
 | compute dispatch helper | present | viable primary path |
 | queue capability query | present | can detect dedicated vs alias compute |
 | readback APIs | present | viable response buffer readback path |
 | async compute example | present | useful pattern for 1-2 frame latency |
 | basic compute result validation | skipped upstream | do not claim acoustic GPU correctness yet |
 | ray tracing API | present, experimental | optional later path, not required for MVP |
+
+Additional RHI run evidence: [gpu-rhi-compute-run.txt](../validation/gpu-rhi-compute-run.txt)
 
 ## 3. CPU Baseline to Match
 
@@ -180,12 +178,10 @@ Per-frame controls:
 
 T013 can move from `REVIEW` to `DONE` only after:
 
-1. Install CMake in the development environment.
-2. Initialize nested submodules:
-   `git -C third_party/in_dreaming_gpu submodule update --init --recursive`
-3. Build and run at least one compute/readback RHI example, preferably `25_async_compute_graph`.
-4. Add a minimal acoustic compute shader that consumes one voxel/material/portal scene.
-5. Produce GPU response subset output for open_air, thick_wall, wall_hole, and open_field.
-6. Compare those GPU outputs against T010 CPU baseline with the tolerances above.
+1. Add a minimal acoustic compute shader that consumes one voxel/material/portal scene.
+2. Bind scene/input/output buffers through `in-dreaming/gpu` resource binding APIs.
+3. Dispatch direct/penetration/escape rays and read back a response subset.
+4. Produce GPU response subset output for open_air, thick_wall, wall_hole, and open_field.
+5. Compare those GPU outputs against T010 CPU baseline with the tolerances above.
 
 Until then, CPU propagation remains the correctness path and GPU remains an acceleration candidate only.

@@ -1,0 +1,46 @@
+Environment setup:
+& 'E:\env\activate-dong-build.ps1'
+
+Configure command:
+cmake --preset dev
+
+Configure result:
+success; build files generated at third_party/in_dreaming_gpu/build/dev
+
+Build command:
+cmake --build --preset dev --target 25_async_compute_graph
+
+Build result:
+success; linked examples/25_async_compute_graph.exe
+
+Run command:
+third_party/in_dreaming_gpu/build/dev/examples/25_async_compute_graph.exe
+
+Run result:
+exit code 0; no stdout captured by this shell
+
+Build command:
+cmake --build --preset dev --target 07_compute_pipeline
+
+Run command:
+third_party/in_dreaming_gpu/build/dev/examples/07_compute_pipeline.exe
+
+Run output:
+=== Compute Pipeline Prefix Sum Test ===
+[1] Device created
+[2] Shader compiler created
+[3] Compute shader compiled
+[4] Compute pipeline created
+[5] Input buffer created
+    Output buffer created
+[6] Buffers created (upload pending full implementation)
+[7] Compute queue obtained
+[8] CPU reference calculated
+[9] Compute commands submitted and completed
+[10] Validating results:
+    CPU prefix sum first 10: 1 2 3 4 5 6 7 8 9 10 ...
+    CPU prefix sum last 5: 252 253 254 255 256
+    Validation: SKIPPED (resource binding not fully implemented)
+
+=== Compute Pipeline Test Complete ===
+Note: Full GPU compute validation pending resource binding implementation
