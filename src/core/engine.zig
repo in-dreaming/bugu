@@ -123,8 +123,20 @@ pub const Engine = struct {
         return self.mixer.startTestVoice(desc, &self.telemetry);
     }
 
+    pub fn startTestVoiceWithHandle(self: *Engine, desc: mixer.TestVoiceDesc) BuguError!mixer.VoiceHandle {
+        return self.mixer.startTestVoiceWithHandle(desc, &self.telemetry);
+    }
+
     pub fn startSampleVoice(self: *Engine, desc: mixer.SampleVoiceDesc) BuguError!void {
         return self.mixer.startSampleVoice(desc, &self.telemetry);
+    }
+
+    pub fn startSampleVoiceWithHandle(self: *Engine, desc: mixer.SampleVoiceDesc) BuguError!mixer.VoiceHandle {
+        return self.mixer.startSampleVoiceWithHandle(desc, &self.telemetry);
+    }
+
+    pub fn updateVoice(self: *Engine, handle: mixer.VoiceHandle, params: mixer.VoiceControlParams, ramp_frames: u32) BuguError!void {
+        return self.mixer.updateVoice(handle, params, ramp_frames);
     }
 
     pub fn stopAllVoices(self: *Engine, release_frames: u32) void {

@@ -36,6 +36,7 @@
 11. T011：AcousticResponse 到 mixer 的映射。
 12. T012：验证、profile、debug visualization。
 13. T013：GPU propagation 设计与 spike。
+14. T014：Runtime acoustic effects integration。
 
 ## 3. 任务列表
 
@@ -54,6 +55,7 @@
 | T011 | DONE | [AcousticResponse 到 mixer 的映射](T011-acoustic-response-mixer-mapping.md) | Design+Implementation | T010,T005 | AcousticSnapshot mapping、mixer delayed layers、[mapping snapshot](../validation/acoustic-t011-mapping-snapshot.json) |
 | T012 | DONE | [验证、profile、debug visualization](T012-validation-profile-debug.md) | Validation+Tooling | T004-T011 | [测试矩阵/profile/debug 计划](../validation/audio-validation-plan.md)、validation-report |
 | T013 | DONE | [GPU propagation 设计与 spike](T013-gpu-propagation-design-spike.md) | Research+Prototype | T010,T012 | [GPU acoustic propagation design](../design/gpu-acoustic-propagation.md)、[validated GPU spike](../validation/gpu-acoustic-spike-report.txt) |
+| T014 | DONE | [Runtime acoustic effects integration](T014-runtime-acoustic-effects.md) | Implementation | T011,T012,T013 | VoiceHandle/update、real reverb send、[effects snapshot](../validation/acoustic-t014-effects-snapshot.txt) |
 
 ## 4. 任务依赖图
 
@@ -71,6 +73,7 @@
 - T011 依赖 T010 的 AcousticResponse 和 T005 的 mixer。
 - T012 可从 T004 开始逐步补，最终覆盖 T011。
 - T013 必须在 T010 CPU correctness 成立后开始。
+- T014 依赖 T011 snapshot mapping，并将 acoustic layer 参数接入真实 mixer effect path。
 
 ## 5. 当前建议 pick
 
@@ -125,6 +128,7 @@
 | 复合声学传播 | T009-T011 | voxel/material/portal -> AcousticResponse -> mixer |
 | GPU 是加速不是主路径 | T013 | CPU correctness 先成立，GPU 不输出 PCM |
 | 验证/profile | T012 | 测试矩阵、p99/p999、dropout、声学 case |
+| 真实 runtime effects | T014 | AcousticSnapshot -> VoiceHandle/update -> delayed layers/reverb send -> offline render telemetry |
 
 ## 10. 更新规则
 

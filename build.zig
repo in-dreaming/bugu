@@ -132,6 +132,21 @@ pub fn build(b: *std.Build) void {
     const run_validation_report = b.addRunArtifact(validation_report_exe);
     const validation_report_step = b.step("validation-report", "Run text validation and profile report");
     validation_report_step.dependOn(&run_validation_report.step);
+
+    const acoustic_effects_exe = b.addExecutable(.{
+        .name = "bugu-acoustic-effects-demo",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/acoustic_effects_demo.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    acoustic_effects_exe.root_module.addImport("bugu_audio", bugu_audio);
+    b.installArtifact(acoustic_effects_exe);
+
+    const run_acoustic_effects = b.addRunArtifact(acoustic_effects_exe);
+    const acoustic_effects_step = b.step("acoustic-effects-demo", "Run acoustic snapshot runtime effects demo");
+    acoustic_effects_step.dependOn(&run_acoustic_effects.step);
 }
 
 fn addMiniaudio(module: *std.Build.Module, target: std.Target) void {

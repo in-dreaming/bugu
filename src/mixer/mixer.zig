@@ -3,6 +3,7 @@ const core = @import("../core/engine.zig");
 const builtin = @import("builtin");
 
 pub const max_real_voices = 64;
+const reverb_delay_frames = 4096;
 
 pub const VoiceState = enum {
     free,
@@ -20,6 +21,11 @@ pub const BusId = enum {
     master,
 };
 
+pub const VoiceHandle = struct {
+    index: u16,
+    generation: u16,
+};
+
 pub const TestVoiceDesc = struct {
     frequency_hz: f32 = 440.0,
     gain: f32 = 0.2,
@@ -28,6 +34,8 @@ pub const TestVoiceDesc = struct {
     pan: f32 = 0.0,
     lowpass_hz: f32 = 20_000.0,
     start_delay_frames: u32 = 0,
+    pitch_ratio: f32 = 1.0,
+    reverb_send: f32 = 0.0,
 };
 
 pub const SampleVoiceDesc = struct {
@@ -40,12 +48,23 @@ pub const SampleVoiceDesc = struct {
     pan: f32 = 0.0,
     lowpass_hz: f32 = 20_000.0,
     start_delay_frames: u32 = 0,
+    reverb_send: f32 = 0.0,
+};
+
+pub const VoiceControlParams = struct {
+    gain: ?f32 = null,
+    pan: ?f32 = null,
+    lowpass_hz: ?f32 = null,
+    pitch_ratio: ?f32 = null,
+    reverb_send: ?f32 = null,
 };
 
 const Voice = struct {
+    generation: u16 = 0,
     state: VoiceState = .free,
     source: enum { test_tone, sample } = .test_tone,
     phase: f32 = 0.0,
+    base_phase_step: f32 = 0.0,
     phase_step: f32 = 0.0,
     samples: []const f32 = &.{},
     cursor: f32 = 0.0,
@@ -60,6 +79,7 @@ const Voice = struct {
     lowpass_hz: f32 = 20_000.0,
     lowpass_z: f32 = 0.0,
     start_delay_frames: u32 = 0,
+    reverb_send: f32 = 0.0,
 
     fn audibility(self: Voice) f32 {
         return self.priority * @max(self.gain_current, self.gain_target);
@@ -74,19 +94,32 @@ pub const Mixer = struct {
     master_gain_current: f32 = 1.0,
     master_gain_target: f32 = 1.0,
     master_gain_step: f32 = 0.0,
+    reverb_l: [reverb_delay_frames]f32 = [_]f32{0.0} ** reverb_delay_frames,
+    reverb_r: [reverb_delay_frames]f32 = [_]f32{0.0} ** reverb_delay_frames,
+    reverb_index: usize = 0,
+    reverb_return_gain: f32 = 0.25,
+    reverb_feedback: f32 = 0.45,
 
     pub fn init(sample_rate: u32) Mixer {
         return .{ .sample_rate = sample_rate };
     }
 
     pub fn startTestVoice(self: *Mixer, desc: TestVoiceDesc, telemetry: *core.TelemetryCounters) core.BuguError!void {
+        _ = try self.startTestVoiceWithHandle(desc, telemetry);
+    }
+
+    pub fn startTestVoiceWithHandle(self: *Mixer, desc: TestVoiceDesc, telemetry: *core.TelemetryCounters) core.BuguError!VoiceHandle {
         const index = self.findFreeVoice() orelse self.stealVoice(desc, telemetry);
         const voice = &self.voices[index];
+        const generation = nextGeneration(voice.generation);
+        const base_step = (2.0 * std.math.pi * desc.frequency_hz) / @as(f32, @floatFromInt(self.sample_rate));
         voice.* = .{
+            .generation = generation,
             .state = .starting,
             .source = .test_tone,
             .phase = 0.0,
-            .phase_step = (2.0 * std.math.pi * desc.frequency_hz) / @as(f32, @floatFromInt(self.sample_rate)),
+            .base_phase_step = base_step,
+            .phase_step = base_step * std.math.clamp(desc.pitch_ratio, 0.01, 8.0),
             .gain_current = 0.0,
             .gain_target = desc.gain,
             .gain_step = desc.gain / 128.0,
@@ -95,10 +128,16 @@ pub const Mixer = struct {
             .pan = desc.pan,
             .lowpass_hz = desc.lowpass_hz,
             .start_delay_frames = desc.start_delay_frames,
+            .reverb_send = std.math.clamp(desc.reverb_send, 0.0, 1.0),
         };
+        return handleFor(index, generation);
     }
 
     pub fn startSampleVoice(self: *Mixer, desc: SampleVoiceDesc, telemetry: *core.TelemetryCounters) core.BuguError!void {
+        _ = try self.startSampleVoiceWithHandle(desc, telemetry);
+    }
+
+    pub fn startSampleVoiceWithHandle(self: *Mixer, desc: SampleVoiceDesc, telemetry: *core.TelemetryCounters) core.BuguError!VoiceHandle {
         if (desc.samples.len == 0) return core.BuguError.InvalidArgument;
         const index = self.findFreeVoice() orelse self.stealVoice(.{
             .gain = desc.gain,
@@ -106,7 +145,9 @@ pub const Mixer = struct {
             .bus = desc.bus,
         }, telemetry);
         const voice = &self.voices[index];
+        const generation = nextGeneration(voice.generation);
         voice.* = .{
+            .generation = generation,
             .state = .starting,
             .source = .sample,
             .samples = desc.samples,
@@ -121,7 +162,39 @@ pub const Mixer = struct {
             .pan = desc.pan,
             .lowpass_hz = desc.lowpass_hz,
             .start_delay_frames = desc.start_delay_frames,
+            .reverb_send = std.math.clamp(desc.reverb_send, 0.0, 1.0),
         };
+        return handleFor(index, generation);
+    }
+
+    pub fn updateVoice(self: *Mixer, handle: VoiceHandle, params: VoiceControlParams, ramp_frames: u32) core.BuguError!void {
+        if (handle.index >= max_real_voices) return core.BuguError.InvalidArgument;
+        const voice = &self.voices[handle.index];
+        if (voice.generation != handle.generation or voice.state == .free or voice.state == .stolen) {
+            return core.BuguError.InvalidArgument;
+        }
+        const frames = @max(ramp_frames, 1);
+        if (params.gain) |gain| {
+            const target = std.math.clamp(gain, 0.0, 4.0);
+            voice.gain_target = target;
+            voice.gain_step = (target - voice.gain_current) / @as(f32, @floatFromInt(frames));
+        }
+        if (params.pan) |pan| {
+            voice.pan = std.math.clamp(pan, -1.0, 1.0);
+        }
+        if (params.lowpass_hz) |lowpass_hz| {
+            voice.lowpass_hz = std.math.clamp(lowpass_hz, 20.0, @as(f32, @floatFromInt(self.sample_rate)) * 0.5);
+        }
+        if (params.pitch_ratio) |pitch_ratio| {
+            const pitch = std.math.clamp(pitch_ratio, 0.01, 8.0);
+            switch (voice.source) {
+                .test_tone => voice.phase_step = voice.base_phase_step * pitch,
+                .sample => voice.cursor_step = pitch,
+            }
+        }
+        if (params.reverb_send) |reverb_send| {
+            voice.reverb_send = std.math.clamp(reverb_send, 0.0, 1.0);
+        }
     }
 
     pub fn stopAll(self: *Mixer, release_frames: u32) void {
@@ -164,6 +237,8 @@ pub const Mixer = struct {
 
             var mixed_l: f32 = 0.0;
             var mixed_r: f32 = 0.0;
+            var reverb_send_l: f32 = 0.0;
+            var reverb_send_r: f32 = 0.0;
 
             for (&self.voices) |*voice| {
                 switch (voice.state) {
@@ -211,11 +286,19 @@ pub const Mixer = struct {
                         const pan = std.math.clamp(voice.pan, -1.0, 1.0);
                         const left = @cos((pan + 1.0) * std.math.pi * 0.25);
                         const right = @sin((pan + 1.0) * std.math.pi * 0.25);
-                        mixed_l += out_sample * left;
-                        mixed_r += out_sample * right;
+                        const dry_l = out_sample * left;
+                        const dry_r = out_sample * right;
+                        mixed_l += dry_l;
+                        mixed_r += dry_r;
+                        reverb_send_l += dry_l * voice.reverb_send;
+                        reverb_send_r += dry_r * voice.reverb_send;
                     },
                 }
             }
+
+            const wet = self.processReverb(reverb_send_l, reverb_send_r);
+            mixed_l += wet.l;
+            mixed_r += wet.r;
 
             if (mixed_l > 1.0 or mixed_l < -1.0) clipping += 1;
             if (mixed_r > 1.0 or mixed_r < -1.0) clipping += 1;
@@ -320,7 +403,28 @@ pub const Mixer = struct {
         voice.lowpass_z += alpha * (sample - voice.lowpass_z);
         return voice.lowpass_z;
     }
+
+    fn processReverb(self: *Mixer, send_l: f32, send_r: f32) struct { l: f32, r: f32 } {
+        const wet_l = self.reverb_l[self.reverb_index];
+        const wet_r = self.reverb_r[self.reverb_index];
+        self.reverb_l[self.reverb_index] = send_l + wet_l * self.reverb_feedback + wet_r * 0.08;
+        self.reverb_r[self.reverb_index] = send_r + wet_r * self.reverb_feedback + wet_l * 0.08;
+        self.reverb_index = (self.reverb_index + 1) % reverb_delay_frames;
+        return .{
+            .l = wet_l * self.reverb_return_gain,
+            .r = wet_r * self.reverb_return_gain,
+        };
+    }
 };
+
+fn nextGeneration(current: u16) u16 {
+    const next = current +% 1;
+    return if (next == 0) 1 else next;
+}
+
+fn handleFor(index: usize, generation: u16) VoiceHandle {
+    return .{ .index = @intCast(index), .generation = generation };
+}
 
 fn nowNanos() u64 {
     if (builtin.os.tag == .windows) {
@@ -389,6 +493,39 @@ test "rapid start stop and master ramp stay bounded" {
 
     const snap = telemetry.snapshot();
     try std.testing.expect(snap.peak_abs <= 1.0);
+    try std.testing.expect(snap.rms > 0.0);
+    try std.testing.expect(snap.clipping_count == 0);
+}
+
+test "voice handle updates gain pan lowpass pitch and reverb send" {
+    var mixer = Mixer.init(48_000);
+    var telemetry: core.TelemetryCounters = .{};
+    const handle = try mixer.startTestVoiceWithHandle(.{ .frequency_hz = 440.0, .gain = 0.05 }, &telemetry);
+    try mixer.updateVoice(handle, .{
+        .gain = 0.2,
+        .pan = 0.75,
+        .lowpass_hz = 1200.0,
+        .pitch_ratio = 1.5,
+        .reverb_send = 0.6,
+    }, 64);
+    const voice = mixer.voices[handle.index];
+    try std.testing.expectEqual(handle.generation, voice.generation);
+    try std.testing.expect(voice.gain_target == 0.2);
+    try std.testing.expect(voice.pan > 0.7);
+    try std.testing.expect(voice.lowpass_hz == 1200.0);
+    try std.testing.expect(voice.phase_step > voice.base_phase_step);
+    try std.testing.expect(voice.reverb_send == 0.6);
+}
+
+test "reverb send produces real delayed tail" {
+    var mixer = Mixer.init(48_000);
+    var telemetry: core.TelemetryCounters = .{};
+    try mixer.startTestVoice(.{ .frequency_hz = 440.0, .gain = 0.2, .reverb_send = 1.0 }, &telemetry);
+    var buffer: [reverb_delay_frames * 2]f32 = undefined;
+    mixer.render(&buffer, reverb_delay_frames, 2, &telemetry);
+    mixer.stopAll(1);
+    mixer.render(&buffer, reverb_delay_frames, 2, &telemetry);
+    const snap = telemetry.snapshot();
     try std.testing.expect(snap.rms > 0.0);
     try std.testing.expect(snap.clipping_count == 0);
 }

@@ -1,0 +1,1 @@
+acoustic effects demo door_closed_portal=0.00201 door_open_portal=0.07408 cave_reverb=1.00000 frames=28928 peak=0.318379 rms=0.082150 active=7 clipping=0
