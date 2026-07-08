@@ -1,0 +1,6 @@
+gpu_acoustic queue compute_support=2 reason=Dedicated compute queue
+gpu_acoustic scene=open_air direct=0.51020 transmission=0.00000 portal=0.00000 portal_dir=[0.000,0.000] openness=1.00000 confidence=0.938 lowpass=20000.0
+gpu_acoustic scene=thick_wall direct=0.44643 transmission=0.01442 portal=0.00000 portal_dir=[0.000,0.000] openness=0.87500 confidence=0.938 lowpass=1380.0
+gpu_acoustic scene=wall_hole direct=0.44643 transmission=0.01442 portal=0.21704 portal_dir=[0.894,0.447] openness=0.87500 confidence=0.938 lowpass=1380.0
+gpu_acoustic scene=open_field direct=0.51020 transmission=0.00000 portal=0.00000 portal_dir=[0.000,0.000] openness=1.00000 confidence=0.938 lowpass=20000.0
+gpu_acoustic validation=PASSED scenes=4

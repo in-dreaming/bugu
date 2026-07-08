@@ -21,6 +21,7 @@ Visualization is not implemented in T012. Any future visual debug tool must use 
 | `zig build acoustic-demo` | CI or local, no device required | Six acoustic scenes output distinct `AcousticResponse` values matching T010 direction checks. |
 | `zig build acoustic-mapping-demo` | CI or local, no device required | Responses map through `AcousticMixerSnapshot` into mixer render telemetry with `clipping=0`. |
 | `zig build validation-report` | CI or local, no device required | Produces a text report from real counters, render timing samples, and acoustic scene outputs. |
+| `cmake -S tools/gpu_acoustic_spike -B build/gpu_acoustic_spike -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build/gpu_acoustic_spike --target bugu_gpu_acoustic_spike && build/gpu_acoustic_spike/bugu_gpu_acoustic_spike.exe` | Local with `E:\env\activate-dong-build.ps1` and GPU/RHI available | Dispatches Bugu acoustic compute shader through `in-dreaming/gpu`, reads back response values, and validates GPU vs CPU tolerances. |
 | `zig build tone -- --device --seconds 2` | Local real device only | Miniaudio backend opens/starts/stops a real device; no callback failure or clipping evidence. |
 | `zig build tone -- --offline --seconds 2 --voices 64 --out <path>` | CI or local | Offline backend writes real WAV PCM; telemetry shows rendered frames, peak/RMS, no clipping. |
 

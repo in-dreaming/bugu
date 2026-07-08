@@ -7,7 +7,7 @@
 
 ## 1. Conclusion
 
-Do not move GPU acoustic propagation into formal implementation yet.
+The minimal GPU acoustic propagation spike is valid.
 
 The required RHI dependency is now present as a git submodule at `third_party/in_dreaming_gpu`, commit `8b0f2bc657775d899dc4d724918a1e6be9ffa450`. The checked-out source exposes the right families of APIs for a future GPU path:
 
@@ -17,9 +17,9 @@ The required RHI dependency is now present as a git submodule at `third_party/in
 - readback buffer/map APIs,
 - experimental ray tracing headers.
 
-After running `E:\env\activate-dong-build.ps1`, the RHI can configure and build locally. The `25_async_compute_graph` target builds and exits successfully, and `07_compute_pipeline` creates a device, compiles a compute shader, creates a compute pipeline, obtains the compute queue, and submits a command buffer.
+After running `E:\env\activate-dong-build.ps1`, the RHI can configure and build locally. Bugu now has a repo-owned spike target under `tools/gpu_acoustic_spike` that compiles a Slang compute shader, dispatches it through `in-dreaming/gpu`, reads back GPU-written response values, and validates those values against the T010 CPU baseline tolerances.
 
-T013 still stops at `REVIEW` because the available RHI example explicitly reports result validation as skipped, and no acoustic GPU response subset has been dispatched, read back, and compared against the T010 CPU baseline. It must remain `REVIEW` until a GPU dispatch/readback run produces GPU `AcousticResponse` subset values comparable to T010 CPU output.
+The spike covers open_air, thick_wall, wall_hole, and open_field. It does not replace the CPU propagation backend and does not touch the audio render thread.
 
 ## 2. Capability Probe
 
@@ -46,6 +46,7 @@ Key findings:
 | ray tracing API | present, experimental | optional later path, not required for MVP |
 
 Additional RHI run evidence: [gpu-rhi-compute-run.txt](../validation/gpu-rhi-compute-run.txt)
+Acoustic GPU spike evidence: [gpu-acoustic-spike-report.txt](../validation/gpu-acoustic-spike-report.txt)
 
 ## 3. CPU Baseline to Match
 
@@ -74,7 +75,7 @@ Initial GPU correctness tolerance:
 | direction vectors | dot product >= 0.90 when valid |
 | confidence | must decrease when GPU uses coarser data or stale readback |
 
-No GPU result was produced in this task; the comparison contract is ready, but the implementation gate remains open.
+T013 GPU results were produced by `bugu_gpu_acoustic_spike.exe` and passed the comparison contract for the four target scenes.
 
 ## 4. Architecture
 
@@ -176,12 +177,12 @@ Per-frame controls:
 
 ## 11. Entry Conditions for Formal Implementation
 
-T013 can move from `REVIEW` to `DONE` only after:
+Post-T013 formal backend work should:
 
-1. Add a minimal acoustic compute shader that consumes one voxel/material/portal scene.
-2. Bind scene/input/output buffers through `in-dreaming/gpu` resource binding APIs.
-3. Dispatch direct/penetration/escape rays and read back a response subset.
-4. Produce GPU response subset output for open_air, thick_wall, wall_hole, and open_field.
-5. Compare those GPU outputs against T010 CPU baseline with the tolerances above.
+1. Split the packed spike buffer into production scene/input/output buffers after RHI multi-buffer binding is mature enough.
+2. Add cave/door dynamic update coverage.
+3. Move from one-shot spike executable to a backend object owned by the audio control/worker side.
+4. Add asynchronous readback ring integration and age/confidence smoothing.
+5. Keep CPU as correctness reference and fallback for unsupported/late GPU work.
 
-Until then, CPU propagation remains the correctness path and GPU remains an acceleration candidate only.
+CPU propagation remains the correctness path; GPU is an acceleration backend candidate with a real validated minimum path.
