@@ -1,0 +1,19 @@
+Command:
+zig build acoustic-event-demo
+
+Input:
+- Generated PCM16 WAV: bugu-acoustic-event-loop.wav
+- Bank import/load: bugu-acoustic-event-bank.toml, bugu-acoustic-event-bank.blob
+- Event: door.acoustic.loop -> looping SoundRef door_loop
+- Acoustic input: doorOpening scene from TestScenes with closed and open wood portal, listener=(-4,0,0), source=(4,0,0)
+- Acoustic path: solveAcoustic -> mapAcousticResponseToSnapshot -> EventRuntime.postAcousticEvent -> AcousticEventInstance.update -> OfflineBackend renderFrames
+
+Output:
+acoustic event demo closed_direct=0.15625 closed_portal=0.00201 open_direct=0.15625 open_portal=0.07408 post_layers=4 update_new_layers=0 direct_handle=true portal_handle=true frames=20992 peak=0.036913 rms=0.021240 active=4 clipping=0
+acoustic event demo before_frames=4864 before_rms=0.017641 voice_handle=true
+
+Pass criteria:
+- postAcousticEvent returned real voice handles.
+- Acoustic parameters came from CPU solver and snapshot mapping, not scenario-name mixer constants.
+- Offline render produced nonzero RMS and peak.
+- clipping=0.
