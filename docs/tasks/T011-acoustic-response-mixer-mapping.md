@@ -64,3 +64,4 @@ Acoustic solver 输出的是物理或近似物理响应；mixer 需要的是 gai
 - 2026-07-08：新增 `examples/acoustic_mapping_demo.zig` 与 `zig build acoustic-mapping-demo`，将 T010 response 先转为 snapshot，再通过 `Engine.startTestVoice`/mixer 离线渲染并输出 telemetry。
 - 2026-07-08：验证命令：`zig build test` 通过；`zig build acoustic-mapping-demo` 通过。输出保存到 [acoustic-t011-mapping-snapshot.json](../validation/acoustic-t011-mapping-snapshot.json)。墙洞 portal_pan=0.894，来自洞口方向；door_open portal_gain=0.07408 > door_closed 0.00201；所有场景 clipping=0。
 - 2026-07-08：限制：当前 reverb 为 send scalar，尚无专用 reverb DSP；reflection 以 delayed tone layers 验证 mixer path；AcousticSnapshot 中未激活 layer 显式 `valid=false`/gain 0，而不是静默忽略。
+- 2026-07-09：补齐 direct/transmission pan：`AcousticResponse.direct_direction`（listener→source）经 `directionToPan` 写入 direct/transmission layer；portal/early reflection 仍用各自方向。visualizer 日志增加 `audio_pan`。

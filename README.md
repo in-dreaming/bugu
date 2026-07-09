@@ -17,7 +17,7 @@ The project is not product-ready yet. It has a working CPU/offline validation pa
 - CPU acoustic propagation MVP using scene, voxel, material, portal, room/probe data.
 - Acoustic response mapping into mixer snapshots, delayed layers, reverb sends, and runtime voice updates.
 - GPU acoustic propagation spike through `in-dreaming/gpu` and Slang compute, currently validated on seven scenes.
-- Interactive GPU acoustic ray visualizer using the `in-dreaming/gpu` SDL-backed window path, Slang compute tracing, and visual response metrics.
+- Interactive Zig GPU acoustic ray visualizer using the `in-dreaming/gpu` SDL-backed window path, Slang compute tracing, and realtime `hello.wav` playback driven by CPU dual-solve acoustics.
 - Repeatable validation wrapper for CPU/offline tests and explicit GPU validation.
 
 ## Repository Layout
@@ -84,17 +84,31 @@ powershell -ExecutionPolicy Bypass -File tools\run_validation.ps1 -Gpu -DongBuil
 
 The GPU path is explicit by design. If the requested GPU build environment is missing, validation fails instead of silently falling back to CPU.
 
-Build and run the interactive acoustic ray visualizer:
+Build and run the interactive acoustic ray visualizer (Zig host + GPU shaders + realtime `hello.wav`):
 
 ```powershell
 & E:\env\activate-dong-build.ps1
-cmake -S tools/acoustic_visualizer -B build/acoustic_visualizer -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build/acoustic_visualizer --target bugu_acoustic_visualizer
-cd build/acoustic_visualizer
-.\bugu_acoustic_visualizer.exe
+zig build acoustic-visualizer
 ```
 
-Visualizer controls: `W/A/S/D` move the listener, arrow keys move the source, mouse drag places the source, `Space` toggles the door, `1/2/3` switch material presets, `R` resets, and `Esc` quits.
+Build it without launching the interactive window:
+
+```powershell
+$vs = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools"
+& "$vs\Common7\Tools\Launch-VsDevShell.ps1" -Arch amd64 -SkipAutomaticLocation
+
+zig build acoustic-visualizer-build
+```
+
+Run the automated visualizer smoke test (muted, 3 frames):
+
+```powershell
+zig build acoustic-visualizer-smoke
+```
+
+On Windows, the visualizer Zig module targets the MSVC ABI and CMake builds `gpu` with `cl`. If an older CMake cache selected MinGW/Strawberry GCC, delete `build/acoustic_visualizer` once and rerun the Zig step.
+
+Visualizer controls: `W/A/S/D` move the listener, arrow keys move the source, mouse drag places the source, `Space` toggles the door (and updates realtime audio), `1/2/3` switch material presets, `R` resets, and `Esc` quits. Pass `--mute` to skip device playback.
 
 ## Validation
 

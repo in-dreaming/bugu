@@ -180,6 +180,8 @@ pub fn build(b: *std.Build) void {
     const run_effect_bus = b.addRunArtifact(effect_bus_exe);
     const effect_bus_step = b.step("effect-bus-demo", "Run fixed effect bus routing demo");
     effect_bus_step.dependOn(&run_effect_bus.step);
+
+    addAcousticVisualizerSteps(b, target, optimize, bugu_audio);
 }
 
 fn addMiniaudio(module: *std.Build.Module, target: std.Target) void {
@@ -211,4 +213,144 @@ fn addMiniaudio(module: *std.Build.Module, target: std.Target) void {
         },
         else => {},
     }
+}
+
+fn addAcousticVisualizerSteps(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    bugu_audio: *std.Build.Module,
+) void {
+    _ = target;
+    _ = bugu_audio;
+    // GPU/MSVC CRT must stay Release to match slang-rhi/gpu import libs.
+    const cmake_build_type = b.option(
+        []const u8,
+        "acoustic-visualizer-cmake-build-type",
+        "CMake build type for the acoustic visualizer",
+    ) orelse "Release";
+    const cmake_c_compiler = b.option(
+        []const u8,
+        "acoustic-visualizer-c-compiler",
+        "C compiler for the acoustic visualizer CMake build",
+    ) orelse if (b.graph.host.result.os.tag == .windows) "cl" else "";
+    const cmake_cxx_compiler = b.option(
+        []const u8,
+        "acoustic-visualizer-cxx-compiler",
+        "C++ compiler for the acoustic visualizer CMake build",
+    ) orelse if (b.graph.host.result.os.tag == .windows) "cl" else "";
+
+    const build_dir = "build/acoustic_visualizer";
+    const is_windows = b.graph.host.result.os.tag == .windows;
+    const viz_target = if (is_windows)
+        b.resolveTargetQuery(.{ .cpu_arch = .x86_64, .os_tag = .windows, .abi = .msvc })
+    else
+        b.graph.host;
+    const exe_name = if (is_windows) "bugu_acoustic_visualizer.exe" else "bugu_acoustic_visualizer";
+    const zig_lib_name = "bugu_acoustic_visualizer_zig";
+    // Prefer ReleaseSafe for the Zig lib so C sources are not built with ubsan.
+    const viz_optimize: std.builtin.OptimizeMode = switch (optimize) {
+        .Debug => .ReleaseSafe,
+        else => optimize,
+    };
+
+    const viz_bugu = b.createModule(.{
+        .root_source_file = b.path("src/bugu_audio.zig"),
+        .target = viz_target,
+        .optimize = viz_optimize,
+    });
+    addMiniaudio(viz_bugu, viz_target.result);
+    viz_bugu.sanitize_c = .off;
+
+    const gpu_adapter = b.createModule(.{
+        .root_source_file = b.path("third_party_adapters/gpu/gpu_adapter.zig"),
+        .target = viz_target,
+        .optimize = viz_optimize,
+    });
+    gpu_adapter.addIncludePath(b.path("third_party_adapters/gpu"));
+    gpu_adapter.addIncludePath(b.path("third_party/in_dreaming_gpu/src"));
+    gpu_adapter.link_libc = true;
+
+    const visualizer_mod = b.createModule(.{
+        .root_source_file = b.path("tools/acoustic_visualizer/main.zig"),
+        .target = viz_target,
+        .optimize = viz_optimize,
+    });
+    visualizer_mod.addImport("bugu_audio", viz_bugu);
+    visualizer_mod.addImport("gpu_adapter", gpu_adapter);
+    visualizer_mod.addIncludePath(b.path("third_party_adapters/gpu"));
+    visualizer_mod.addIncludePath(b.path("third_party/in_dreaming_gpu/src"));
+    visualizer_mod.link_libc = true;
+    visualizer_mod.sanitize_c = .off;
+
+    const visualizer_lib = b.addLibrary(.{
+        .linkage = .static,
+        .name = zig_lib_name,
+        .root_module = visualizer_mod,
+    });
+    visualizer_lib.bundle_compiler_rt = true;
+    b.installArtifact(visualizer_lib);
+
+    const configure = b.addSystemCommand(&.{
+        "cmake",
+        "-S",
+        "tools/acoustic_visualizer",
+        "-B",
+        build_dir,
+        "-G",
+        "Ninja",
+        b.fmt("-DCMAKE_BUILD_TYPE={s}", .{cmake_build_type}),
+    });
+    configure.addPrefixedFileArg("-DBUGU_ZIG_VISUALIZER_LIB=", visualizer_lib.getEmittedBin());
+    if (cmake_c_compiler.len > 0) {
+        configure.addArg(b.fmt("-DCMAKE_C_COMPILER={s}", .{cmake_c_compiler}));
+    }
+    if (cmake_cxx_compiler.len > 0) {
+        configure.addArg(b.fmt("-DCMAKE_CXX_COMPILER={s}", .{cmake_cxx_compiler}));
+    }
+    configure.step.dependOn(&visualizer_lib.step);
+
+    const build_exe = b.addSystemCommand(&.{
+        "cmake",
+        "--build",
+        build_dir,
+        "--target",
+        "bugu_acoustic_visualizer",
+    });
+    build_exe.step.dependOn(&configure.step);
+
+    const visualizer_build_step = b.step(
+        "acoustic-visualizer-build",
+        "Build the Zig GPU acoustic ray visualizer through CMake/Ninja",
+    );
+    visualizer_build_step.dependOn(&build_exe.step);
+
+    const run_visualizer = b.addSystemCommand(&.{if (is_windows) b.fmt(".\\{s}", .{exe_name}) else b.fmt("./{s}", .{exe_name})});
+    run_visualizer.setCwd(b.path(build_dir));
+    run_visualizer.step.dependOn(&build_exe.step);
+    if (b.args) |args| {
+        run_visualizer.addArgs(args);
+    }
+
+    const visualizer_step = b.step(
+        "acoustic-visualizer",
+        "Build and run the interactive GPU acoustic ray visualizer",
+    );
+    visualizer_step.dependOn(&run_visualizer.step);
+
+    const smoke_visualizer = b.addSystemCommand(&.{
+        if (is_windows) b.fmt(".\\{s}", .{exe_name}) else b.fmt("./{s}", .{exe_name}),
+        "--once",
+        "--mute",
+        "--report",
+        "acoustic-ray-visualizer-runtime-report.txt",
+    });
+    smoke_visualizer.setCwd(b.path(build_dir));
+    smoke_visualizer.step.dependOn(&build_exe.step);
+
+    const visualizer_smoke_step = b.step(
+        "acoustic-visualizer-smoke",
+        "Build and run the acoustic ray visualizer automated smoke test",
+    );
+    visualizer_smoke_step.dependOn(&smoke_visualizer.step);
 }

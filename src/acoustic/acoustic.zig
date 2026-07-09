@@ -84,6 +84,8 @@ pub const AcousticResponse = struct {
     direct_gain: f32 = 0.0,
     direct_delay: f32 = 0.0,
     direct_lowpass_hz: f32 = 20_000.0,
+    /// Unit direction from listener toward source (used for direct/transmission pan).
+    direct_direction: Vec3 = .{},
     transmission_gain: f32 = 0.0,
     transmission_lowpass_hz: f32 = 20_000.0,
     diffraction_or_portal_gain: f32 = 0.0,
@@ -171,12 +173,14 @@ pub fn mapResponseToSnapshot(response: AcousticResponse, config: MappingConfig) 
         .smoothing_ms = lerp(config.max_smoothing_ms, config.min_smoothing_ms, std.math.clamp(response.confidence, 0.0, 1.0)),
     };
 
+    const source_pan = directionToPan(response.direct_direction, config.listener_right);
+
     if (response.direct_gain > 0.0001) {
         snapshot.direct = .{
             .valid = true,
             .gain = std.math.clamp(response.direct_gain * config.base_gain, 0.0, 1.0),
             .lowpass_hz = std.math.clamp(response.direct_lowpass_hz, 80.0, 20_000.0),
-            .pan = 0.0,
+            .pan = source_pan,
             .delay_frames = secondsToFrames(response.direct_delay, config.sample_rate),
         };
     }
@@ -186,7 +190,8 @@ pub fn mapResponseToSnapshot(response: AcousticResponse, config: MappingConfig) 
             .valid = true,
             .gain = std.math.clamp(response.transmission_gain * config.base_gain * 0.85, 0.0, 1.0),
             .lowpass_hz = std.math.clamp(@min(response.transmission_lowpass_hz, response.direct_lowpass_hz), 80.0, 12_000.0),
-            .pan = 0.0,
+            // Transmission still arrives from the source bearing; muffling is via lowpass/gain.
+            .pan = source_pan,
             .delay_frames = secondsToFrames(response.direct_delay + 0.006, config.sample_rate),
         };
     }
@@ -328,6 +333,7 @@ fn solveWithGrid(scene: TestScene, grid: *const AcousticVoxelGrid, listener: Vec
         .direct_gain = distance_gain * occlusion,
         .direct_delay = distance / 343.0,
         .direct_lowpass_hz = 20_000.0 - (1.0 - occlusion) * 12_000.0,
+        .direct_direction = normalize(to_source),
         .transmission_gain = 0.0,
         .transmission_lowpass_hz = 20_000.0,
         .confidence = direct_trace.confidence,
@@ -493,6 +499,7 @@ fn blendResponse(a: AcousticResponse, b: AcousticResponse, t: f32) AcousticRespo
     out.direct_gain = lerp(a.direct_gain, b.direct_gain, t);
     out.direct_delay = lerp(a.direct_delay, b.direct_delay, t);
     out.direct_lowpass_hz = lerp(a.direct_lowpass_hz, b.direct_lowpass_hz, t);
+    out.direct_direction = lerpVec3(a.direct_direction, b.direct_direction, t);
     out.transmission_gain = lerp(a.transmission_gain, b.transmission_gain, t);
     out.transmission_lowpass_hz = lerp(a.transmission_lowpass_hz, b.transmission_lowpass_hz, t);
     out.diffraction_or_portal_gain = lerp(a.diffraction_or_portal_gain, b.diffraction_or_portal_gain, t);
@@ -751,6 +758,7 @@ test "acoustic response maps to mixer snapshot layers" {
         .direct_gain = 0.5,
         .direct_delay = 0.02,
         .direct_lowpass_hz = 18_000,
+        .direct_direction = .{ .x = 0.8, .y = 0, .z = 0.6 },
         .transmission_gain = 0.1,
         .transmission_lowpass_hz = 1_200,
         .diffraction_or_portal_gain = 0.25,
@@ -769,7 +777,10 @@ test "acoustic response maps to mixer snapshot layers" {
     try std.testing.expect(snapshot.portal.valid);
     try std.testing.expect(snapshot.early_reflections[0].valid);
     try std.testing.expect(snapshot.transmission.lowpass_hz < snapshot.direct.lowpass_hz);
+    try std.testing.expect(snapshot.direct.pan > 0.7);
+    try std.testing.expectApproxEqAbs(snapshot.direct.pan, snapshot.transmission.pan, 0.0001);
     try std.testing.expect(snapshot.portal.pan > 0.9);
+    try std.testing.expect(snapshot.early_reflections[0].pan < -0.9);
     try std.testing.expect(snapshot.early_reflections[0].delay_frames > snapshot.direct.delay_frames);
     try std.testing.expect(snapshot.smoothing_ms > 20.0 and snapshot.smoothing_ms < 100.0);
 }
