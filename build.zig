@@ -88,6 +88,19 @@ pub fn build(b: *std.Build) void {
     const spatial_step = b.step("spatial-demo", "Run the spatial baseline demo");
     spatial_step.dependOn(&run_spatial.step);
 
+    const runtime_embedding = b.addExecutable(.{
+        .name = "bugu-runtime-embedding",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/runtime_embedding.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    runtime_embedding.root_module.addImport("bugu_audio", bugu_audio);
+    const run_runtime_embedding = b.addRunArtifact(runtime_embedding);
+    const runtime_embedding_step = b.step("runtime-embedding", "Run the hardened control/snapshot compatibility sample");
+    runtime_embedding_step.dependOn(&run_runtime_embedding.step);
+
     const acoustic_exe = b.addExecutable(.{
         .name = "bugu-acoustic-demo",
         .root_module = b.createModule(.{

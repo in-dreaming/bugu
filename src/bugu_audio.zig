@@ -7,6 +7,7 @@ pub const assets = @import("assets/bank.zig");
 pub const events = @import("events/runtime.zig");
 pub const spatial = @import("spatial/spatial.zig");
 pub const acoustic = @import("acoustic/acoustic.zig");
+pub const runtime = @import("runtime/runtime.zig");
 
 pub const EngineConfig = core.EngineConfig;
 pub const Engine = core.Engine;
@@ -56,6 +57,15 @@ pub const mapAcousticResponseToSnapshot = acoustic.mapResponseToSnapshot;
 pub const OfflineBackend = device.OfflineBackend;
 pub const MiniaudioBackend = device.MiniaudioBackend;
 pub const DeviceConfig = device.DeviceConfig;
+pub const ControlRuntime = runtime.ControlRuntime;
+pub const RuntimeRenderer = runtime.RuntimeRenderer;
+pub const RuntimeInstanceHandle = runtime.InstanceHandle;
+pub const RuntimeSampleOwner = runtime.SampleOwner;
+pub const RuntimeVoiceParams = runtime.VoiceParams;
+pub const RuntimeCompletion = runtime.Completion;
+pub const RuntimeOfflineBackend = device.RuntimeOfflineBackend;
+pub const RuntimeMiniaudioBackend = device.RuntimeMiniaudioBackend;
+pub const RuntimeDeviceState = device.RuntimeDeviceState;
 
 test {
     std.testing.refAllDecls(@This());

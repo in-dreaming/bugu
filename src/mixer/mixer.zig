@@ -273,6 +273,21 @@ pub const Mixer = struct {
         }
     }
 
+    pub fn stopVoice(self: *Mixer, handle: VoiceHandle, release_frames: u32) core.BuguError!void {
+        if (handle.index >= max_real_voices) return core.BuguError.InvalidArgument;
+        const voice = &self.voices[handle.index];
+        if (voice.generation != handle.generation or voice.state == .free or voice.state == .stolen) return core.BuguError.InvalidArgument;
+        voice.state = .releasing;
+        voice.gain_target = 0.0;
+        voice.gain_step = -voice.gain_current / @as(f32, @floatFromInt(@max(release_frames, 1)));
+    }
+
+    pub fn isVoiceActive(self: *const Mixer, handle: VoiceHandle) bool {
+        if (handle.index >= max_real_voices) return false;
+        const voice = self.voices[handle.index];
+        return voice.generation == handle.generation and voice.state != .free and voice.state != .stolen;
+    }
+
     pub fn stopAll(self: *Mixer, release_frames: u32) void {
         const frames = @max(release_frames, 1);
         for (&self.voices) |*voice| {

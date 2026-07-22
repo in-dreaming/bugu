@@ -1,6 +1,6 @@
 # Bugu 实时音频运行时 Contract
 
-状态：Draft v0.1  
+状态：Implemented v1（production embedding API 见 `runtime-embedding-v1.md`）
 日期：2026-07-08  
 任务：T002 实时运行时 contract 与线程模型设计  
 依赖：docs/tasks/asetup.md、docs/design/audio-engine-design.md 第 4、5、10、11、12 节

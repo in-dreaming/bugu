@@ -1,5 +1,6 @@
 const std = @import("std");
 const core = @import("../core/engine.zig");
+const runtime = @import("../runtime/runtime.zig");
 
 const c = @cImport({
     @cInclude("miniaudio.h");
@@ -61,6 +62,47 @@ const FixedQuantumAdapter = struct {
     }
 };
 
+const RuntimeFixedQuantumAdapter = struct {
+    renderer: *runtime.RuntimeRenderer,
+    quantum_frames: u32,
+    channels: u16,
+    pending: [max_pending_samples]f32 = undefined,
+    pending_start: usize = 0,
+    pending_len: usize = 0,
+
+    fn init(renderer: *runtime.RuntimeRenderer, quantum_frames: u32, channels: u16) RuntimeFixedQuantumAdapter {
+        return .{ .renderer = renderer, .quantum_frames = quantum_frames, .channels = channels };
+    }
+
+    fn render(self: *RuntimeFixedQuantumAdapter, output: []f32, frame_count: u32) void {
+        _ = self.renderer.telemetry.callback_count.fetchAdd(1, .monotonic);
+        const quantum_samples = @as(usize, self.quantum_frames) * self.channels;
+        const requested_samples = @as(usize, frame_count) * self.channels;
+        var written: usize = 0;
+        if (self.pending_len > 0) {
+            const take = @min(self.pending_len, requested_samples);
+            @memcpy(output[0..take], self.pending[self.pending_start..][0..take]);
+            self.pending_start += take;
+            self.pending_len -= take;
+            written += take;
+            if (self.pending_len == 0) self.pending_start = 0;
+        }
+        while (written < requested_samples) {
+            const remaining = requested_samples - written;
+            if (remaining >= quantum_samples) {
+                self.renderer.render(output[written..][0..quantum_samples], self.quantum_frames, self.channels);
+                written += quantum_samples;
+            } else {
+                self.renderer.render(self.pending[0..quantum_samples], self.quantum_frames, self.channels);
+                @memcpy(output[written..][0..remaining], self.pending[0..remaining]);
+                self.pending_start = remaining;
+                self.pending_len = quantum_samples - remaining;
+                written += remaining;
+            }
+        }
+    }
+};
+
 pub const OfflineBackend = struct {
     engine: *core.Engine,
     adapter: FixedQuantumAdapter,
@@ -102,6 +144,105 @@ pub const OfflineBackend = struct {
             frames_remaining -= frames_this_chunk;
         }
         try writer.interface.flush();
+    }
+};
+
+pub const RuntimeOfflineBackend = struct {
+    renderer: *runtime.RuntimeRenderer,
+    adapter: RuntimeFixedQuantumAdapter,
+
+    pub fn init(renderer: *runtime.RuntimeRenderer, quantum_frames: u32, channels: u16) core.BuguError!RuntimeOfflineBackend {
+        if (quantum_frames == 0 or quantum_frames > max_quantum_frames or channels != 2) return core.BuguError.InvalidArgument;
+        return .{ .renderer = renderer, .adapter = .init(renderer, quantum_frames, channels) };
+    }
+
+    pub fn renderFrames(self: *RuntimeOfflineBackend, allocator: std.mem.Allocator, frame_count: u32) ![]f32 {
+        const sample_count = @as(usize, frame_count) * self.adapter.channels;
+        const buffer = try allocator.alloc(f32, sample_count);
+        self.adapter.render(buffer, frame_count);
+        return buffer;
+    }
+};
+
+pub const RuntimeDeviceState = enum { closed, open, running, lost, reopening, stopped };
+
+pub const RuntimeMiniaudioBackend = struct {
+    renderer: *runtime.RuntimeRenderer,
+    adapter: RuntimeFixedQuantumAdapter,
+    device: c.ma_device = undefined,
+    config: DeviceConfig = .{},
+    state: RuntimeDeviceState = .closed,
+    generation: u32 = 0,
+    lost_count: u64 = 0,
+    reopen_count: u64 = 0,
+
+    pub fn init(renderer: *runtime.RuntimeRenderer, quantum_frames: u32, channels: u16) core.BuguError!RuntimeMiniaudioBackend {
+        if (quantum_frames == 0 or quantum_frames > max_quantum_frames or channels != 2) return core.BuguError.InvalidArgument;
+        return .{ .renderer = renderer, .adapter = .init(renderer, quantum_frames, channels) };
+    }
+
+    pub fn open(self: *RuntimeMiniaudioBackend, config: DeviceConfig) core.BuguError!void {
+        if (self.state == .open or self.state == .running) return;
+        if (self.state != .closed and self.state != .stopped and self.state != .reopening and self.state != .lost) return core.BuguError.InvalidState;
+        if (config.sample_rate != self.renderer.mixer.sample_rate or config.channels != self.adapter.channels or config.period_frames == 0) return core.BuguError.InvalidArgument;
+        var ma_config = c.ma_device_config_init(c.ma_device_type_playback);
+        ma_config.playback.format = c.ma_format_f32;
+        ma_config.playback.channels = config.channels;
+        ma_config.sampleRate = config.sample_rate;
+        ma_config.periodSizeInFrames = config.period_frames;
+        ma_config.dataCallback = runtimeDataCallback;
+        ma_config.pUserData = self;
+        if (c.ma_device_init(null, &ma_config, &self.device) != c.MA_SUCCESS) return core.BuguError.DeviceUnavailable;
+        self.config = config;
+        self.state = .open;
+        self.generation +%= 1;
+        if (self.generation == 0) self.generation = 1;
+    }
+
+    pub fn start(self: *RuntimeMiniaudioBackend) core.BuguError!void {
+        if (self.state == .running) return;
+        if (self.state != .open) return core.BuguError.InvalidState;
+        if (c.ma_device_start(&self.device) != c.MA_SUCCESS) return core.BuguError.DeviceStartFailed;
+        self.state = .running;
+    }
+
+    pub fn notifyLost(self: *RuntimeMiniaudioBackend) void {
+        if (self.state == .closed or self.state == .stopped or self.state == .lost) return;
+        if (self.state == .running) _ = c.ma_device_stop(&self.device);
+        c.ma_device_uninit(&self.device);
+        self.state = .lost;
+        self.lost_count += 1;
+    }
+
+    pub fn reopen(self: *RuntimeMiniaudioBackend) core.BuguError!void {
+        if (self.state != .lost) return core.BuguError.InvalidState;
+        self.state = .reopening;
+        self.open(self.config) catch |err| {
+            self.state = .lost;
+            return err;
+        };
+        self.start() catch |err| {
+            c.ma_device_uninit(&self.device);
+            self.state = .lost;
+            return err;
+        };
+        self.reopen_count += 1;
+    }
+
+    pub fn stop(self: *RuntimeMiniaudioBackend) void {
+        if (self.state == .running) {
+            _ = c.ma_device_stop(&self.device);
+            self.state = .open;
+        }
+        if (self.state == .open) {
+            c.ma_device_uninit(&self.device);
+            self.state = .stopped;
+        }
+    }
+
+    pub fn deinit(self: *RuntimeMiniaudioBackend) void {
+        self.stop();
+        if (self.state == .lost or self.state == .reopening) self.state = .stopped;
     }
 };
 
@@ -172,6 +313,15 @@ fn dataCallback(device: [*c]c.ma_device, output: ?*anyopaque, input: ?*const any
     backend.adapter.render(out[0..sample_count], frame_count);
 }
 
+fn runtimeDataCallback(device: [*c]c.ma_device, output: ?*anyopaque, input: ?*const anyopaque, frame_count: c.ma_uint32) callconv(.c) void {
+    _ = input;
+    if (device == null or output == null) return;
+    const backend: *RuntimeMiniaudioBackend = @ptrCast(@alignCast(device.*.pUserData));
+    const sample_count = @as(usize, frame_count) * backend.adapter.channels;
+    const out: [*]f32 = @ptrCast(@alignCast(output));
+    backend.adapter.render(out[0..sample_count], frame_count);
+}
+
 fn writeWavHeader(writer: *std.Io.Writer, frame_count: u32, sample_rate: u32, channels: u16) !void {
     const bits_per_sample: u16 = 16;
     const block_align: u16 = channels * (bits_per_sample / 8);
@@ -204,4 +354,28 @@ test "offline backend writes samples" {
     try std.testing.expectEqual(@as(u64, 1), engine.telemetrySnapshot().callback_count);
     try std.testing.expectEqual(@as(u64, 256), engine.telemetrySnapshot().rendered_frames);
     try std.testing.expect(engine.telemetrySnapshot().peak_abs > 0.0);
+}
+
+test "runtime offline backend handles variable callback sizes through immutable snapshots" {
+    const samples = [_]f32{ 0.25, -0.25, 0.5, -0.5 };
+    var owner = try runtime.SampleOwner.init(&samples);
+    var control = runtime.ControlRuntime.init();
+    const instance = try control.reserveInstance();
+    try control.submitPlay(.{ .instance = instance, .owner = &owner, .params = .{ .loop = true } });
+    _ = try control.controlTick(runtime.max_control_drain);
+    var renderer = runtime.RuntimeRenderer.init(&control, 48_000);
+    var backend = try RuntimeOfflineBackend.init(&renderer, 256, 2);
+    inline for (.{ 1, 127, 256, 300, 513 }) |frames| {
+        const output = try backend.renderFrames(std.testing.allocator, frames);
+        defer std.testing.allocator.free(output);
+        for (output) |sample| try std.testing.expect(std.math.isFinite(sample));
+    }
+    try control.submitStop(.{ .instance = instance, .fade_frames = 1 });
+    _ = try control.controlTick(runtime.max_control_drain);
+    const tail = try backend.renderFrames(std.testing.allocator, 513);
+    defer std.testing.allocator.free(tail);
+    _ = try control.controlTick(runtime.max_control_drain);
+    owner.retire();
+    try control.destroy();
+    try std.testing.expect(owner.canDestroy());
 }
