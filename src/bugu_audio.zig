@@ -7,6 +7,7 @@ pub const assets = @import("assets/bank.zig");
 pub const events = @import("events/runtime.zig");
 pub const spatial = @import("spatial/spatial.zig");
 pub const acoustic = @import("acoustic/acoustic.zig");
+pub const acoustic_production = @import("acoustic/production.zig");
 pub const runtime = @import("runtime/runtime.zig");
 
 pub const EngineConfig = core.EngineConfig;
