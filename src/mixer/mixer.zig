@@ -278,7 +278,13 @@ pub const Mixer = struct {
         const voice = &self.voices[handle.index];
         if (voice.generation != handle.generation or voice.state == .free or voice.state == .stolen) return core.BuguError.InvalidArgument;
         voice.state = .releasing;
+        voice.start_delay_frames = 0;
         voice.gain_target = 0.0;
+        if (voice.gain_current == 0.0) {
+            voice.gain_step = 0.0;
+            voice.state = .free;
+            return;
+        }
         voice.gain_step = -voice.gain_current / @as(f32, @floatFromInt(@max(release_frames, 1)));
     }
 

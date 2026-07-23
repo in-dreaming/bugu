@@ -919,6 +919,27 @@ test "production runtime preserves acoustic layer start delay" {
     try std.testing.expect(owner.canDestroy());
 }
 
+test "production runtime promptly retires a stopped pre-delay layer" {
+    const samples = [_]f32{1} ** 32;
+    var owner = try SampleOwner.init(&samples);
+    var runtime = ControlRuntime.init();
+    const instance = try runtime.reserveInstance();
+    try runtime.submitPlay(.{ .instance = instance, .owner = &owner, .params = .{ .loop = true, .start_delay_frames = 480_000 } });
+    _ = try runtime.controlTick(max_control_drain);
+    var renderer = RuntimeRenderer.init(&runtime, 48_000);
+    var output: [2]f32 = undefined;
+    renderer.render(&output, 1, 2);
+    try runtime.submitStop(.{ .instance = instance, .fade_frames = 32 });
+    _ = try runtime.controlTick(max_control_drain);
+    renderer.render(&output, 1, 2);
+    _ = try runtime.controlTick(max_control_drain);
+    const completion = runtime.pollCompletion() orelse return error.MissingCompletion;
+    try std.testing.expectEqual(CompletionReason.stopped, completion.reason);
+    owner.retire();
+    try runtime.destroy();
+    try std.testing.expect(owner.canDestroy());
+}
+
 test "concurrent producers control and render preserve bounded snapshots" {
     var runtime = ControlRuntime.init();
     var context: StressContext = .{ .runtime = &runtime };
