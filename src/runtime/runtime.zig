@@ -81,6 +81,7 @@ pub const VoiceParams = struct {
     loop: bool = false,
     pan: f32 = 0,
     lowpass_hz: f32 = 20_000,
+    start_delay_frames: u32 = 0,
     reverb_send: f32 = 0,
 };
 
@@ -361,6 +362,13 @@ pub const ControlRuntime = struct {
     pub fn reserveInstance(self: *ControlRuntime) RuntimeError!InstanceHandle {
         if (!self.accepting.load(.acquire)) return error.RuntimeStopped;
         return self.instances.reserve();
+    }
+
+    /// Releases a handle whose play command was never accepted.
+    pub fn cancelReservedInstance(self: *ControlRuntime, instance: InstanceHandle) RuntimeError!void {
+        if (!self.instances.current(instance)) return error.StaleInstance;
+        if (self.desired[instance.index].active) return error.DuplicateInstance;
+        self.instances.release(instance);
     }
 
     pub fn submitPlay(self: *ControlRuntime, play: PlayCommand) RuntimeError!void {
@@ -703,7 +711,7 @@ pub const RuntimeRenderer = struct {
     fn start(self: *RuntimeRenderer, wanted: SnapshotVoice) ?*RenderVoice {
         const slot = for (&self.voices) |*voice| if (!voice.active) break voice else continue else return null;
         wanted.owner.pin() catch return null;
-        const handle = self.mixer.startSampleVoiceWithHandle(.{ .samples = wanted.owner.samples, .gain = wanted.params.gain, .pitch = wanted.params.pitch, .priority = wanted.params.priority, .bus = wanted.params.bus, .loop = wanted.params.loop, .pan = wanted.params.pan, .lowpass_hz = wanted.params.lowpass_hz, .reverb_send = wanted.params.reverb_send }, &self.telemetry) catch {
+        const handle = self.mixer.startSampleVoiceWithHandle(.{ .samples = wanted.owner.samples, .gain = wanted.params.gain, .pitch = wanted.params.pitch, .priority = wanted.params.priority, .bus = wanted.params.bus, .loop = wanted.params.loop, .pan = wanted.params.pan, .lowpass_hz = wanted.params.lowpass_hz, .start_delay_frames = wanted.params.start_delay_frames, .reverb_send = wanted.params.reverb_send }, &self.telemetry) catch {
             wanted.owner.release();
             return null;
         };
@@ -883,6 +891,32 @@ test "idle control ticks do not republish an unchanged snapshot" {
     var lease = runtime.acquireSnapshot();
     lease.release();
     try runtime.destroy();
+}
+
+test "production runtime preserves acoustic layer start delay" {
+    const samples = [_]f32{1} ** 32;
+    var owner = try SampleOwner.init(&samples);
+    var runtime = ControlRuntime.init();
+    const instance = try runtime.reserveInstance();
+    try runtime.submitPlay(.{ .instance = instance, .owner = &owner, .params = .{ .start_delay_frames = 8 } });
+    _ = try runtime.controlTick(max_control_drain);
+    var renderer = RuntimeRenderer.init(&runtime, 48_000);
+    var output: [8]f32 = undefined;
+    renderer.render(&output, 4, 2);
+    for (output) |sample| try std.testing.expectEqual(@as(f32, 0), sample);
+    renderer.render(&output, 4, 2);
+    for (output) |sample| try std.testing.expectEqual(@as(f32, 0), sample);
+    renderer.render(&output, 4, 2);
+    var peak: f32 = 0;
+    for (output) |sample| peak = @max(peak, @abs(sample));
+    try std.testing.expect(peak > 0);
+    try runtime.submitStop(.{ .instance = instance, .fade_frames = 1 });
+    _ = try runtime.controlTick(max_control_drain);
+    renderer.render(&output, 4, 2);
+    _ = try runtime.controlTick(max_control_drain);
+    owner.retire();
+    try runtime.destroy();
+    try std.testing.expect(owner.canDestroy());
 }
 
 test "concurrent producers control and render preserve bounded snapshots" {
