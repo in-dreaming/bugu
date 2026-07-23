@@ -343,6 +343,7 @@ pub const ControlRuntime = struct {
     snapshots: [snapshot_count]SnapshotSlot = [_]SnapshotSlot{.{}} ** snapshot_count,
     published_slot: std.atomic.Value(u8) = std.atomic.Value(u8).init(0),
     published_generation: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
+    snapshot_dirty: bool = true,
     next_revision: u64 = 1,
     sfx_gain: f32 = 1,
     music_gain: f32 = 1,
@@ -419,7 +420,8 @@ pub const ControlRuntime = struct {
     pub fn controlTick(self: *ControlRuntime, limit: usize) RuntimeError!usize {
         if (self.control_active.cmpxchgStrong(false, true, .acquire, .monotonic) != null) return error.ConcurrentControl;
         defer self.control_active.store(false, .release);
-        self.consumeCompletions();
+        self.retireSnapshots();
+        if (self.consumeCompletions()) self.snapshot_dirty = true;
         var drained: usize = 0;
         while (drained < @min(limit, max_control_drain)) : (drained += 1) {
             const normal = self.normal.peek();
@@ -437,8 +439,13 @@ pub const ControlRuntime = struct {
                 },
                 else => return err,
             };
+            self.snapshot_dirty = true;
         }
-        try self.publishSnapshot();
+        if (self.snapshot_dirty) {
+            try self.publishSnapshot();
+            self.snapshot_dirty = false;
+        }
+        self.retireSnapshots();
         return drained;
     }
 
@@ -528,7 +535,8 @@ pub const ControlRuntime = struct {
         return self.next_revision;
     }
 
-    fn consumeCompletions(self: *ControlRuntime) void {
+    fn consumeCompletions(self: *ControlRuntime) bool {
+        var changed = false;
         while (self.render_completions.pop()) |completion| {
             if (!self.instances.current(completion.instance)) continue;
             const state = &self.desired[completion.instance.index];
@@ -538,7 +546,9 @@ pub const ControlRuntime = struct {
             self.active_count -= 1;
             self.instances.release(completion.instance);
             self.reportCompletion(completion);
+            changed = true;
         }
+        return changed;
     }
 
     fn finish(self: *ControlRuntime, instance: InstanceHandle, reason: CompletionReason) void {
@@ -577,6 +587,13 @@ pub const ControlRuntime = struct {
         };
         self.published_generation.store(slot.snapshot.generation, .release);
         self.published_slot.store(index, .release);
+    }
+
+    fn retireSnapshots(self: *ControlRuntime) void {
+        const current = self.published_slot.load(.acquire);
+        for (&self.snapshots, 0..) |*slot, index| {
+            if (index != current and slot.readers.load(.acquire) == 0) slot.releaseOwners(&self.counters);
+        }
     }
 
     pub fn acquireSnapshot(self: *ControlRuntime) SnapshotLease {
@@ -838,6 +855,19 @@ test "generation-safe single stop rejects stale reuse" {
     try std.testing.expectError(error.StaleInstance, runtime.submitStop(.{ .instance = first, .fade_frames = 1 }));
     runtime.instances.release(second);
     owner.retire();
+}
+
+test "idle control ticks do not republish an unchanged snapshot" {
+    var runtime = ControlRuntime.init();
+    _ = try runtime.controlTick(max_control_drain);
+    const generation = runtime.telemetry().snapshot_generation;
+    try std.testing.expect(generation > 0);
+    for (0..10_000) |_| _ = try runtime.controlTick(max_control_drain);
+    try std.testing.expectEqual(generation, runtime.telemetry().snapshot_generation);
+
+    var lease = runtime.acquireSnapshot();
+    lease.release();
+    try runtime.destroy();
 }
 
 test "concurrent producers control and render preserve bounded snapshots" {

@@ -66,6 +66,7 @@ pub const RuntimeCompletion = runtime.Completion;
 pub const RuntimeOfflineBackend = device.RuntimeOfflineBackend;
 pub const RuntimeMiniaudioBackend = device.RuntimeMiniaudioBackend;
 pub const RuntimeDeviceState = device.RuntimeDeviceState;
+pub const RuntimeDeviceEvidence = device.RuntimeDeviceEvidence;
 
 test {
     std.testing.refAllDecls(@This());

@@ -12,6 +12,23 @@ pub const DeviceConfig = struct {
     period_frames: u32 = 256,
 };
 
+pub const RuntimeDeviceEvidence = struct {
+    identity: [256]u8 = [_]u8{0} ** 256,
+    identity_len: u16 = 0,
+    driver: [32]u8 = [_]u8{0} ** 32,
+    driver_len: u8 = 0,
+    sample_rate: u32 = 0,
+    channels: u16 = 0,
+    period_frames: u32 = 0,
+
+    pub fn identitySlice(self: *const RuntimeDeviceEvidence) []const u8 {
+        return self.identity[0..self.identity_len];
+    }
+    pub fn driverSlice(self: *const RuntimeDeviceEvidence) []const u8 {
+        return self.driver[0..self.driver_len];
+    }
+};
+
 const max_quantum_frames = 1024;
 const max_channels = 2;
 const max_pending_samples = max_quantum_frames * max_channels;
@@ -175,6 +192,8 @@ pub const RuntimeMiniaudioBackend = struct {
     generation: u32 = 0,
     lost_count: u64 = 0,
     reopen_count: u64 = 0,
+    notification_pending: std.atomic.Value(u8) = std.atomic.Value(u8).init(0),
+    evidence_value: RuntimeDeviceEvidence = .{},
 
     pub fn init(renderer: *runtime.RuntimeRenderer, quantum_frames: u32, channels: u16) core.BuguError!RuntimeMiniaudioBackend {
         if (quantum_frames == 0 or quantum_frames > max_quantum_frames or channels != 2) return core.BuguError.InvalidArgument;
@@ -191,8 +210,18 @@ pub const RuntimeMiniaudioBackend = struct {
         ma_config.sampleRate = config.sample_rate;
         ma_config.periodSizeInFrames = config.period_frames;
         ma_config.dataCallback = runtimeDataCallback;
+        ma_config.notificationCallback = runtimeNotificationCallback;
         ma_config.pUserData = self;
         if (c.ma_device_init(null, &ma_config, &self.device) != c.MA_SUCCESS) return core.BuguError.DeviceUnavailable;
+        self.evidence_value = .{ .sample_rate = self.device.sampleRate, .channels = @intCast(self.device.playback.channels), .period_frames = self.device.playback.internalPeriodSizeInFrames };
+        const name = std.mem.sliceTo(self.device.playback.name[0..], 0);
+        const name_len = @min(name.len, self.evidence_value.identity.len);
+        @memcpy(self.evidence_value.identity[0..name_len], name[0..name_len]);
+        self.evidence_value.identity_len = @intCast(name_len);
+        const driver = std.mem.span(c.ma_get_backend_name(self.device.pContext.*.backend));
+        const driver_len = @min(driver.len, self.evidence_value.driver.len);
+        @memcpy(self.evidence_value.driver[0..driver_len], driver[0..driver_len]);
+        self.evidence_value.driver_len = @intCast(driver_len);
         self.config = config;
         self.state = .open;
         self.generation +%= 1;
@@ -212,6 +241,14 @@ pub const RuntimeMiniaudioBackend = struct {
         c.ma_device_uninit(&self.device);
         self.state = .lost;
         self.lost_count += 1;
+    }
+
+    pub fn pollLostNotification(self: *RuntimeMiniaudioBackend) bool {
+        return self.notification_pending.swap(0, .acq_rel) != 0;
+    }
+
+    pub fn evidence(self: *const RuntimeMiniaudioBackend) RuntimeDeviceEvidence {
+        return self.evidence_value;
     }
 
     pub fn reopen(self: *RuntimeMiniaudioBackend) core.BuguError!void {
@@ -320,6 +357,15 @@ fn runtimeDataCallback(device: [*c]c.ma_device, output: ?*anyopaque, input: ?*co
     const sample_count = @as(usize, frame_count) * backend.adapter.channels;
     const out: [*]f32 = @ptrCast(@alignCast(output));
     backend.adapter.render(out[0..sample_count], frame_count);
+}
+
+fn runtimeNotificationCallback(notification: [*c]const c.ma_device_notification) callconv(.c) void {
+    if (notification == null or notification.*.pDevice == null) return;
+    const backend: *RuntimeMiniaudioBackend = @ptrCast(@alignCast(notification.*.pDevice.*.pUserData));
+    switch (notification.*.type) {
+        c.ma_device_notification_type_rerouted, c.ma_device_notification_type_interruption_began => backend.notification_pending.store(1, .release),
+        else => {},
+    }
 }
 
 fn writeWavHeader(writer: *std.Io.Writer, frame_count: u32, sample_rate: u32, channels: u16) !void {

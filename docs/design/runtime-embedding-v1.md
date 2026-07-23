@@ -32,7 +32,7 @@ Render completions use a fixed SPSC ring; Control validates the full instance ge
 
 Shutdown is idempotent by stages: `stopAccepting`, reserved `submitShutdown`, repeated control ticks and render callbacks until `drainStatus` succeeds, backend stop, then `destroy`. `destroy` refuses live queues/instances/render pins/readers, releases all retired snapshot pins, and clears completion observations. It does not wait, join, free, or perform I/O.
 
-`RuntimeMiniaudioBackend` exposes `closed/open/running/lost/reopening/stopped`, a non-callback `notifyLost`, `reopen`, device generation, and lost/reopen counters. Its callback only enters the preallocated fixed-quantum adapter. `RuntimeOfflineBackend` is the backend-neutral test path and does not count as physical-device evidence.
+`RuntimeMiniaudioBackend` exposes `closed/open/running/lost/reopening/stopped`, a non-callback `notifyLost`, atomic miniaudio reroute/interruption notification polling, `reopen`, device generation, lost/reopen counters, and fixed-capacity actual device identity/format/period evidence. Its callbacks only enter the preallocated fixed-quantum adapter or store the lost-notification flag; reopen and evidence inspection remain Control-side. `RuntimeOfflineBackend` is the backend-neutral test path and does not count as physical-device evidence.
 
 ## Callback audit surface
 
