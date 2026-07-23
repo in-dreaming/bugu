@@ -116,14 +116,14 @@ pub const Command = union(CommandKind) {
     shutdown: void,
 };
 
-const SequencedCommand = struct { sequence: u64, value: Command };
+const QueuedCommand = struct { reserved: bool, value: Command };
 
 fn MpscRing(comptime capacity: usize) type {
     return struct {
         const Self = @This();
         const Cell = struct {
             sequence: std.atomic.Value(usize) = std.atomic.Value(usize).init(0),
-            value: SequencedCommand = undefined,
+            value: QueuedCommand = undefined,
         };
 
         cells: [capacity]Cell = undefined,
@@ -137,7 +137,7 @@ fn MpscRing(comptime capacity: usize) type {
             return self;
         }
 
-        fn push(self: *Self, value: Command, sequence_counter: *std.atomic.Value(u64)) bool {
+        fn push(self: *Self, value: QueuedCommand) bool {
             var position = self.enqueue_position.load(.monotonic);
             while (true) {
                 const cell = &self.cells[position % capacity];
@@ -148,7 +148,7 @@ fn MpscRing(comptime capacity: usize) type {
                         position = actual;
                         continue;
                     }
-                    cell.value = .{ .sequence = sequence_counter.fetchAdd(1, .monotonic), .value = value };
+                    cell.value = value;
                     cell.sequence.store(position +% 1, .release);
                     return true;
                 }
@@ -157,14 +157,14 @@ fn MpscRing(comptime capacity: usize) type {
             }
         }
 
-        fn peek(self: *Self) ?SequencedCommand {
+        fn peek(self: *Self) ?QueuedCommand {
             const position = self.dequeue_position;
             const cell = &self.cells[position % capacity];
             if (cell.sequence.load(.acquire) != position +% 1) return null;
             return cell.value;
         }
 
-        fn pop(self: *Self) ?SequencedCommand {
+        fn pop(self: *Self) ?QueuedCommand {
             const value = self.peek() orelse return null;
             const position = self.dequeue_position;
             self.cells[position % capacity].sequence.store(position +% capacity, .release);
@@ -330,9 +330,9 @@ const RuntimeCounters = struct {
 };
 
 pub const ControlRuntime = struct {
-    normal: MpscRing(normal_command_capacity) = MpscRing(normal_command_capacity).init(),
-    reserved: MpscRing(reserved_command_capacity) = MpscRing(reserved_command_capacity).init(),
-    next_sequence: std.atomic.Value(u64) = std.atomic.Value(u64).init(1),
+    commands: MpscRing(command_capacity) = MpscRing(command_capacity).init(),
+    normal_pending: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
+    reserved_pending: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
     next_control_sequence: u64 = 1,
     instances: InstancePool = .{},
     desired: [max_instances]DesiredVoice = [_]DesiredVoice{.{}} ** max_instances,
@@ -402,8 +402,15 @@ pub const ControlRuntime = struct {
     }
 
     fn submit(self: *ControlRuntime, command: Command, use_reserved: bool) RuntimeError!void {
-        const pushed = if (use_reserved) self.reserved.push(command, &self.next_sequence) else self.normal.push(command, &self.next_sequence);
+        const pending = if (use_reserved) &self.reserved_pending else &self.normal_pending;
+        const capacity: u32 = if (use_reserved) reserved_command_capacity else normal_command_capacity;
+        if (!claimPending(pending, capacity)) {
+            _ = self.counters.rejected_commands.fetchAdd(1, .monotonic);
+            return error.CommandQueueFull;
+        }
+        const pushed = self.commands.push(.{ .reserved = use_reserved, .value = command });
         if (!pushed) {
+            _ = pending.fetchSub(1, .release);
             _ = self.counters.rejected_commands.fetchAdd(1, .monotonic);
             return error.CommandQueueFull;
         }
@@ -412,7 +419,7 @@ pub const ControlRuntime = struct {
     }
 
     fn recordHighWater(self: *ControlRuntime) void {
-        const count: u32 = @intCast(@min(command_capacity, self.normal.count() + self.reserved.count()));
+        const count = self.normal_pending.load(.acquire) + self.reserved_pending.load(.acquire);
         var current = self.counters.queue_high_water.load(.monotonic);
         while (count > current) current = self.counters.queue_high_water.cmpxchgWeak(current, count, .monotonic, .monotonic) orelse return;
     }
@@ -424,15 +431,13 @@ pub const ControlRuntime = struct {
         if (self.consumeCompletions()) self.snapshot_dirty = true;
         var drained: usize = 0;
         while (drained < @min(limit, max_control_drain)) : (drained += 1) {
-            const normal = self.normal.peek();
-            const reserved = self.reserved.peek();
-            const candidate = if (normal == null) reserved else if (reserved == null) normal else if (normal.?.sequence < reserved.?.sequence) normal else reserved;
-            if (candidate == null or candidate.?.sequence != self.next_control_sequence) break;
-            const command = if (normal != null and normal.?.sequence == self.next_control_sequence) self.normal.pop() else self.reserved.pop();
-            const item = command orelse break;
+            const item = self.commands.pop() orelse break;
+            const pending = if (item.reserved) &self.reserved_pending else &self.normal_pending;
+            _ = pending.fetchSub(1, .release);
+            const sequence = self.next_control_sequence;
             self.next_control_sequence +%= 1;
             if (self.next_control_sequence == 0) self.next_control_sequence = 1;
-            self.apply(item.value, item.sequence) catch |err| switch (err) {
+            self.apply(item.value, sequence) catch |err| switch (err) {
                 error.StaleInstance, error.DuplicateInstance => {
                     _ = self.counters.rejected_commands.fetchAdd(1, .monotonic);
                     continue;
@@ -614,7 +619,7 @@ pub const ControlRuntime = struct {
     }
 
     pub fn drainStatus(self: *const ControlRuntime) RuntimeError!void {
-        if (self.normal.count() != 0 or self.reserved.count() != 0 or self.instances.liveCount() != 0 or self.counters.render_pins.load(.acquire) != 0) return error.DrainPending;
+        if (self.pendingCommandCount() != 0 or self.instances.liveCount() != 0 or self.counters.render_pins.load(.acquire) != 0) return error.DrainPending;
     }
 
     pub fn destroy(self: *ControlRuntime) RuntimeError!void {
@@ -627,7 +632,17 @@ pub const ControlRuntime = struct {
         while (self.reported_completions.pop() != null) {}
         if (self.counters.snapshot_pins.load(.acquire) != 0) return error.DrainPending;
     }
+
+    fn pendingCommandCount(self: *const ControlRuntime) usize {
+        return self.normal_pending.load(.acquire) + self.reserved_pending.load(.acquire);
+    }
 };
+
+fn claimPending(counter: *std.atomic.Value(u32), capacity: u32) bool {
+    var current = counter.load(.acquire);
+    while (current < capacity) current = counter.cmpxchgWeak(current, current + 1, .acq_rel, .acquire) orelse return true;
+    return false;
+}
 
 const RenderVoice = struct {
     active: bool = false,
@@ -781,7 +796,7 @@ fn stressProducer(context: *StressContext, producer: u32) void {
 }
 
 fn stressControl(context: *StressContext) void {
-    while (context.producers_done.load(.acquire) != 4 or context.runtime.normal.count() != 0 or context.runtime.reserved.count() != 0) {
+    while (context.producers_done.load(.acquire) != 4 or context.runtime.pendingCommandCount() != 0) {
         _ = context.runtime.controlTick(max_control_drain) catch |err| switch (err) {
             error.SnapshotBusy => continue,
             else => {
@@ -808,7 +823,7 @@ test "reserved commands survive normal queue saturation and preserve sequence" {
     try std.testing.expectError(error.CommandQueueFull, runtime.submitBus(.{ .bus = .master, .gain = 1, .ramp_frames = 1 }));
     try runtime.submitStop(.{ .instance = stopped, .fade_frames = 1 });
     try runtime.submitShutdown();
-    while (runtime.normal.count() + runtime.reserved.count() > 0) _ = try runtime.controlTick(max_control_drain);
+    while (runtime.pendingCommandCount() > 0) _ = try runtime.controlTick(max_control_drain);
     try std.testing.expect(runtime.telemetry().queue_high_water == normal_command_capacity + 2);
     runtime.instances.release(stopped);
     try runtime.destroy();

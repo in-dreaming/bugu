@@ -6,7 +6,7 @@ The v1 embedding path is `ControlRuntime -> RenderSnapshot -> RuntimeRenderer`. 
 
 ## Command and instance contract
 
-`ControlRuntime` owns a fixed 4,096-command MPSC budget: 3,968 normal slots plus 128 slots reserved for `stop` and `shutdown`. Producers receive `error.CommandQueueFull`; no command is overwritten or dynamically allocated. A global sequence is assigned only after a ring slot has been reserved. The single control consumer will not pass a sequence gap and merges the normal and reserved rings by sequence. At most 512 commands are drained per `controlTick`.
+`ControlRuntime` owns one fixed 4,096-command FIFO MPSC ring with atomic admission quotas: 3,968 normal commands plus 128 entries reserved for `stop` and `shutdown`. Producers receive `error.CommandQueueFull`; no command is overwritten or dynamically allocated. The ring-slot claim is the single global order, so producers cannot invert a separate sequence behind a FIFO head. At most 512 commands are drained per `controlTick`.
 
 Commands are value-semantic `play`, `update`, `bus`, `stop`, and `shutdown` records. A play record carries a stable `SampleOwner` pointer rather than owning allocation or source metadata. `reserveInstance` returns `{index: u16, generation: u16}` from a fixed 1,024-slot atomic pool. Reuse increments a nonzero generation; stale update/stop commands are rejected and cannot affect a reused slot.
 
