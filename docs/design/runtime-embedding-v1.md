@@ -34,6 +34,8 @@ Shutdown is idempotent by stages: `stopAccepting`, reserved `submitShutdown`, re
 
 `RuntimeMiniaudioBackend` exposes `closed/open/running/lost/reopening/stopped`, a non-callback `notifyLost`, atomic miniaudio reroute/interruption notification polling, `reopen`, device generation, lost/reopen counters, and fixed-capacity actual device identity/format/period evidence. Its callbacks only enter the preallocated fixed-quantum adapter or store the lost-notification flag; reopen and evidence inspection remain Control-side. `RuntimeOfflineBackend` is the backend-neutral test path and does not count as physical-device evidence.
 
+The fixed-quantum callback records duration into 32 fixed atomic log2 buckets and an atomic maximum. `TelemetryCounters.snapshot` performs the non-realtime p50/p95/p99 aggregation; the callback never sorts, allocates, locks, or formats telemetry.
+
 ## Callback audit surface
 
 The reachable production callback chain is:

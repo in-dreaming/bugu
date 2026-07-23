@@ -26,6 +26,9 @@ pub const TelemetrySnapshot = struct {
     underrun_count: u64,
     dropout_count: u64,
     max_callback_nanos: u64,
+    callback_p50_nanos: u64,
+    callback_p95_nanos: u64,
+    callback_p99_nanos: u64,
     peak_abs: f32,
     rms: f32,
     active_voices: u32,
@@ -34,6 +37,8 @@ pub const TelemetrySnapshot = struct {
     clipping_count: u64,
     mixer_time_nanos: u64,
 };
+
+pub const callback_histogram_buckets = 32;
 
 pub const EffectBusSnapshot = mixer.EffectBusSnapshot;
 
@@ -44,6 +49,7 @@ pub const TelemetryCounters = struct {
     underrun_count: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
     dropout_count: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
     max_callback_nanos: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
+    callback_histogram: [callback_histogram_buckets]std.atomic.Value(u64) = [_]std.atomic.Value(u64){std.atomic.Value(u64).init(0)} ** callback_histogram_buckets,
     peak_abs_bits: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
     rms_bits: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
     active_voices: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
@@ -53,6 +59,7 @@ pub const TelemetryCounters = struct {
     mixer_time_nanos: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
 
     pub fn snapshot(self: *const TelemetryCounters) TelemetrySnapshot {
+        const quantiles = self.callbackQuantiles();
         return .{
             .callback_count = self.callback_count.load(.monotonic),
             .rendered_frames = self.rendered_frames.load(.monotonic),
@@ -60,6 +67,9 @@ pub const TelemetryCounters = struct {
             .underrun_count = self.underrun_count.load(.monotonic),
             .dropout_count = self.dropout_count.load(.monotonic),
             .max_callback_nanos = self.max_callback_nanos.load(.monotonic),
+            .callback_p50_nanos = quantiles.p50,
+            .callback_p95_nanos = quantiles.p95,
+            .callback_p99_nanos = quantiles.p99,
             .peak_abs = @bitCast(self.peak_abs_bits.load(.monotonic)),
             .rms = @bitCast(self.rms_bits.load(.monotonic)),
             .active_voices = self.active_voices.load(.monotonic),
@@ -86,6 +96,7 @@ pub const TelemetryCounters = struct {
     }
 
     pub fn recordCallbackNanos(self: *TelemetryCounters, nanos: u64) void {
+        _ = self.callback_histogram[histogramBucket(nanos)].fetchAdd(1, .monotonic);
         var current = self.max_callback_nanos.load(.monotonic);
         while (nanos > current) {
             current = self.max_callback_nanos.cmpxchgWeak(
@@ -97,10 +108,49 @@ pub const TelemetryCounters = struct {
         }
     }
 
+    fn callbackQuantiles(self: *const TelemetryCounters) struct { p50: u64, p95: u64, p99: u64 } {
+        var counts: [callback_histogram_buckets]u64 = undefined;
+        var total: u64 = 0;
+        for (&counts, &self.callback_histogram) |*destination, *source| {
+            destination.* = source.load(.acquire);
+            total +|= destination.*;
+        }
+        if (total == 0) return .{ .p50 = 0, .p95 = 0, .p99 = 0 };
+        return .{ .p50 = histogramQuantile(&counts, total, 50), .p95 = histogramQuantile(&counts, total, 95), .p99 = histogramQuantile(&counts, total, 99) };
+    }
+
     pub fn storeRms(self: *TelemetryCounters, rms: f32) void {
         self.rms_bits.store(@bitCast(rms), .monotonic);
     }
 };
+
+fn histogramBucket(nanos: u64) usize {
+    if (nanos <= 1) return 0;
+    const bits = 64 - @clz(nanos - 1);
+    return @min(callback_histogram_buckets - 1, bits);
+}
+
+fn histogramQuantile(counts: *const [callback_histogram_buckets]u64, total: u64, percentile: u64) u64 {
+    const rank = @max(1, (total *| percentile +| 99) / 100);
+    var cumulative: u64 = 0;
+    for (counts, 0..) |count, index| {
+        cumulative +|= count;
+        if (cumulative >= rank) return @as(u64, 1) << @intCast(index);
+    }
+    return @as(u64, 1) << (callback_histogram_buckets - 1);
+}
+
+test "callback histogram aggregates bounded quantiles outside render" {
+    var telemetry: TelemetryCounters = .{};
+    for (0..50) |_| telemetry.recordCallbackNanos(100);
+    for (0..45) |_| telemetry.recordCallbackNanos(1_000);
+    for (0..5) |_| telemetry.recordCallbackNanos(10_000);
+    const value = telemetry.snapshot();
+    try std.testing.expectEqual(@as(u64, 128), value.callback_p50_nanos);
+    try std.testing.expectEqual(@as(u64, 1_024), value.callback_p95_nanos);
+    try std.testing.expectEqual(@as(u64, 16_384), value.callback_p99_nanos);
+    try std.testing.expectEqual(@as(u64, 10_000), value.max_callback_nanos);
+}
 
 pub const Engine = struct {
     config: EngineConfig,

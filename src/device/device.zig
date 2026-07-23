@@ -44,6 +44,8 @@ const FixedQuantumAdapter = struct {
     }
 
     fn render(self: *FixedQuantumAdapter, output: []f32, frame_count: u32) void {
+        const start_ns = callbackNowNanos();
+        defer recordCallbackDuration(&self.engine.telemetry, start_ns);
         _ = self.engine.telemetry.callback_count.fetchAdd(1, .monotonic);
 
         const channels = self.engine.config.channels;
@@ -92,6 +94,8 @@ const RuntimeFixedQuantumAdapter = struct {
     }
 
     fn render(self: *RuntimeFixedQuantumAdapter, output: []f32, frame_count: u32) void {
+        const start_ns = callbackNowNanos();
+        defer recordCallbackDuration(&self.renderer.telemetry, start_ns);
         _ = self.renderer.telemetry.callback_count.fetchAdd(1, .monotonic);
         const quantum_samples = @as(usize, self.quantum_frames) * self.channels;
         const requested_samples = @as(usize, frame_count) * self.channels;
@@ -119,6 +123,22 @@ const RuntimeFixedQuantumAdapter = struct {
         }
     }
 };
+
+fn recordCallbackDuration(telemetry: *core.TelemetryCounters, start_ns: u64) void {
+    const end_ns = callbackNowNanos();
+    if (end_ns > start_ns) telemetry.recordCallbackNanos(end_ns - start_ns);
+}
+
+fn callbackNowNanos() u64 {
+    if (@import("builtin").os.tag != .windows) return 0;
+    const windows = std.os.windows;
+    var counter: windows.LARGE_INTEGER = 0;
+    var frequency: windows.LARGE_INTEGER = 0;
+    if (!windows.ntdll.RtlQueryPerformanceCounter(&counter).toBool()) return 0;
+    if (!windows.ntdll.RtlQueryPerformanceFrequency(&frequency).toBool()) return 0;
+    if (frequency <= 0 or counter <= 0) return 0;
+    return @intCast(@divTrunc(@as(i128, counter) * std.time.ns_per_s, frequency));
+}
 
 pub const OfflineBackend = struct {
     engine: *core.Engine,
