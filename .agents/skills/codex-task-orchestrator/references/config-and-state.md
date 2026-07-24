@@ -104,6 +104,10 @@ Stages are `pending`, `implementation_running`, `implementation_complete`, `revi
 result/process pairs are reused after restart. A failed subprocess, invalid output, reviewer source
 mutation, `blocked`, or cycle exhaustion stops the run and preserves all evidence.
 
+Reviewer mutation comparison ignores known build/cache directories plus untracked `.log`, `.tmp`,
+and `.lock` runner artifacts. Tracked files with those suffixes remain protected, as do untracked
+source, documentation, configuration, and fixture files.
+
 After `pass`, automatic commit stages only paths introduced after the task baseline. It refuses a
 pre-existing staged index and leaves baseline-dirty paths untouched. Submodule source changes must
 already be committed inside the submodule; the parent commit then records the changed gitlink. Push

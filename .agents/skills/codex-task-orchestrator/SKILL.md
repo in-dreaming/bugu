@@ -51,7 +51,8 @@ For each ordered task:
 3. Persist prompts, Codex JSONL events, structured results, stage transitions, binary Git patches,
    source fingerprints, tests, acceptance evidence, and timestamps.
 4. Give Sol the same specifications in `workspace-write` so it can execute tests, while rejecting any
-   non-cache worktree mutation made during review.
+   protected worktree mutation made during review. Ignore generated caches and untracked runner
+   `.log`, `.tmp`, and `.lock` files, but continue protecting tracked files and untracked source/docs.
 5. Require Sol to report every extracted `AC-NNN` criterion exactly once and return `pass`,
    `changes_required`, or `blocked`.
 6. On `changes_required`, give the findings to a fresh Terra turn and repeat. A process retry resumes

@@ -222,6 +222,13 @@ function renderJsonSnapshot(role, value) {
   return renderDocumentSnapshot(role, `${role}.json`, text);
 }
 
+function shellExecutionGuidance() {
+  if (process.platform === "win32") {
+    return "Shell environment: Windows PowerShell. Native tools do not receive PowerShell-expanded path globs; use forms such as `rg PATTERN src/runtime/script_module -g '*.zig'`. Give full test suites a generous timeout, and retry only timeout failures.";
+  }
+  return "Shell environment: POSIX. Give full test suites a generous timeout, and retry only timeout failures.";
+}
+
 function atomicWriteJson(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
@@ -341,9 +348,22 @@ function isGeneratedRuntimePath(relative) {
   ) || relative.startsWith(".agents/task-orchestrator/runs/");
 }
 
+function isTrackedPath(repo, relative) {
+  return git(repo, ["ls-files", "--error-unmatch", "--", relative], { allowFailure: true }).status === 0;
+}
+
+function isTransientUntrackedPath(repo, relative) {
+  if (isTrackedPath(repo, relative)) return false;
+  return [".log", ".tmp", ".lock"].includes(path.extname(relative).toLowerCase());
+}
+
+function isProtectedFingerprintEntry(repo, relative) {
+  return !isGeneratedRuntimePath(relative) && !isTransientUntrackedPath(repo, relative);
+}
+
 function sourceFingerprint(repo) {
   const entries = {};
-  for (const relative of dirtyPaths(repo).filter((item) => !isGeneratedRuntimePath(item))) {
+  for (const relative of dirtyPaths(repo).filter((item) => isProtectedFingerprintEntry(repo, item))) {
     const full = ensureInside(repo, path.join(repo, relative), "Git worktree path");
     if (!fs.existsSync(full)) {
       entries[relative] = "deleted";
@@ -355,6 +375,15 @@ function sourceFingerprint(repo) {
     }
   }
   return { digest: sha256(JSON.stringify(entries)), entries };
+}
+
+function fingerprintChanges(repo, before, after) {
+  const beforeEntries = before?.entries ?? {};
+  const afterEntries = after?.entries ?? {};
+  const paths = [...new Set([...Object.keys(beforeEntries), ...Object.keys(afterEntries)])]
+    .filter((relative) => isProtectedFingerprintEntry(repo, relative))
+    .sort();
+  return paths.filter((relative) => beforeEntries[relative] !== afterEntries[relative]);
 }
 
 function captureGitEvidence(repo, attemptDir, label) {
@@ -530,6 +559,7 @@ Repository: ${repo}
 Setup source: ${setupPath}
 Task source: ${taskPath}
 Review cycle: ${cycle}
+${shellExecutionGuidance()}
 
 Complete exactly this task in the current repository. Read repository instructions and inspect
 existing code before editing. Implement the task fully, run proportionate tests, and update task
@@ -567,6 +597,7 @@ Repository: ${repo}
 Setup source: ${setupPath}
 Task source: ${taskPath}
 Review cycle: ${cycle}
+${shellExecutionGuidance()}
 
 Review the current repository state against the complete setup and task acceptance criteria.
 Do not edit source or documentation files. You may run tests and allow their normal caches/output in
@@ -740,7 +771,7 @@ function commitAcceptedTask(repo, task) {
     }
   }
   const candidates = dirtyPaths(repo).filter((relative) => {
-    if (isGeneratedRuntimePath(relative)) return false;
+    if (!isProtectedFingerprintEntry(repo, relative)) return false;
     if (!baseline.has(relative)) return true;
     return submoduleHeadDiffers(repo, relative);
   });
@@ -923,8 +954,9 @@ async function executeRun(repo, runDir, state, options) {
         captureGitEvidence(repo, attemptDir, "after-review");
         const fingerprintAfter = sourceFingerprint(repo);
         atomicWriteJson(path.join(attemptDir, "review-source-after.json"), fingerprintAfter);
-        if (fingerprintBefore.digest !== fingerprintAfter.digest) {
-          throw new Error(`${task.id} reviewer mutated non-cache worktree files; inspect review-source-*.json`);
+        const reviewerChanges = fingerprintChanges(repo, fingerprintBefore, fingerprintAfter);
+        if (reviewerChanges.length) {
+          throw new Error(`${task.id} reviewer mutated protected worktree files (${reviewerChanges.join(", ")}); inspect review-source-*.json`);
         }
         validateReviewCoverage(task, reviewResult);
         task.lastReview = reviewResult;
@@ -935,8 +967,9 @@ async function executeRun(repo, runDir, state, options) {
           const fingerprintBefore = JSON.parse(readUtf8(fingerprintFile));
           const fingerprintAfter = sourceFingerprint(repo);
           atomicWriteJson(path.join(attemptDir, "review-source-after.json"), fingerprintAfter);
-          if (fingerprintBefore.digest !== fingerprintAfter.digest) {
-            throw new Error(`${task.id} reviewer mutated non-cache worktree files; inspect review-source-*.json`);
+          const reviewerChanges = fingerprintChanges(repo, fingerprintBefore, fingerprintAfter);
+          if (reviewerChanges.length) {
+            throw new Error(`${task.id} reviewer mutated protected worktree files (${reviewerChanges.join(", ")}); inspect review-source-*.json`);
           }
         }
         validateReviewCoverage(task, reviewResult);
@@ -1018,6 +1051,9 @@ function printSummary(state) {
 }
 
 function selfTest() {
+  if (process.platform === "win32" && !shellExecutionGuidance().includes("-g '*.zig'")) {
+    throw new Error("Windows shell guidance self-test failed");
+  }
   const snapshot = renderDocumentSnapshot("task", "TASK.md", "# title\n```\n## injected\n```");
   for (const expected of ["TASK|00001| # title", "TASK|00003| ## injected", "BEGIN_DOCUMENT", "END_DOCUMENT"]) {
     if (!snapshot.includes(expected)) throw new Error(`Snapshot self-test failed: ${expected}`);
@@ -1053,12 +1089,25 @@ function selfTest() {
       baselineSourceFingerprint: sourceFingerprint(tempRepo),
     };
     fs.writeFileSync(path.join(tempRepo, "task.txt"), "task delta\n");
+    fs.writeFileSync(path.join(tempRepo, "task-run.log"), "runner output\n");
     const commit = commitAcceptedTask(tempRepo, task);
-    if (!commit.paths.includes("task.txt") || commit.paths.includes("existing.txt")) {
+    if (!commit.paths.includes("task.txt") || commit.paths.includes("existing.txt") || commit.paths.includes("task-run.log")) {
       throw new Error(`Commit scope self-test failed: ${JSON.stringify(commit.paths)}`);
     }
     if (!dirtyPaths(tempRepo).includes("existing.txt")) {
       throw new Error("Commit scope self-test failed to preserve baseline dirty file");
+    }
+    fs.writeFileSync(path.join(tempRepo, "runner.log"), "before\n");
+    const reviewBefore = sourceFingerprint(tempRepo);
+    fs.appendFileSync(path.join(tempRepo, "runner.log"), "after\n");
+    const logOnlyAfter = sourceFingerprint(tempRepo);
+    if (fingerprintChanges(tempRepo, reviewBefore, logOnlyAfter).length) {
+      throw new Error("Reviewer fingerprint self-test treated an untracked runner log as source");
+    }
+    fs.writeFileSync(path.join(tempRepo, "reviewer-created.zig"), "pub const bad = true;\n");
+    const sourceAfter = sourceFingerprint(tempRepo);
+    if (!fingerprintChanges(tempRepo, reviewBefore, sourceAfter).includes("reviewer-created.zig")) {
+      throw new Error("Reviewer fingerprint self-test missed an untracked source file");
     }
   } finally {
     fs.rmSync(tempRepo, { recursive: true, force: true });
