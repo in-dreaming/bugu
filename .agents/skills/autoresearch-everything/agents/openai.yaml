@@ -1,0 +1,4 @@
+interface:
+  display_name: "Autoresearch Everything"
+  short_description: "Generate autoresearch programs and agents"
+  default_prompt: "Use $autoresearch-everything to turn this research goal, context, and constraints into a runnable autoresearch setup."
