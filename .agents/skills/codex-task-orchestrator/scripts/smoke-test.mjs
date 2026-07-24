@@ -31,6 +31,17 @@ try {
     "--dry-run",
   ], { cwd: repo, encoding: "utf8" });
   if (dryRun.status !== 0) throw new Error(`Dry run failed:\n${dryRun.stderr}\n${dryRun.stdout}`);
+  const traversal = spawnSync(process.execPath, [
+    orchestrator,
+    "run",
+    "--repo", repo,
+    "--run-id", "../escape",
+    "--data-root", relativeDataRoot,
+    "--dry-run",
+  ], { cwd: repo, encoding: "utf8" });
+  if (traversal.status === 0 || !traversal.stderr.includes("--run-id must match")) {
+    throw new Error("Traversal run ID was not rejected");
+  }
 
   server = spawn(process.execPath, [
     dashboard,
@@ -49,9 +60,12 @@ try {
     runCount: runs.length,
     runId: run.id,
     taskCount: run.tasks.length,
+    acceptanceCount: run.tasks[0].acceptanceCriteria.length,
+    commitTasks: run.commitTasks,
     hasTitle: html.includes("Codex Task Orchestrator"),
   };
-  if (!result.health || result.runCount !== 1 || result.runId !== runId || result.taskCount !== 1 || !result.hasTitle) {
+  if (!result.health || result.runCount !== 1 || result.runId !== runId || result.taskCount !== 1 ||
+      result.acceptanceCount < 1 || result.commitTasks !== true || !result.hasTitle) {
     throw new Error(`Unexpected smoke result: ${JSON.stringify(result)}`);
   }
   console.log(JSON.stringify(result, null, 2));

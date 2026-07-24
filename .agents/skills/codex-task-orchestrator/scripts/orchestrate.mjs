@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import os from "node:os";
 import { spawn, spawnSync } from "node:child_process";
 
 const VERSION = 2;
@@ -91,6 +92,7 @@ Usage:
   orchestrate.mjs run [options]
   orchestrate.mjs status --run-id <id> [--repo <path>] [--data-root <path>]
   orchestrate.mjs list [--repo <path>] [--data-root <path>]
+  orchestrate.mjs self-test
 
 Run options:
   --repo <path>               Repository root (default: current directory)
@@ -235,7 +237,7 @@ function appendEvent(file, event) {
 function globToRegex(pattern) {
   const normalized = pattern.replaceAll("\\", "/");
   const escaped = normalized.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^${escaped.replaceAll("**", "§§").replaceAll("*", "[^/]*").replaceAll("§§", ".*").replaceAll("?", ".")}$`, "i");
+  return new RegExp(`^${escaped.replaceAll("**", "\u0000").replaceAll("*", "[^/]*").replaceAll("\u0000", ".*").replaceAll("?", ".")}$`, "i");
 }
 
 function walkFiles(root) {
@@ -335,7 +337,7 @@ function dirtyPaths(repo) {
 
 function isGeneratedRuntimePath(relative) {
   return relative.split("/").some((part) =>
-    part === ".zig-cache" || part === ".zig-global-cache" || part === "zig-cache" || part === "node_modules"
+    part === ".zig-cache" || part === ".zig-global-cache" || part === "zig-cache" || part === "zig-out" || part === "node_modules"
   ) || relative.startsWith(".agents/task-orchestrator/runs/");
 }
 
@@ -349,8 +351,7 @@ function sourceFingerprint(repo) {
       entries[relative] = sha256(fs.readFileSync(full));
     } else {
       const subHead = git(full, ["rev-parse", "HEAD"], { allowFailure: true });
-      const subDiff = git(full, ["diff", "--binary", "HEAD"], { allowFailure: true });
-      entries[relative] = sha256(`${subHead.stdout}\n${subDiff.stdout}`);
+      entries[relative] = `submodule:${subHead.stdout.trim()}:${sourceFingerprint(full).digest}`;
     }
   }
   return { digest: sha256(JSON.stringify(entries)), entries };
@@ -365,10 +366,22 @@ function captureGitEvidence(repo, attemptDir, label) {
     staged: git(repo, ["diff", "--cached", "--binary"]).stdout,
     head: git(repo, ["rev-parse", "HEAD"]).stdout,
     submodules: git(repo, ["submodule", "status", "--recursive"], { allowFailure: true }).stdout,
+    untracked: JSON.stringify(Object.fromEntries(
+      git(repo, ["ls-files", "--others", "--exclude-standard", "-z"]).stdout.split("\0").filter(Boolean)
+        .filter((relative) => !isGeneratedRuntimePath(relative.replaceAll("\\", "/")))
+        .map((relative) => {
+          const normalized = relative.replaceAll("\\", "/");
+          const full = path.join(repo, normalized);
+          return [normalized, {
+            bytes: fs.statSync(full).size,
+            sha256: sha256(fs.readFileSync(full)),
+          }];
+        }),
+    ), null, 2),
   };
   const artifactPaths = {};
   for (const [kind, body] of Object.entries(files)) {
-    const extension = kind === "unstaged" || kind === "staged" ? "patch" : "txt";
+    const extension = kind === "unstaged" || kind === "staged" ? "patch" : kind === "untracked" ? "json" : "txt";
     const file = path.join(evidenceDir, `${label}-${kind}.${extension}`);
     fs.writeFileSync(file, body, "utf8");
     artifactPaths[kind] = path.relative(attemptDir, file).replaceAll("\\", "/");
@@ -380,6 +393,7 @@ function captureGitEvidence(repo, attemptDir, label) {
     unstagedPatchSha256: sha256(files.unstaged),
     stagedPatchSha256: sha256(files.staged),
     submodulesSha256: sha256(files.submodules),
+    untrackedManifestSha256: sha256(files.untracked),
     artifacts: artifactPaths,
   };
   atomicWriteJson(path.join(evidenceDir, `${label}-summary.json`), summary);
@@ -451,6 +465,8 @@ function createOrResumeState(repo, setupRelative, taskPattern, runDir, options) 
       saved.timeline ??= [];
       saved.commit ??= null;
       saved.baselineDirtyPaths ??= (state.initialGit?.status ?? []).map((line) => line.slice(3).replaceAll("\\", "/"));
+      saved.baselineHadStaged ??= (state.initialGit?.status ?? []).some((line) => line[0] !== " " && line[0] !== "?");
+      saved.baselineGit ??= state.initialGit;
     }
     state.schemaVersion = VERSION;
     state.models = {
@@ -638,6 +654,138 @@ async function invokeCodex({ repo, model, sandbox, schemaFile, prompt, eventFile
   return parsed;
 }
 
+function recordTaskStage(runDir, state, task, stage, event, extra = {}) {
+  task.stage = stage;
+  task.status = {
+    implementation_running: "implementing",
+    implementation_complete: "implementing",
+    review_running: "reviewing",
+    review_complete: "reviewing",
+    fix_required: "changes_required",
+    committing: "committing",
+    accepted: "accepted",
+    blocked: "blocked",
+  }[stage] ?? task.status;
+  const item = { at: isoNow(), stage, cycle: task.attempts, ...extra };
+  task.timeline ??= [];
+  task.timeline.push(item);
+  updateTaskFile(runDir, task);
+  updateRun(runDir, state, { type: event, task: task.id, cycle: task.attempts, stage, ...extra });
+}
+
+function loadCompletedInvocation(resultFile, processFile) {
+  if (!fs.existsSync(resultFile) || !fs.existsSync(processFile)) return null;
+  const processResult = JSON.parse(readUtf8(processFile));
+  if (processResult.exitCode !== 0) return null;
+  return JSON.parse(readUtf8(resultFile));
+}
+
+function validateReviewCoverage(task, reviewResult) {
+  if (reviewResult.verdict === "changes_required" && reviewResult.findings.length === 0) {
+    throw new Error(`${task.id} review requested changes without actionable findings`);
+  }
+  const expected = task.acceptanceCriteria.map((criterion) => criterion.id);
+  const actual = reviewResult.acceptance_checks.map((check) => check.criterion_id);
+  if (actual.length !== expected.length || actual.some((id, index) => id !== expected[index])) {
+    throw new Error(`${task.id} review acceptance coverage mismatch: expected ${expected.join(", ")}, got ${actual.join(", ")}`);
+  }
+  for (let index = 0; index < expected.length; index += 1) {
+    if (reviewResult.acceptance_checks[index].criterion !== task.acceptanceCriteria[index].text) {
+      throw new Error(`${task.id} review changed criterion text for ${expected[index]}`);
+    }
+  }
+  if (reviewResult.verdict === "pass" && reviewResult.acceptance_checks.some((check) => check.status !== "passed")) {
+    throw new Error(`${task.id} review returned pass with unverified or failed acceptance checks`);
+  }
+}
+
+function submoduleHeadDiffers(repo, relative) {
+  const full = path.join(repo, relative);
+  if (!fs.existsSync(full) || !fs.statSync(full).isDirectory() || !fs.existsSync(path.join(full, ".git"))) return false;
+  const recorded = git(repo, ["ls-tree", "HEAD", "--", relative], { allowFailure: true }).stdout.trim().split(/\s+/)[2];
+  const current = git(full, ["rev-parse", "HEAD"], { allowFailure: true }).stdout.trim();
+  return Boolean(recorded && current && recorded !== current);
+}
+
+function submoduleWorktreeState(repo) {
+  const configured = git(repo, ["config", "--file", ".gitmodules", "--get-regexp", "path"], { allowFailure: true });
+  const state = {};
+  if (configured.status !== 0) return state;
+  for (const line of configured.stdout.split(/\r?\n/).filter(Boolean)) {
+    const relative = line.trim().split(/\s+/).slice(1).join(" ").replaceAll("\\", "/");
+    const full = path.join(repo, relative);
+    if (!fs.existsSync(full)) continue;
+    const head = git(full, ["rev-parse", "HEAD"], { allowFailure: true }).stdout.trim();
+    state[relative] = { head, source: sourceFingerprint(full).digest };
+  }
+  return state;
+}
+
+function commitAcceptedTask(repo, task) {
+  if (task.baselineHadStaged) {
+    throw new Error(`${task.id} cannot auto-commit because the index contains pre-existing staged changes`);
+  }
+  const baseline = new Set(task.baselineDirtyPaths ?? []);
+  const currentFingerprint = sourceFingerprint(repo);
+  for (const [relative, digest] of Object.entries(task.baselineSourceFingerprint?.entries ?? {})) {
+    if (currentFingerprint.entries[relative] !== digest) {
+      throw new Error(`${task.id} modified pre-existing dirty path '${relative}'; automatic commit refuses to mix ownership`);
+    }
+  }
+  const currentSubmodules = submoduleWorktreeState(repo);
+  for (const [relative, before] of Object.entries(task.baselineSubmodules ?? {})) {
+    const after = currentSubmodules[relative];
+    if (after && before.source !== after.source && before.head === after.head) {
+      throw new Error(`${task.id} changed submodule '${relative}' without committing it inside the submodule`);
+    }
+  }
+  const candidates = dirtyPaths(repo).filter((relative) => {
+    if (isGeneratedRuntimePath(relative)) return false;
+    if (!baseline.has(relative)) return true;
+    return submoduleHeadDiffers(repo, relative);
+  });
+  if (!candidates.length) {
+    return { sha: null, message: null, paths: [], createdAt: isoNow(), reason: "no_task_delta" };
+  }
+  git(repo, ["add", "-A", "--", ...candidates]);
+  const staged = git(repo, ["diff", "--cached", "--name-only", "-z"]).stdout.split("\0").filter(Boolean);
+  const unexpected = staged.filter((relative) => !candidates.includes(relative.replaceAll("\\", "/")));
+  if (unexpected.length) {
+    throw new Error(`${task.id} staged paths are outside the task delta: ${unexpected.join(", ")}`);
+  }
+  if (!staged.length) {
+    return { sha: null, message: null, paths: [], createdAt: isoNow(), reason: "no_stageable_delta" };
+  }
+  const title = task.title.replace(new RegExp(`^${task.id}\\s*[:：-]?\\s*`, "i"), "").trim();
+  const message = `${task.id}: ${title || "complete task"}`;
+  git(repo, ["commit", "-m", message]);
+  const sha = git(repo, ["rev-parse", "HEAD"]).stdout.trim();
+  return { sha, message, paths: staged, createdAt: isoNow(), reason: "committed" };
+}
+
+function recoverTaskCommit(repo, task) {
+  if (!task.commitBaseHead) return null;
+  const sha = git(repo, ["rev-parse", "HEAD"]).stdout.trim();
+  if (sha === task.commitBaseHead) return null;
+  const subject = git(repo, ["show", "-s", "--format=%s", "HEAD"]).stdout.trim();
+  if (!subject.startsWith(`${task.id}:`)) return null;
+  const paths = git(repo, ["show", "--pretty=", "--name-only", "-z", "HEAD"]).stdout.split("\0").filter(Boolean);
+  return { sha, message: subject, paths, createdAt: isoNow(), reason: "recovered" };
+}
+
+function archiveIncompleteInvocation(attemptDir, prefix) {
+  const candidates = fs.existsSync(attemptDir)
+    ? fs.readdirSync(attemptDir).filter((name) => name.startsWith(`${prefix}-`) && !name.startsWith(`${prefix}-retry-`))
+    : [];
+  if (!candidates.length) return;
+  const retryRoot = path.join(attemptDir, "retries");
+  fs.mkdirSync(retryRoot, { recursive: true });
+  const ordinal = String(fs.readdirSync(retryRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory()).length + 1).padStart(3, "0");
+  const destination = path.join(retryRoot, `${prefix}-${ordinal}`);
+  fs.mkdirSync(destination, { recursive: true });
+  for (const name of candidates) fs.renameSync(path.join(attemptDir, name), path.join(destination, name));
+}
+
 async function executeRun(repo, runDir, state, options) {
   const setupPath = ensureInside(repo, path.join(repo, state.setupFile), "Setup file");
   const setupText = readUtf8(setupPath);
@@ -646,49 +794,87 @@ async function executeRun(repo, runDir, state, options) {
     if (task.status === "accepted") continue;
     state.status = "running";
     state.currentTask = task.id;
-    task.status = "implementing";
-    task.startedAt ||= isoNow();
-    updateTaskFile(runDir, task);
-    updateRun(runDir, state, { type: "task_started", task: task.id });
+    if (!task.startedAt) {
+      task.startedAt = isoNow();
+      task.baselineDirtyPaths = dirtyPaths(repo);
+      task.baselineGit = gitSnapshot(repo);
+      task.baselineHadStaged = git(repo, ["diff", "--cached", "--quiet"], { allowFailure: true }).status !== 0;
+      task.baselineSubmodules = submoduleWorktreeState(repo);
+      task.baselineSourceFingerprint = sourceFingerprint(repo);
+      task.stage = "pending";
+      recordTaskStage(runDir, state, task, "pending", "task_started");
+    }
 
-    while (task.attempts < state.maxCycles) {
-      task.attempts += 1;
+    while (task.status !== "accepted") {
+      if (task.stage === "pending" || task.stage === "fix_required" || !task.stage) {
+        if (task.attempts >= state.maxCycles) {
+          task.status = "cycle_limit";
+          updateTaskFile(runDir, task);
+          updateRun(runDir, state, { type: "cycle_limit", task: task.id });
+          throw new Error(`${task.id} reached max review cycles (${state.maxCycles})`);
+        }
+        task.attempts += 1;
+        recordTaskStage(runDir, state, task, "implementation_running", "implementation_started");
+      }
       const cycle = task.attempts;
       const attemptDir = path.join(runDir, "tasks", task.id, "attempts", String(cycle).padStart(3, "0"));
       fs.mkdirSync(attemptDir, { recursive: true });
+      const artifactBase = path.relative(runDir, attemptDir).replaceAll("\\", "/");
+      task.artifacts ??= {};
+      task.artifacts[String(cycle)] ??= {
+        implementPrompt: `${artifactBase}/implement-prompt.md`,
+        implementEvents: `${artifactBase}/implement-events.jsonl`,
+        implementResult: `${artifactBase}/implement-result.json`,
+        implementProcess: `${artifactBase}/implement-process.json`,
+        reviewPrompt: `${artifactBase}/review-prompt.md`,
+        reviewEvents: `${artifactBase}/review-events.jsonl`,
+        reviewResult: `${artifactBase}/review-result.json`,
+        reviewProcess: `${artifactBase}/review-process.json`,
+        gitEvidence: `${artifactBase}/git`,
+      };
+      updateTaskFile(runDir, task);
       const taskPath = ensureInside(repo, path.join(repo, task.file), "Task file");
       const taskText = readUtf8(taskPath);
-      const gitBefore = gitSnapshot(repo);
-      const implPrompt = implementationPrompt({
-        repo,
-        setupPath: state.setupFile,
-        taskPath: task.file,
-        setupText,
-        taskText,
-        priorFindings: task.lastFindings ?? [],
-        cycle,
-      });
-      fs.writeFileSync(path.join(attemptDir, "implement-prompt.md"), implPrompt, "utf8");
-      task.status = "implementing";
-      updateTaskFile(runDir, task);
-      updateRun(runDir, state, { type: "implementation_started", task: task.id, cycle });
-      const implementationResult = await invokeCodex({
-        repo,
-        model: state.models.terra,
-        sandbox: options.implementerSandbox,
-        schemaFile: path.join(runDir, "schemas", "implementation.schema.json"),
-        prompt: implPrompt,
-        eventFile: path.join(attemptDir, "implement-events.jsonl"),
-        resultFile: path.join(attemptDir, "implement-result.json"),
-        processFile: path.join(attemptDir, "implement-process.json"),
-        label: `${task.id} implement #${cycle}`,
-      });
-      atomicWriteJson(path.join(attemptDir, "git-before.json"), gitBefore);
-      atomicWriteJson(path.join(attemptDir, "git-after-implementation.json"), gitSnapshot(repo));
-      task.lastImplementation = implementationResult;
-      updateTaskFile(runDir, task);
-      if (implementationResult.status === "blocked") {
-        task.status = "blocked";
+      const implementationResultFile = path.join(attemptDir, "implement-result.json");
+      const implementationProcessFile = path.join(attemptDir, "implement-process.json");
+      let implementationResult = loadCompletedInvocation(implementationResultFile, implementationProcessFile);
+
+      if (task.stage === "implementation_running" && !implementationResult) {
+        archiveIncompleteInvocation(attemptDir, "implement");
+        captureGitEvidence(repo, attemptDir, "before-implementation");
+        const implPrompt = implementationPrompt({
+          repo,
+          setupPath: state.setupFile,
+          taskPath: task.file,
+          setupText,
+          taskText,
+          acceptanceCriteria: task.acceptanceCriteria,
+          priorFindings: task.lastFindings ?? [],
+          cycle,
+        });
+        fs.writeFileSync(path.join(attemptDir, "implement-prompt.md"), implPrompt, "utf8");
+        implementationResult = await invokeCodex({
+          repo,
+          model: state.models.terra,
+          sandbox: options.implementerSandbox,
+          schemaFile: path.join(runDir, "schemas", "implementation.schema.json"),
+          prompt: implPrompt,
+          eventFile: path.join(attemptDir, "implement-events.jsonl"),
+          resultFile: implementationResultFile,
+          processFile: implementationProcessFile,
+          label: `${task.id} implement #${cycle}`,
+        });
+        captureGitEvidence(repo, attemptDir, "after-implementation");
+        task.lastImplementation = implementationResult;
+        recordTaskStage(runDir, state, task, "implementation_complete", "implementation_completed");
+      } else if (task.stage === "implementation_running" && implementationResult) {
+        task.lastImplementation = implementationResult;
+        recordTaskStage(runDir, state, task, "implementation_complete", "implementation_recovered");
+      } else {
+        implementationResult ??= task.lastImplementation;
+      }
+
+      if (implementationResult?.status === "blocked") {
         task.verdict = "blocked";
         task.lastFindings = implementationResult.blockers.map((details) => ({
           severity: "high",
@@ -697,74 +883,94 @@ async function executeRun(repo, runDir, state, options) {
           suggested_fix: "Resolve the blocker before resuming this run.",
           files: [],
         }));
-        updateTaskFile(runDir, task);
-        updateRun(runDir, state, { type: "task_blocked", task: task.id, cycle });
+        recordTaskStage(runDir, state, task, "blocked", "task_blocked");
         throw new Error(`${task.id} implementation is blocked`);
       }
 
-      const reviewPromptText = reviewPrompt({
-        repo,
-        setupPath: state.setupFile,
-        taskPath: task.file,
-        setupText,
-        taskText,
-        implementationResult,
-        cycle,
-      });
-      fs.writeFileSync(path.join(attemptDir, "review-prompt.md"), reviewPromptText, "utf8");
-      task.status = "reviewing";
-      updateTaskFile(runDir, task);
-      updateRun(runDir, state, { type: "review_started", task: task.id, cycle });
-      const reviewResult = await invokeCodex({
-        repo,
-        model: state.models.sol,
-        sandbox: options.reviewerSandbox,
-        schemaFile: path.join(runDir, "schemas", "review.schema.json"),
-        prompt: reviewPromptText,
-        eventFile: path.join(attemptDir, "review-events.jsonl"),
-        resultFile: path.join(attemptDir, "review-result.json"),
-        processFile: path.join(attemptDir, "review-process.json"),
-        label: `${task.id} review #${cycle}`,
-      });
-      if (reviewResult.verdict === "changes_required" && reviewResult.findings.length === 0) {
-        throw new Error(`${task.id} review requested changes without actionable findings`);
+      if (task.stage === "implementation_complete") {
+        recordTaskStage(runDir, state, task, "review_running", "review_started");
       }
-      if (reviewResult.verdict === "pass" && reviewResult.acceptance_checks.some((check) => check.status !== "passed")) {
-        throw new Error(`${task.id} review returned pass with unverified or failed acceptance checks`);
+      const reviewResultFile = path.join(attemptDir, "review-result.json");
+      const reviewProcessFile = path.join(attemptDir, "review-process.json");
+      let reviewResult = loadCompletedInvocation(reviewResultFile, reviewProcessFile);
+      if (task.stage === "review_running" && !reviewResult) {
+        archiveIncompleteInvocation(attemptDir, "review");
+        const reviewPromptText = reviewPrompt({
+          repo,
+          setupPath: state.setupFile,
+          taskPath: task.file,
+          setupText,
+          taskText,
+          acceptanceCriteria: task.acceptanceCriteria,
+          implementationResult,
+          cycle,
+        });
+        fs.writeFileSync(path.join(attemptDir, "review-prompt.md"), reviewPromptText, "utf8");
+        const fingerprintBefore = sourceFingerprint(repo);
+        atomicWriteJson(path.join(attemptDir, "review-source-before.json"), fingerprintBefore);
+        captureGitEvidence(repo, attemptDir, "before-review");
+        reviewResult = await invokeCodex({
+          repo,
+          model: state.models.sol,
+          sandbox: options.reviewerSandbox,
+          schemaFile: path.join(runDir, "schemas", "review.schema.json"),
+          prompt: reviewPromptText,
+          eventFile: path.join(attemptDir, "review-events.jsonl"),
+          resultFile: reviewResultFile,
+          processFile: reviewProcessFile,
+          label: `${task.id} review #${cycle}`,
+        });
+        captureGitEvidence(repo, attemptDir, "after-review");
+        const fingerprintAfter = sourceFingerprint(repo);
+        atomicWriteJson(path.join(attemptDir, "review-source-after.json"), fingerprintAfter);
+        if (fingerprintBefore.digest !== fingerprintAfter.digest) {
+          throw new Error(`${task.id} reviewer mutated non-cache worktree files; inspect review-source-*.json`);
+        }
+        validateReviewCoverage(task, reviewResult);
+        task.lastReview = reviewResult;
+        recordTaskStage(runDir, state, task, "review_complete", "review_completed", { verdict: reviewResult.verdict });
+      } else if (task.stage === "review_running" && reviewResult) {
+        const fingerprintFile = path.join(attemptDir, "review-source-before.json");
+        if (fs.existsSync(fingerprintFile)) {
+          const fingerprintBefore = JSON.parse(readUtf8(fingerprintFile));
+          const fingerprintAfter = sourceFingerprint(repo);
+          atomicWriteJson(path.join(attemptDir, "review-source-after.json"), fingerprintAfter);
+          if (fingerprintBefore.digest !== fingerprintAfter.digest) {
+            throw new Error(`${task.id} reviewer mutated non-cache worktree files; inspect review-source-*.json`);
+          }
+        }
+        validateReviewCoverage(task, reviewResult);
+        task.lastReview = reviewResult;
+        recordTaskStage(runDir, state, task, "review_complete", "review_recovered", { verdict: reviewResult.verdict });
+      } else {
+        reviewResult ??= task.lastReview;
       }
-      atomicWriteJson(path.join(attemptDir, "git-after-review.json"), gitSnapshot(repo));
-      task.lastReview = reviewResult;
       task.verdict = reviewResult.verdict;
       task.lastFindings = reviewResult.findings;
+
       if (reviewResult.verdict === "pass") {
-        task.status = "accepted";
+        if (options.commit) {
+          if (task.stage !== "committing") {
+            task.commitBaseHead = git(repo, ["rev-parse", "HEAD"]).stdout.trim();
+            recordTaskStage(runDir, state, task, "committing", "task_commit_started");
+          }
+          task.commit = task.commit ?? recoverTaskCommit(repo, task) ?? commitAcceptedTask(repo, task);
+          updateTaskFile(runDir, task);
+          updateRun(runDir, state, { type: "task_committed", task: task.id, commit: task.commit.sha });
+        }
         task.completedAt = isoNow();
-        updateTaskFile(runDir, task);
-        updateRun(runDir, state, { type: "task_accepted", task: task.id, cycle });
+        recordTaskStage(runDir, state, task, "accepted", "task_accepted", { commit: task.commit?.sha ?? null });
         console.log(`[${task.id}] accepted after ${cycle} cycle(s)`);
         break;
       }
       if (reviewResult.verdict === "blocked") {
-        task.status = "blocked";
-        updateTaskFile(runDir, task);
-        updateRun(runDir, state, { type: "task_blocked", task: task.id, cycle });
+        recordTaskStage(runDir, state, task, "blocked", "task_blocked");
         throw new Error(`${task.id} review is blocked`);
       }
-      task.status = "changes_required";
-      updateTaskFile(runDir, task);
-      updateRun(runDir, state, {
-        type: "changes_required",
-        task: task.id,
-        cycle,
+      recordTaskStage(runDir, state, task, "fix_required", "changes_required", {
         findingCount: reviewResult.findings.length,
       });
       console.log(`[${task.id}] Sol requested ${reviewResult.findings.length} change(s)`);
-    }
-    if (task.status !== "accepted") {
-      task.status = "cycle_limit";
-      updateTaskFile(runDir, task);
-      updateRun(runDir, state, { type: "cycle_limit", task: task.id });
-      throw new Error(`${task.id} reached max review cycles (${state.maxCycles})`);
     }
   }
   state.status = "completed";
@@ -811,9 +1017,62 @@ function printSummary(state) {
   }, null, 2));
 }
 
+function selfTest() {
+  const snapshot = renderDocumentSnapshot("task", "TASK.md", "# title\n```\n## injected\n```");
+  for (const expected of ["TASK|00001| # title", "TASK|00003| ## injected", "BEGIN_DOCUMENT", "END_DOCUMENT"]) {
+    if (!snapshot.includes(expected)) throw new Error(`Snapshot self-test failed: ${expected}`);
+  }
+  for (const invalid of [".", "..", "../escape", "a/b", "", "a".repeat(129)]) {
+    let rejected = false;
+    try { validateRunId(invalid); } catch { rejected = true; }
+    if (!rejected) throw new Error(`Run ID self-test failed: ${JSON.stringify(invalid)}`);
+  }
+  validateReviewCoverage(
+    { id: "TASK-001", acceptanceCriteria: [{ id: "AC-001", text: "works" }] },
+    {
+      verdict: "pass",
+      findings: [],
+      acceptance_checks: [{ criterion_id: "AC-001", criterion: "works", status: "passed", evidence: "test" }],
+    },
+  );
+  const tempRepo = fs.mkdtempSync(path.join(os.tmpdir(), "codex-task-orchestrator-"));
+  try {
+    git(tempRepo, ["init", "-q"]);
+    git(tempRepo, ["config", "user.name", "Orchestrator Self Test"]);
+    git(tempRepo, ["config", "user.email", "orchestrator@example.invalid"]);
+    fs.writeFileSync(path.join(tempRepo, "existing.txt"), "baseline\n");
+    git(tempRepo, ["add", "existing.txt"]);
+    git(tempRepo, ["commit", "-q", "-m", "baseline"]);
+    fs.writeFileSync(path.join(tempRepo, "existing.txt"), "user dirty\n");
+    const task = {
+      id: "TASK-999",
+      title: "TASK-999: scoped commit",
+      baselineDirtyPaths: dirtyPaths(tempRepo),
+      baselineHadStaged: false,
+      baselineSubmodules: {},
+      baselineSourceFingerprint: sourceFingerprint(tempRepo),
+    };
+    fs.writeFileSync(path.join(tempRepo, "task.txt"), "task delta\n");
+    const commit = commitAcceptedTask(tempRepo, task);
+    if (!commit.paths.includes("task.txt") || commit.paths.includes("existing.txt")) {
+      throw new Error(`Commit scope self-test failed: ${JSON.stringify(commit.paths)}`);
+    }
+    if (!dirtyPaths(tempRepo).includes("existing.txt")) {
+      throw new Error("Commit scope self-test failed to preserve baseline dirty file");
+    }
+  } finally {
+    fs.rmSync(tempRepo, { recursive: true, force: true });
+  }
+  console.log("orchestrator self-test passed");
+}
+
 async function main() {
   const { command, options: raw } = parseArgs(process.argv.slice(2));
   if (raw.help) usage();
+  if (command === "self-test") {
+    selfTest();
+    return;
+  }
   const repo = path.resolve(raw.repo ?? process.cwd());
   if (!fs.existsSync(path.join(repo, ".git"))) throw new Error(`Not a Git repository root: ${repo}`);
   const options = {

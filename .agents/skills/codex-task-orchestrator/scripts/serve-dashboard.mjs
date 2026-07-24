@@ -34,6 +34,11 @@ function sendFile(response, file) {
     ".js": "text/javascript; charset=utf-8",
     ".css": "text/css; charset=utf-8",
     ".svg": "image/svg+xml",
+    ".json": "application/json; charset=utf-8",
+    ".jsonl": "application/x-ndjson; charset=utf-8",
+    ".md": "text/markdown; charset=utf-8",
+    ".txt": "text/plain; charset=utf-8",
+    ".patch": "text/plain; charset=utf-8",
   };
   const body = fs.readFileSync(file);
   response.writeHead(200, {
@@ -87,6 +92,16 @@ const server = http.createServer((request, response) => {
       return sendJson(response, 200, { ok: true, repo, dataRoot, now: new Date().toISOString() });
     }
     if (url.pathname === "/api/runs") return sendJson(response, 200, listRuns(dataRoot));
+    const artifactMatch = url.pathname.match(/^\/api\/runs\/([A-Za-z0-9][A-Za-z0-9._-]{0,127})\/artifacts\/(.+)$/);
+    if (artifactMatch) {
+      const runRoot = path.resolve(dataRoot, artifactMatch[1]);
+      const relativeArtifact = decodeURIComponent(artifactMatch[2]);
+      const file = path.resolve(runRoot, relativeArtifact);
+      const inside = path.relative(runRoot, file);
+      if (inside.startsWith("..") || path.isAbsolute(inside)) return sendJson(response, 403, { error: "forbidden" });
+      if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return sendJson(response, 404, { error: "artifact_not_found" });
+      return sendFile(response, file);
+    }
     const runMatch = url.pathname.match(/^\/api\/runs\/([A-Za-z0-9._-]+)$/);
     if (runMatch) {
       const file = path.join(dataRoot, runMatch[1], "run.json");

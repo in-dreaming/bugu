@@ -11,12 +11,8 @@ Use the bundled Node.js scripts. They require only Node 20+ and an authenticated
 
 From the target repository:
 
-```text
-node .agents/skills/codex-task-orchestrator/scripts/orchestrate.mjs run \
-  --repo . \
-  --setup docs/tasksv2/setup.md \
-  --tasks "docs/tasksv2/TASK-*.md" \
-  --run-id porffor-v2
+```powershell
+node .agents/skills/codex-task-orchestrator/scripts/orchestrate.mjs run --repo . --setup docs/tasksv2/setup.md --tasks "docs/tasksv2/TASK-*.md" --run-id porffor-v2
 ```
 
 The same command resumes an interrupted run. Use a stable `--run-id`; do not delete run data while
@@ -31,6 +27,7 @@ Useful controls:
 --terra-model gpt-5.6-terra
 --sol-model gpt-5.6-sol
 --dry-run
+--no-commit
 ```
 
 Default runtime data is `.agents/task-orchestrator/runs/<run-id>/`. Inspect
@@ -49,19 +46,31 @@ Open `http://127.0.0.1:4173`. The server is read-only and polls persisted run st
 For each ordered task:
 
 1. Give Terra the complete setup document, task document, repository path, and prior review findings.
-2. Persist the prompt, Codex JSONL events, structured final result, Git status, and timestamps.
-3. Give Sol the same specifications and current repository state in read-only mode.
-4. Require Sol to return `pass`, `changes_required`, or `blocked` with actionable findings.
-5. On `changes_required`, give the findings to a fresh Terra turn and repeat.
-6. Advance only on `pass`; stop on blocked work, process failure, or the configured cycle limit.
+2. Render Markdown as line-prefixed, checksummed snapshots so headings and code fences cannot escape
+   their prompt boundary.
+3. Persist prompts, Codex JSONL events, structured results, stage transitions, binary Git patches,
+   source fingerprints, tests, acceptance evidence, and timestamps.
+4. Give Sol the same specifications in `workspace-write` so it can execute tests, while rejecting any
+   non-cache worktree mutation made during review.
+5. Require Sol to report every extracted `AC-NNN` criterion exactly once and return `pass`,
+   `changes_required`, or `blocked`.
+6. On `changes_required`, give the findings to a fresh Terra turn and repeat. A process retry resumes
+   the incomplete stage without consuming another review cycle.
+7. On `pass`, create one task-scoped parent-repository commit by default, then advance. Use
+   `--no-commit` to disable this; the orchestrator never pushes.
 
 Do not treat process exit alone as acceptance. The Sol verdict is the task acceptance record.
-The orchestrator does not commit or push changes.
+Failed, blocked, interrupted, or cycle-limited tasks are never committed.
 
 ## Safety
 
 - Start with a clean or intentionally understood worktree.
-- Keep the default implementer sandbox at `workspace-write` and reviewer at `read-only`.
+- Keep both sandboxes at `workspace-write`; the reviewer prompt forbids source edits and before/after
+  fingerprints enforce that boundary.
 - Do not run two processes with the same run ID; the lock prevents accidental overlap.
-- Review `run.json` and task results before committing.
+- Run IDs are restricted to portable filename characters and cannot escape the data root.
+- Automatic commits stage only paths absent from the task's baseline dirty set. Pre-existing staged
+  changes stop automatic commit.
+- A task that changes a submodule must commit inside that submodule first; the orchestrator records
+  the resulting parent gitlink but never pushes either repository.
 - Preserve run artifacts for audit and incremental repair.
