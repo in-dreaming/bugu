@@ -1,7 +1,13 @@
 # TASK-003：实现版本化 MusicBank schema 与 compiler core
 
 ## 元数据
-- 状态：待实施
+- 状态：TODO
+- Owner：`UNASSIGNED`
+- Reviewer：`UNASSIGNED`
+- 实施角色：Asset Schema/Compiler
+- 评审角色：资产运行时、兼容性、安全
+- 工作量等级：`L`
+- 证据路径：`docs/validation/sme/TASK-003/evidence.md`（脱敏摘要）、`zig-out/sme-validation/TASK-003/`（原始产物）
 - 执行波次：1
 - 硬依赖：TASK-001
 - 协作关系：TASK-007/008/009/010/011/016/017 共享本任务 schema；本任务是表结构唯一所有者
@@ -24,7 +30,8 @@
 - FNV ID collision、offset/length/overflow、UTF-8、cross-reference 校验。
 - deterministic serialization；相同输入 byte-identical。
 - legacy bank 明确走旧 loader，不自动升级。
-- compiler core 先能处理最小完整结构；特定表的深层语义由后续任务扩展同一 validator registry。
+- compiler core 先能处理 `tests/fixtures/sme/minimal-v1/` 中的最小合法 bank；fixture 必须含每个 required table 的最小记录和明确许可证/生成说明。特定表的深层语义由后续任务扩展同一 validator registry。
+- 在 `docs/design/sme-music-bank-v1-layout.md` 冻结 header、table directory、alignment、endian、offset/length、capability 和 table count 上限。
 
 ### 明确不包含
 - tempo grid 算法、Opus decode、transition 求解、GUI。
@@ -36,6 +43,7 @@
 3. unknown required capability 失败；unknown optional debug section 可跳过。
 4. builder 分离 source AST、validated IR、runtime binary。
 5. compiler report 列出 hash、counts、budgets、warnings/errors。
+6. 每个 table 的最大 count、总 bank bytes 和 blob/chunk 上限必须进入 schema constants、loader 校验和 layout 文档，禁止仅依赖 `usize` 或 allocator 失败。
 
 ## 接口与数据契约
 - `MusicBank.load` 返回 owned immutable generation。
@@ -43,7 +51,8 @@
 - content hash 不含非确定时间戳；build metadata 单独存放。
 
 ## 文件变更
-- 新增 schema/bank/compiler/test 文件。
+- 新增 schema/bank/compiler/test 文件与 `tests/fixtures/sme/minimal-v1/`。
+- `docs/design/sme-music-bank-v1-layout.md`：新增可审查的二进制布局和 table 索引。
 - `src/assets/bank.zig`：只增加显式 legacy/music dispatch seam，保留旧格式。
 
 ## 验证
@@ -56,10 +65,15 @@
 - 0 entries、超大 count、交叠 blob、unknown capability、旧 bank 被误送 music loader。
 
 ## 完成定义
-- [ ] 所有 v1 tables 与 capability 位存在。
+- [ ] 所有 v1 tables、capability 位、table 索引和容量上限存在。
+- [ ] 最小合法 fixture 可从 source 确定性编译、加载并 round-trip。
 - [ ] loader 对 malformed 输入 fail closed。
 - [ ] 相同输入 byte-identical。
 - [ ] 旧 bank 测试保持通过。
+
+## 活动日志
+
+- 2026-07-28：根据评审报告完成规格收口；状态保持 `TODO`，未开始代码实施。
 
 ## 风险与注意事项
 后续任务只能通过注册的 table validator/IR extension 扩展，不得 fork 第二种 MusicBank。

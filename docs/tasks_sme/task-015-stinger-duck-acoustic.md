@@ -1,7 +1,13 @@
 # TASK-015：实现 Stinger、duck request 与 acoustic-to-music 映射
 
 ## 元数据
-- 状态：待实施
+- 状态：TODO
+- Owner：`UNASSIGNED`
+- Reviewer：`UNASSIGNED`
+- 实施角色：Runtime Audio Integration
+- 评审角色：DSP、声学集成、实时安全
+- 工作量等级：`M`
+- 证据路径：`docs/validation/sme/TASK-015/evidence.md`（脱敏摘要）、`zig-out/sme-validation/TASK-015/`（原始产物）
 - 执行波次：6
 - 硬依赖：TASK-004、TASK-013、TASK-014
 - 协作关系：与 TASK-016/017 可并行；只通过 MusicRuntime extension seam
@@ -20,10 +26,10 @@ Stinger 必须使用同一绝对 frame scheduler。声学可影响 layer/filter/
 
 ## 实施范围
 ### 必须完成
-- stinger immediate/beat/bar sync、并发上限、repeat、drop/replace/defer。
+- stinger immediate/beat/bar sync、`PlatformProfile.max_stingers`、每 stinger/polyphony 上限、repeat window 与 drop/replace/defer deadline；所有时间以 frames 或 musical boundary 表达。
 - stinger priority/protection/duck main music。
 - begin/end duck request、priority/combine/attack/hold/release。
-- AcousticMusicProfile：clamp/smooth/rate-limit/quantize openness/room/path等输入。
+- `AcousticMusicProfile`：每个 openness/room/path 输入的 min/max、neutral、attack/release smoothing frames、rate limit per second、quantize steps、stale timeout frames 和 missing-data policy。
 - acoustic result stale/GPU late/CPU fallback semantics。
 - telemetry 与 trace。
 
@@ -35,11 +41,11 @@ Stinger 必须使用同一绝对 frame scheduler。声学可影响 layer/filter/
 1. stinger 是独立 scheduled group，不加入 selector history。
 2. repeated trigger 使用 stable request ID tie-break。
 3. duck request handle generation 防止重复 end。
-4. acoustic mapping 在 control thread，规则来自 bank。
+4. acoustic mapping 在 control thread，规则来自 bank；release profile 的 stinger 并发、duck ramp 和 acoustic smooth/rate-limit 默认值必须冻结并出现在 compiler report。
 5. 缺 acoustic input 保留上值/neutral profile，不影响 clock。
 
 ## 接口与数据契约
-`StingerDesc`、`DuckRequest/DuckRequestId`、`AcousticMusicProfile`。错误：stinger limit、invalid duck handle、stale acoustic sample；不得返回假 success。
+`StingerDesc`、`DuckRequest/DuckRequestId`、`AcousticMusicProfile`。三者的容量、时间单位、默认值与 profile override 顺序必须显式；超出上限返回结构化 reason，不能 clamp 后假成功。错误：stinger limit、invalid duck handle、stale acoustic sample；不得返回假 success。
 
 ## 文件变更
 - 新增 stinger/acoustic modules/tests。
@@ -59,6 +65,11 @@ Stinger 必须使用同一绝对 frame scheduler。声学可影响 layer/filter/
 - [ ] duck 真实控制 Bus DAG。
 - [ ] acoustic input 永不阻塞/切 state。
 - [ ] 所有策略可追踪。
+- [ ] release profile 的 stinger/duck/acoustic 定量默认值和 override 顺序已冻结。
+
+## 活动日志
+
+- 2026-07-28：根据评审报告完成规格收口；状态保持 `TODO`，未开始代码实施。
 
 ## 风险与注意事项
 不要让 stinger 或 acoustic path 绕过 voice budget和stream readiness。

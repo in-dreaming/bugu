@@ -111,16 +111,18 @@ docs/tasks/tasks.md 是总览。每个任务文件也有状态字段。状态只
 - REVIEW：产物完成，等待检查。
 - DONE：验收标准全部满足。
 
+独立任务包（例如 `docs/tasks_sme/`）如果在自身 `setup.md` 明确声明机器可读总览，可用该总览代替在 `docs/tasks/tasks.md` 重复登记；但状态值、同步更新、Activity Log、Evidence 和验收门禁仍必须遵守本节。
+
 开始任务时：
 
-1. 在 docs/tasks/tasks.md 中把任务状态改为 IN_PROGRESS。
+1. 在对应机器可读总览（`docs/tasks/tasks.md` 或独立任务包 `setup.md`）中把任务状态改为 IN_PROGRESS。
 2. 在任务文件的 Activity Log 增加一条开始记录。
 
 完成任务时：
 
 1. 确认任务的 Acceptance Criteria 全部满足。
 2. 更新任务文件的 Deliverables、Evidence、Activity Log。
-3. 更新 docs/tasks/tasks.md 的状态、产物链接、后续任务。
+3. 更新对应机器可读总览的状态、产物链接、后续任务。
 4. 如果产生了新的公共约束、ADR、术语或实现事实，更新本文件。
 
 ## 8. 任务产物要求

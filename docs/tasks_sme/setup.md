@@ -1,7 +1,8 @@
 # Bugu SME v1 实施上下文
 
-状态：ACTIVE
-最后更新：2026-07-24
+文档状态：ACTIVE（任务包已冻结，代码实施尚未开始）
+任务状态基线：TODO
+最后更新：2026-07-28
 适用范围：`docs/tasks_sme/` 下全部任务
 唯一产品终点：完整 Bugu Sequence Music Engine v1
 
@@ -52,7 +53,7 @@ SME v1 是完整 release，不是 MVP。TASK-001 至 TASK-024 全部完成且最
 | 路径 | 已确认职责与限制 |
 |---|---|
 | `src/core/engine.zig` | `EngineConfig` 默认 48 kHz/256 frames/stereo；直接拥有 mixer；无绝对 render-frame scheduler |
-| `src/mixer/mixer.zig` | 64 real voices；mono sample 到 stereo；gain/pan/filter/pitch/reverb send；无 atomic group、virtual voice、Bus DAG |
+| `src/mixer/mixer.zig` | 64 个 voice slot；mono sample 到 stereo；gain/pan/filter/pitch/reverb send；虽已有 `VoiceState.virtual` 枚举和计数槽，但没有进入/退出、cursor 推进或恢复执行路径，因此尚无可用的 virtual voice；无 atomic group、Bus DAG |
 | `src/assets/bank.zig` | WAV PCM 导入为单声道 48 kHz float32；未版本化 TOML + blob；全量 preload |
 | `src/events/runtime.zig` | 即时 play/switch/RTPC/stop；不能保证音乐边界或多 stem 同步 |
 | `src/device/device.zig` | miniaudio 与 offline backend；fixed-quantum adapter |
@@ -75,7 +76,7 @@ zig build acoustic-visualizer-smoke
 
 ### 2.3 文档与实现差异
 
-`arch_sme.md` 是目标 contract，不代表代码已实现。当前缺失：绝对 frame command block、multichannel、atomic group、virtual voice、tempo map、Music Director、cue/fill planner、Opus/streaming、Bus DAG/sidechain、MusicRuntime、music bank、作者工具和 SME 验证。任务不得把设计类型名当作已存在接口。
+`arch_sme.md` 是目标 contract，不代表代码已实现。当前缺失：绝对 frame command block、multichannel、atomic group、可运行的 music virtual voice、tempo map、Music Director、cue/fill planner、Opus/streaming、Bus DAG/sidechain、MusicRuntime、music bank、作者工具和 SME 验证。任务不得把设计类型名或未接通的枚举值当作已存在能力。
 
 ## 3. 当前架构
 
@@ -134,11 +135,14 @@ Authoring -> shared schema/compiler/runtime preview -> compiled MusicBank
 
 ```text
 src/music/
+  api.zig
   root.zig
   ids.zig
   errors.zig
   contract.zig
+  scheduler.zig
   trace.zig
+  replay.zig
   clock.zig
   logic.zig
   selector.zig
@@ -169,9 +173,18 @@ tools/sme_debug/
 examples/sme/
 tests/sme/
 docs/validation/sme/
+build_support/sme_steps.zig
 ```
 
 实际实现可在 TASK-001 的契约审查中做无行为差异的路径微调，但必须同步本文件和全部受影响任务，不能各任务自行发明第二套命名。
+
+公共 façade 与聚合层的职责冻结如下：
+
+- `src/music/api.zig` 是 `bugu_audio.music` 对外暴露的唯一公共 façade；只转发已实现且通过验收的公共类型与操作。
+- `src/music/root.zig` 是 SME 内部模块聚合入口，不作为游戏侧第二套公共 API。
+- `src/assets/music_schema.zig` 与 `src/assets/music_bank.zig` 拥有编译资产 schema/loader；公共调用方只能通过 `music/api.zig` 暴露的稳定类型访问，不新增并行的 `music/assets.zig` 实现。
+- `build_support/sme_steps.zig` 是可跟踪的 Zig 构建扩展。仓库 `build/` 已被 `.gitignore` 用作生成目录，禁止在其中放源文件。
+- `build_support/sme_steps.zig` 必须为 `tests/sme/*.zig` 提供确定性的发现/注册规则，或等价的无需共享聚合文件的稳定注册 API；任何新增 SME 测试都必须真实成为现有 `zig build test` 的依赖。
 
 ### 4.3 ID、版本和错误
 
@@ -232,21 +245,71 @@ docs/validation/sme/
 - GUI 使用 `in-dreaming/gpu`，不引入第二套窗口/RHI。
 - headless CI 始终可运行，不依赖 GPU。
 
-### 4.9 状态协议与证据
+### 4.9 任务状态、分配与证据
 
-任务状态仅允许 `待实施`、`实施中`、`阻塞`、`待审查`、`完成`。只有完成定义全部满足并记录真实命令/输入/输出，才可标记完成。
+任务的机器状态与 `docs/tasks/asetup.md` 统一，只允许：
+
+- `TODO`：未开始；
+- `IN_PROGRESS`：已分配 Owner 和 Reviewer，输入工件可用，正在实施；
+- `BLOCKED`：存在文档中已记录的外部阻塞；
+- `REVIEW`：输出工件与实施证据已完整，等待独立审查；
+- `DONE`：完成定义全部满足且审查通过。
+
+`文档状态`、architecture 版本和 release verdict 不是任务状态，不得写入任务的 `状态` 字段。中文状态词只用于解释，不作为机器值。状态变化必须同步本文件第 6 节总览、对应任务元数据和该任务的“活动日志”。
+
+每个任务的 `Owner`、`Reviewer`、`实施角色` 和 `工作量等级` 都是必填元数据。未分配任务使用机器值 `UNASSIGNED`；从 `TODO` 进入 `IN_PROGRESS` 前必须替换为仓库可追踪的人员或团队标识。Reviewer 不得与 Owner 相同。工作量等级用于排期而非替代实现拆分：
+
+- `M`：单一组件、预计 3–5 工程人日；
+- `L`：跨相邻组件、预计 6–10 工程人日；
+- `XL`：预计超过 10 工程人日；进入 `IN_PROGRESS` 前必须在任务内写出可独立审查的子交付物和检查点。
+
+各任务的“前置条件”是规范输入工件清单；“文件变更”、新增命令和验证产物共同构成规范输出工件清单。硬依赖只表示任务 ID，不替代对所需接口、schema、fixture 或决策的明确列举。
 
 每个任务实施后在其文档追加：
 
 ```markdown
 ## 实施证据
+- Owner:
+- Reviewer:
 - Commit:
 - Commands:
 - Inputs:
 - Results:
+- Artifact summary:
 - Failures/limits:
 - Acceptance mapping:
 ```
+
+同时写入经脱敏的 `docs/validation/sme/TASK-NNN/evidence.md`。大体积或自动生成的原始产物写入已忽略的 `zig-out/sme-validation/TASK-NNN/`，不得提交到仓库。`REVIEW` 要求任务文档、evidence 文件和当前 commit 一致。
+
+### 4.10 Trace、报告与产物隐私
+
+- trace、JSON、CSV、WAV、report 和 recovery 文件默认不得包含用户名、机器名、绝对本机路径、环境变量值、token/key、私有 stem 原始文件名、未脱敏设备序列号或私有目录结构。
+- 仓库内路径统一写为 repo-relative；仓库外输入只记录逻辑 asset ID、content hash、媒体格式和必要的许可标识。
+- 可共享环境字段限于：OS 名称/版本/build、CPU architecture、设备 model、driver version、Zig/toolchain version、commit、bank build ID/hash、测试 seed 和 profile ID。设备 model 不附带序列号。
+- schema 中每个可导出字段必须标注 `public`、`sensitive` 或 `local_only`；exporter 默认丢弃后两类，只有显式本地调试模式才能保留 `local_only`。
+- 原始 CI artifact 只允许包含脱敏 trace、WAV、report 与机器可读 JSON，不包含源 stems、recovery 副本、cache、core dump 或含本机路径的完整环境转储。
+- GitHub Actions artifact 默认保留 14 天；release qualification 只长期提交小型 evidence/manifest/hash，不提交原始大文件。若组织策略要求更短保留期，以更短者为准；延长必须有 ADR。
+- TASK-018 recovery 固定写入 `<project>/.sme-recovery/`，不覆盖 source，项目模板必须忽略该目录；smoke/CI 完成后不得归档 recovery。
+
+### 4.11 定量参数冻结规则
+
+未在架构中冻结的数字不得靠隐藏常量补齐。负责任务必须在实现前把取值、单位、适用 profile、内存/时延影响和验证 oracle 写入公共 schema、测试 fixture 与实施证据。下表是最迟冻结点：
+
+| 参数族 | 必须冻结的字段/判据 | 最迟所有者 |
+|---|---|---|
+| 调度容量 | request/command/receipt capacity、每 block/group 上限、emergency lane、late budget | TASK-002；request queue 的 game/control 部分由 TASK-014 联合确认 |
+| Bank/logic 上限 | 各 table count、logic instruction/stack、planner phase/candidate 上限 | TASK-003、TASK-008、TASK-009 |
+| 声道转换 | canonical channel order/mask 与每个支持布局的 downmix/upmix matrix | TASK-005 |
+| Voice 预算 | real/virtual/group/stinger 上限、audibility 定义、hysteresis 与 drop 计量 | TASK-006 |
+| 音乐时间 | 默认/允许 PPQ、BPM/meter 范围、anchor 与 loop 误差 | TASK-007 |
+| Streaming | ring/chunk/job capacity、critical/low/high watermark、prefetch lead/deadline | TASK-011 |
+| 自动化/DSP | ramp/click oracle、detector/meter window、lookahead/latency、preset 参数范围 | TASK-012、TASK-013、TASK-015 |
+| Generation | migration map version、history capacity、rollback retention | TASK-016 |
+| Tooling 协议 | CLI diagnostics、authoring smoke、debug handshake/snapshot、recovery 版本 | TASK-017、TASK-018、TASK-019 |
+| Demo/release | 资产许可与体积预算、CI artifact schema/retention、device matrix/profiler overhead、package layout | TASK-020、TASK-021、TASK-022、TASK-023 |
+
+如果负责任务无法用真实测试冻结参数，状态必须为 `BLOCKED` 或保持 `IN_PROGRESS`，不得以“稳定”“正确”“真实”“无 click”等非量化词进入 `REVIEW`。
 
 ## 5. 实施范围
 
@@ -268,32 +331,34 @@ docs/validation/sme/
 
 ## 6. 任务总览
 
-| ID | 标题 | 交付结果 | 硬依赖 | 波次 |
-|---|---|---|---|---:|
-| TASK-001 | [SME 公共契约与模块骨架](task-001-sme-contract-module-seams.md) | 冻结 ID/error/API/thread/source tree，建立可编译 module seam | 无 | 0 |
-| TASK-002 | [绝对帧调度与 command block](task-002-absolute-frame-scheduler.md) | quantum 内 sample-offset、原子 command group、receipt | 001 | 1 |
-| TASK-003 | [版本化 MusicBank 与 compiler core](task-003-versioned-music-bank.md) | v1 tables/capabilities/hash/TOML parse/校验 | 001 | 1 |
-| TASK-004 | [Trace、telemetry 与 replay contract](task-004-trace-telemetry-replay.md) | 结构化 trace、atomic counters、deterministic replay format | 001 | 1 |
-| TASK-005 | [Multichannel mixer 与 MusicVoiceGroup](task-005-multichannel-voice-groups.md) | mono/stereo/5.1/7.1、原子 group、0 stem skew | 002,004 | 2 |
-| TASK-006 | [Virtual voice 与平台预算](task-006-virtual-voice-budgets.md) | music virtualize/realize、保护类、drop rank、profile | 004,005 | 3 |
-| TASK-007 | [Tempo/meter compiler 与 Clock](task-007-tempo-map-clock.md) | ramp/meter/pickup/loop grid、frame/tick/bar 查询 | 002,003,004 | 2 |
-| TASK-008 | [Logic、Director 与 SegmentSelector](task-008-logic-director-selectors.md) | bounded bytecode、仲裁、sequence/shuffle/history | 003,004,007 | 3 |
-| TASK-009 | [Cue/Fill Transition Planner](task-009-cue-fill-transition-planner.md) | entry/exit/fill/compatibility 联合求解与计划 | 003,004,007,008 | 4 |
-| TASK-010 | [Ogg Opus codec adapter](task-010-ogg-opus-adapter.md) | submodules、decode、pre-skip、seek、loop | 003 | 2 |
-| TASK-011 | [Streaming、prefetch 与 seek](task-011-streaming-prefetch-seek.md) | ring/cache/watermark、group readiness、emergency | 002,003,004,010 | 3 |
-| TASK-012 | [Layer Controller 与重配器](task-012-layer-reorchestration.md) | intensity/context 驱动 layer/variant/filter/send/bus | 004,005,006,007 | 4 |
-| TASK-013 | [Bus DAG 与真实 sidechain](task-013-bus-dag-sidechain.md) | 编译 bus graph、detector/compressor、meter | 002,004,005,006 | 4 |
-| TASK-014 | [MusicRuntime 端到端集成](task-014-music-runtime-integration.md) | 公共 API、生命周期、save/restore、真实主链 | 004,008,009,011,012,013 | 5 |
-| TASK-015 | [Stinger、ducking 与声学映射](task-015-stinger-duck-acoustic.md) | stinger scheduler、automation duck、acoustic profile | 004,013,014 | 6 |
-| TASK-016 | [Hot reload、generation 与 rollback](task-016-hot-reload-rollback.md) | lease、迁移、旧 voice 安全、rollback | 003,004,011,014,015 | 7 |
-| TASK-017 | [Headless authoring 与 CLI compiler](task-017-headless-authoring-cli.md) | project import/edit validate/build/preview core | 003,007,008,009,010,014 | 6 |
-| TASK-018 | [GPU 作者应用](task-018-gpu-authoring-app.md) | graph/timeline/cue/fill/layer 编辑、preview/live tuning | 013,016,017 | 8 |
-| TASK-019 | [Runtime 可视调试器](task-019-runtime-visual-debugger.md) | transport/candidate/layer/bus/stream/trace 视图 | 015,018 | 9 |
-| TASK-020 | [完整 SME 示例项目与 demo](task-020-complete-sme-demo.md) | 真实 bank/stream/state/fill/sidechain/hot reload 演示 | 015,016,017,018,019 | 10 |
-| TASK-021 | [全量自动验证与 replay/CI](task-021-full-validation-replay-ci.md) | unit/integration/golden/failure matrix、wrapper、CI | 004,010,011,012,013,014,015,016,020 | 11 |
-| TASK-022 | [实时安全、设备与 8 小时压力 gate](task-022-realtime-device-stress.md) | RT audit、Windows device、长时无 dropout/underrun | 011,013,014,021 | 12 |
-| TASK-023 | [Packaging、迁移和用户文档](task-023-packaging-migration-docs.md) | release package、legacy migration、author/runtime guides | 017,018,019,020,021,022 | 13 |
-| TASK-024 | [SME v1 产品资格审查](task-024-v1-product-qualification.md) | 逐项证据矩阵和唯一 release verdict | 018,019,021,022,023 | 14 |
+本表是 `docs/tasks_sme/` 的机器可读状态总览；状态变化必须同时更新本表与对应任务文件。`docs/tasks/tasks.md` 继续只跟踪原有任务，不重复登记本独立任务包。
+
+| ID | 状态 | 标题 | 交付结果 | 硬依赖 | 波次 |
+|---|---|---|---|---|---:|
+| TASK-001 | TODO | [SME 公共契约与模块骨架](task-001-sme-contract-module-seams.md) | 冻结 ID/error/API/thread/source tree，建立可编译 module seam | 无 | 0 |
+| TASK-002 | TODO | [绝对帧调度与 command block](task-002-absolute-frame-scheduler.md) | quantum 内 sample-offset、原子 command group、receipt | TASK-001 | 1 |
+| TASK-003 | TODO | [版本化 MusicBank 与 compiler core](task-003-versioned-music-bank.md) | v1 tables/capabilities/hash/TOML parse/校验 | TASK-001 | 1 |
+| TASK-004 | TODO | [Trace、telemetry 与 replay contract](task-004-trace-telemetry-replay.md) | 结构化 trace、atomic counters、deterministic replay format | TASK-001 | 1 |
+| TASK-005 | TODO | [Multichannel mixer 与 MusicVoiceGroup](task-005-multichannel-voice-groups.md) | mono/stereo/5.1/7.1、原子 group、0 stem skew | TASK-002、TASK-004 | 2 |
+| TASK-006 | TODO | [Virtual voice 与平台预算](task-006-virtual-voice-budgets.md) | music virtualize/realize、保护类、drop rank、profile | TASK-004、TASK-005 | 3 |
+| TASK-007 | TODO | [Tempo/meter compiler 与 Clock](task-007-tempo-map-clock.md) | ramp/meter/pickup/loop grid、frame/tick/bar 查询 | TASK-002、TASK-003、TASK-004 | 2 |
+| TASK-008 | TODO | [Logic、Director 与 SegmentSelector](task-008-logic-director-selectors.md) | bounded bytecode、仲裁、sequence/shuffle/history | TASK-003、TASK-004、TASK-007 | 3 |
+| TASK-009 | TODO | [Cue/Fill Transition Planner](task-009-cue-fill-transition-planner.md) | entry/exit/fill/compatibility 联合求解与计划 | TASK-003、TASK-004、TASK-007、TASK-008 | 4 |
+| TASK-010 | TODO | [Ogg Opus codec adapter](task-010-ogg-opus-adapter.md) | submodules、decode、pre-skip、seek、loop | TASK-003 | 2 |
+| TASK-011 | TODO | [Streaming、prefetch 与 seek](task-011-streaming-prefetch-seek.md) | ring/cache/watermark、group readiness、emergency | TASK-002、TASK-003、TASK-004、TASK-010 | 3 |
+| TASK-012 | TODO | [Layer Controller 与重配器](task-012-layer-reorchestration.md) | intensity/context 驱动 layer/variant/filter/send/bus | TASK-004、TASK-005、TASK-006、TASK-007 | 4 |
+| TASK-013 | TODO | [Bus DAG 与真实 sidechain](task-013-bus-dag-sidechain.md) | 编译 bus graph、detector/compressor、meter | TASK-002、TASK-004、TASK-005、TASK-006 | 4 |
+| TASK-014 | TODO | [MusicRuntime 端到端集成](task-014-music-runtime-integration.md) | 公共 API、生命周期、save/restore、真实主链 | TASK-004、TASK-008、TASK-009、TASK-011、TASK-012、TASK-013 | 5 |
+| TASK-015 | TODO | [Stinger、ducking 与声学映射](task-015-stinger-duck-acoustic.md) | stinger scheduler、automation duck、acoustic profile | TASK-004、TASK-013、TASK-014 | 6 |
+| TASK-016 | TODO | [Hot reload、generation 与 rollback](task-016-hot-reload-rollback.md) | lease、迁移、旧 voice 安全、rollback | TASK-003、TASK-004、TASK-011、TASK-014、TASK-015 | 7 |
+| TASK-017 | TODO | [Headless authoring 与 CLI compiler](task-017-headless-authoring-cli.md) | project import/edit validate/build/preview core | TASK-003、TASK-007、TASK-008、TASK-009、TASK-010、TASK-014 | 6 |
+| TASK-018 | TODO | [GPU 作者应用](task-018-gpu-authoring-app.md) | graph/timeline/cue/fill/layer 编辑、preview/live tuning | TASK-013、TASK-016、TASK-017 | 8 |
+| TASK-019 | TODO | [Runtime 可视调试器](task-019-runtime-visual-debugger.md) | transport/candidate/layer/bus/stream/trace 视图 | TASK-015、TASK-018 | 9 |
+| TASK-020 | TODO | [完整 SME 示例项目与 demo](task-020-complete-sme-demo.md) | 真实 bank/stream/state/fill/sidechain/hot reload 演示 | TASK-015、TASK-016、TASK-017、TASK-018、TASK-019 | 10 |
+| TASK-021 | TODO | [全量自动验证与 replay/CI](task-021-full-validation-replay-ci.md) | unit/integration/golden/failure matrix、wrapper、CI | TASK-004、TASK-010、TASK-011、TASK-012、TASK-013、TASK-014、TASK-015、TASK-016、TASK-020 | 11 |
+| TASK-022 | TODO | [实时安全、设备与 8 小时压力 gate](task-022-realtime-device-stress.md) | RT audit、Windows device、长时无 dropout/underrun | TASK-011、TASK-013、TASK-014、TASK-021 | 12 |
+| TASK-023 | TODO | [Packaging、迁移和用户文档](task-023-packaging-migration-docs.md) | release package、legacy migration、author/runtime guides | TASK-017、TASK-018、TASK-019、TASK-020、TASK-021、TASK-022 | 13 |
+| TASK-024 | TODO | [SME v1 产品资格审查](task-024-v1-product-qualification.md) | 逐项证据矩阵和唯一 release verdict | TASK-018、TASK-019、TASK-021、TASK-022、TASK-023 | 14 |
 
 ## 7. 依赖图与执行波次
 
@@ -407,14 +472,14 @@ flowchart TD
 
 | 共享位置 | 所有者与合并顺序 |
 |---|---|
-| `src/bugu_audio.zig` | TASK-001 建 seam；TASK-014 导出 runtime；TASK-023 做 release surface 收口 |
+| `src/bugu_audio.zig` | TASK-001 建立并固定 `music -> src/music/api.zig` seam；TASK-023 仅做 release surface 收口。TASK-014 在 `api.zig` 扩展 runtime，不改 façade 指向 |
 | `src/core/engine.zig` | TASK-002 scheduler；TASK-014 runtime ownership；TASK-016 generation lifecycle，依赖顺序已串联 |
 | `src/mixer/mixer.zig` | TASK-002 command seam；TASK-005 multichannel/group；TASK-006 virtualization；TASK-013 Bus DAG，依赖顺序已串联 |
 | `src/assets/bank.zig` | TASK-003 仅添加兼容桥；TASK-016 generation/hot reload；旧 bank 行为不得被其他任务重写 |
-| `build.zig` | TASK-001 建 `addSmeSteps` 扩展点；之后仅 TASK-010、017、018、019、020、021 按依赖顺序追加 |
+| `build.zig` / `build_support/sme_steps.zig` | TASK-001 建 `addSmeSteps` 与 SME test 注册扩展点；之后仅 TASK-010、017、018、019、020、021 按依赖顺序追加。禁止使用已忽略的 `build/` 目录存源文件 |
 | `tools/run_validation.ps1` | TASK-021 唯一功能所有者；TASK-022 只增加被脚本调用的独立 stress 工具，TASK-023 不改 gate |
 | `tools/sme_authoring/` | TASK-017 core/CLI；TASK-018 UI；TASK-019 不得在此目录实现 runtime debugger |
-| `docs/validation/sme/` | 各任务写唯一命名 artifact；TASK-021 建索引，TASK-024 只读取并出 qualification report |
+| `docs/validation/sme/` | 各任务写 `TASK-NNN/evidence.md` 脱敏摘要；原始产物写 `zig-out/sme-validation/TASK-NNN/`。TASK-021 建索引，TASK-024 只读取并出 qualification report |
 
 ## 8. 全局验收标准
 
@@ -448,37 +513,37 @@ flowchart TD
 ### 8.4 证据
 
 - 每项能力有 unit + integration + failure case。
-- validation artifacts 包含命令、输入、输出、版本、commit、机器/设备信息。
+- validation evidence 包含命令、输入、输出、版本、commit 和允许共享的环境/设备字段，并遵守 4.10 的脱敏与保留规则。
 - 最终 TASK-024 逐条引用证据，不以“之前任务标记完成”代替复验。
 
 ### 8.5 架构能力追踪
 
 | `arch_sme.md` 能力 | 实现所有者 | 集成/验证所有者 |
 |---|---|---|
-| 公共API、ID、错误、线程边界 | 001 | 014、023、024 |
-| 绝对frame、quantum内命令、原子发布 | 002 | 005、014、021 |
-| 版本化bank/capability/hash | 003 | 016、017、021 |
-| trace/telemetry/replay | 004 | 019、021、024 |
-| multichannel与MusicVoiceGroup | 005 | 012、020、021 |
-| virtual voice和平台预算 | 006 | 012、020、022 |
-| tempo/meter/pickup/loop grid | 007 | 009、017、021 |
-| logic/director/selector/history | 008 | 014、020、021 |
-| entry/exit/fill/compatibility planner | 009 | 014、017、020、021 |
-| Resident PCM + Ogg Opus | 010 | 011、020、021 |
-| streaming/prefetch/seek/emergency | 011 | 014、020、022 |
-| 完整重配器 | 012 | 014、020、021 |
-| Bus DAG/automation/sidechain | 013 | 015、020、021 |
-| lifecycle/save/restore/device恢复 | 014 | 020、021、022 |
-| stinger/duck/acoustic mapping | 015 | 020、021 |
-| hot reload/migration/rollback | 016 | 018、020、021 |
-| headless authoring/compiler/preview | 017 | 020、021、023 |
-| GPU authoring application | 018 | 020、023、024 |
-| runtime visual debugger | 019 | 020、023、024 |
-| 完整示例项目 | 020 | 021、023 |
-| 自动化/golden/replay/CI | 021 | 022、024 |
-| RT/device/8小时压力 | 022 | 023、024 |
-| package/migration/docs | 023 | 024 |
-| 最终release verdict | 024 | 024 |
+| 公共API、ID、错误、线程边界 | TASK-001 | TASK-014、TASK-023、TASK-024 |
+| 绝对frame、quantum内命令、原子发布 | TASK-002 | TASK-005、TASK-014、TASK-021 |
+| 版本化bank/capability/hash | TASK-003 | TASK-016、TASK-017、TASK-021 |
+| trace/telemetry/replay | TASK-004 | TASK-019、TASK-021、TASK-024 |
+| multichannel与MusicVoiceGroup | TASK-005 | TASK-012、TASK-020、TASK-021 |
+| virtual voice和平台预算 | TASK-006 | TASK-012、TASK-020、TASK-022 |
+| tempo/meter/pickup/loop grid | TASK-007 | TASK-009、TASK-017、TASK-021 |
+| logic/director/selector/history | TASK-008 | TASK-014、TASK-020、TASK-021 |
+| entry/exit/fill/compatibility planner | TASK-009 | TASK-014、TASK-017、TASK-020、TASK-021 |
+| Resident PCM + Ogg Opus | TASK-010 | TASK-011、TASK-020、TASK-021 |
+| streaming/prefetch/seek/emergency | TASK-011 | TASK-014、TASK-020、TASK-022 |
+| 完整重配器 | TASK-012 | TASK-014、TASK-020、TASK-021 |
+| Bus DAG/automation/sidechain | TASK-013 | TASK-015、TASK-020、TASK-021 |
+| lifecycle/save/restore/device恢复 | TASK-014 | TASK-020、TASK-021、TASK-022 |
+| stinger/duck/acoustic mapping | TASK-015 | TASK-020、TASK-021 |
+| hot reload/migration/rollback | TASK-016 | TASK-018、TASK-020、TASK-021 |
+| headless authoring/compiler/preview | TASK-017 | TASK-020、TASK-021、TASK-023 |
+| GPU authoring application | TASK-018 | TASK-020、TASK-023、TASK-024 |
+| runtime visual debugger | TASK-019 | TASK-020、TASK-023、TASK-024 |
+| 完整示例项目 | TASK-020 | TASK-021、TASK-023 |
+| 自动化/golden/replay/CI | TASK-021 | TASK-022、TASK-024 |
+| RT/device/8小时压力 | TASK-022 | TASK-023、TASK-024 |
+| package/migration/docs | TASK-023 | TASK-024 |
+| 最终release verdict | TASK-024 | TASK-024 |
 
 ## 9. 未决事项与假设
 
@@ -489,9 +554,9 @@ flowchart TD
 | 参数 | 当前处理 | 最迟冻结 |
 |---|---|---|
 | libogg/libopus commit | 使用官方 `xiph/ogg`、`xiph/opus` submodule，选择能在 Zig 0.16 + Windows/Linux gate 通过的固定 commit | TASK-010 |
-| platform voice/stream budgets | 通过 `PlatformProfile` 数据化，不写死全局值 | TASK-006/TASK-011 |
+| platform voice/stream budgets | 通过 `PlatformProfile` 数据化，不写死跨平台全局值；每个 release profile 仍必须给出具体数值 | TASK-006、TASK-011 |
 | tempo compiler 误差阈值 | 必须小于 1 sample anchor error，loop 闭合为 0 frame error | TASK-007 |
-| sidechain preset defaults | 以测试信号无 click、可复现为准；作者资产可覆盖 | TASK-013 |
-| 8 小时 gate 机器 | Windows 支持矩阵中的真实设备机器，记录硬件/driver | TASK-022 |
+| sidechain preset defaults | TASK-013 冻结 exact 参数范围、detector/meter window、lookahead 与 latency budget；作者资产可在合法范围内覆盖 | TASK-013 |
+| 8 小时 gate 机器 | Windows 支持矩阵中的真实设备机器，仅记录允许共享的 OS/CPU architecture/device model/driver 字段 | TASK-022 |
 
 这些参数由指定任务的真实测试收敛，不构成把功能延期出 v1 的理由。

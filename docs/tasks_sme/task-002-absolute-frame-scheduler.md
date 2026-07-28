@@ -1,7 +1,13 @@
 # TASK-002：实现绝对 render-frame scheduler 与原子 command block
 
 ## 元数据
-- 状态：待实施
+- 状态：TODO
+- Owner：`UNASSIGNED`
+- Reviewer：`UNASSIGNED`
+- 实施角色：Core/Realtime Scheduler
+- 评审角色：Mixer、设备、实时安全
+- 工作量等级：`L`
+- 证据路径：`docs/validation/sme/TASK-002/evidence.md`（脱敏摘要）、`zig-out/sme-validation/TASK-002/`（原始产物）
 - 执行波次：1
 - 硬依赖：TASK-001
 - 协作关系：TASK-005/007/011/013/014 消费本任务 contract；`src/core/engine.zig` 由本任务先修改
@@ -25,6 +31,7 @@
 - quantum 内按命令 frame 切分有界 render spans。
 - 支持取消尚未发布 plan、stale sequence 拒绝和 execution receipt。
 - queue/block high-water、overflow、late command telemetry。
+- 冻结 `SchedulerCapacityProfile`：request/command/receipt capacity、每 block/group 命令上限、emergency lane、允许的最小 plan lead 与 late 判定预算；所有单位为 frames 或 entry count。
 
 ### 明确不包含
 - 音乐 clock、state/planner。
@@ -37,9 +44,10 @@
 3. late command 默认拒绝并 receipt=`late`；紧急 stop 走独立 bounded emergency lane 和最短 ramp。
 4. device callback frame count 不规则仍经 FixedQuantumAdapter 保持相同绝对 frame。
 5. counter 使用 atomics；详细 reason 在 control side 格式化。
+6. 默认 capacity 必须由静态内存占用计算和 queue-full 压力测试共同证明；不得使用可增长容器或隐藏常量。TASK-014 只能在同一 profile 上补 game/control request queue 字段。
 
 ## 接口与数据契约
-`ScheduledMusicCommand { execute_frame:u64, sequence:u64, group_id:u64, payload }`。
+`ScheduledMusicCommand { execute_frame:u64, sequence:u64, group_id:u64, payload }`。`SchedulerCapacityProfile` 必须显式携带所有容量、lead/late frames 与 emergency ramp frames；初始化时验证相互约束和乘法溢出。
 `ExecutionReceipt { sequence, planned_frame, executed_frame, result }`。
 `CommandQueueFull`、`InvalidState`、`StaleAssetGeneration` 语义不得合并。
 
@@ -54,6 +62,7 @@
 ### 自动化验证
 - `zig build test`。
 - 覆盖 quantum 首/中/尾 frame、同 frame sequence、跨 quantum、queue full、原子 group 容量不足、late command、callback 非固定 frame。
+- 对 release 默认 profile 断言 capacity 数值、静态字节占用、high-water 和 late budget，并把结果写入 TASK-002 evidence。
 ### 手工验证
 - 不需要。
 ### 边界与失败场景
@@ -65,6 +74,11 @@
 - [ ] 原子 group 永不部分执行。
 - [ ] render path 无 alloc/lock/log/I/O。
 - [ ] 现有 voice/demo 行为回归通过。
+- [ ] release 默认 `SchedulerCapacityProfile` 的值、单位、内存占用与 late 判据已冻结并有测试。
+
+## 活动日志
+
+- 2026-07-28：根据评审报告完成规格收口；状态保持 `TODO`，未开始代码实施。
 
 ## 风险与注意事项
 不要为了 scheduler 把 Music Director 放进 render thread；payload 只表达已经规划好的 bounded 操作。

@@ -1,7 +1,13 @@
 # TASK-008：实现 bounded logic、Music Director 与 SegmentSelector
 
 ## 元数据
-- 状态：待实施
+- 状态：TODO
+- Owner：`UNASSIGNED`
+- Reviewer：`UNASSIGNED`
+- 实施角色：Runtime Logic/State
+- 评审角色：确定性状态机、资产校验、QA
+- 工作量等级：`L`
+- 证据路径：`docs/validation/sme/TASK-008/evidence.md`（脱敏摘要）、`zig-out/sme-validation/TASK-008/`（原始产物）
 - 执行波次：3
 - 硬依赖：TASK-003、TASK-004、TASK-007
 - 协作关系：TASK-009 消费 transition intent；TASK-014 持有 director；TASK-017 复用 compiler
@@ -25,7 +31,7 @@
 - fixed/sequence/weighted random/shuffle bag/no-repeat/history-aware selector。
 - seed + stable selector ID + epoch 的确定随机。
 - candidate/rejection/selection trace。
-- snapshot/restore 所需 director/selector state model。
+- snapshot/restore 所需 director/selector state model，以及独立版本号、长度/容量和 selector-type-specific history 编码。
 
 ### 明确不包含
 - cue/fill 具体执行 frame。
@@ -36,10 +42,11 @@
 2. 多 rule tie-break：priority、specificity、authored order。
 3. empty pool 返回显式 fallback/error。
 4. parameter clamp、attack/release target 由 data 声明。
-5. selector history 在 bank hot reload 时使用 stable ID migration。
+5. selector history 在 bank hot reload 时使用 stable ID migration；snapshot 记录 schema version、bank build ID、selector stable ID、selector kind、epoch、bounded history payload，kind/容量不兼容时必须显式拒绝或由 TASK-016 migration map 转换。
+6. 冻结 logic instruction/stack/program count 与 selector history/window 上限；loader 在进入 runtime 前校验。
 
 ## 接口与数据契约
-输出 `TransitionIntent { request_id, from, to, selector, resolved_segment, priority }`。accepted 不改变 committed state；执行 receipt 后才提交。
+输出 `TransitionIntent { request_id, from, to, selector, resolved_segment, priority }`。`DirectorSelectorSnapshotV1` 是 versioned、length-delimited、无内部 pointer 的 owned value；未知 required selector state 返回 `UnsupportedCapability`，损坏 payload 返回 `InvalidMusicGraph`。accepted 不改变 committed state；执行 receipt 后才提交。
 
 ## 文件变更
 - 新增 logic/selector/director/compiler/tests。
@@ -48,7 +55,7 @@
 ## 验证
 ### 自动化验证
 - `zig build test`。
-- opcode/type/stack 上限、优先级、hold/cooldown、rapid churn、每类 selector、seed replay、history capture/restore、empty pool。
+- opcode/type/stack/program 上限、优先级、hold/cooldown、rapid churn、每类 selector、seed replay、history capture/restore、旧/未知 snapshot version、kind/容量迁移、empty pool。
 ### 手工验证
 - 不需要。
 ### 边界与失败场景
@@ -59,6 +66,11 @@
 - [ ] committed/pending state 语义正确。
 - [ ] 所有候选和淘汰原因可追踪。
 - [ ] evaluator 无动态分配/脚本回调。
+- [ ] selector history snapshot 的版本、容量和 hot-reload 兼容语义已冻结。
+
+## 活动日志
+
+- 2026-07-28：根据评审报告完成规格收口；状态保持 `TODO`，未开始代码实施。
 
 ## 风险与注意事项
 Director 在 control thread 运行；不得直接 start voice 或读取 mixer 内部状态。

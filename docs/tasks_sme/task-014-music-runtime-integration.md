@@ -1,11 +1,17 @@
 # TASK-014：集成完整 MusicRuntime 公共主链与生命周期
 
 ## 元数据
-- 状态：待实施
+- 状态：TODO
+- Owner：`UNASSIGNED`
+- Reviewer：`UNASSIGNED`
+- 实施角色：Runtime Integration
+- 评审角色：架构、实时安全、生命周期、QA
+- 工作量等级：`XL`
+- 证据路径：`docs/validation/sme/TASK-014/evidence.md`（脱敏摘要）、`zig-out/sme-validation/TASK-014/`（原始产物）
 - 执行波次：5
 - 硬依赖：TASK-004、TASK-008、TASK-009、TASK-011、TASK-012、TASK-013
-- 协作关系：TASK-015/016/017 通过本任务稳定 extension seam 并行；`Engine`/公共导出由本任务所有
-- 预计改动范围：`src/music/runtime.zig`、`src/music/save_state.zig`（新增）、`src/core/engine.zig`、`src/bugu_audio.zig`、`tests/sme/runtime_integration_test.zig`
+- 协作关系：TASK-015/016/017 通过本任务稳定 extension seam 并行；`Engine` 集成与 `src/music/api.zig` runtime exports 由本任务所有
+- 预计改动范围：`src/music/runtime.zig`、`src/music/save_state.zig`（新增）、`src/music/api.zig`、`src/core/engine.zig`、`tests/sme/runtime_integration_test.zig`
 
 ## 目标
 交付一个真实 `MusicRuntime`，把 request、Director、Planner、prefetch、Layer Controller、scheduler、mixer、receipt 和 trace 串为端到端播放链，并实现生命周期与 capture/restore。
@@ -25,11 +31,20 @@
 - capture/restore：state、selector history、seed/epochs、transport/cue、build ID。
 - device lost 默认 restart next legal bar/cue；显式 resume phase 条件。
 - bank/stream/group lease 和 shutdown 安全。
-- public `bugu_audio.music` exports。
+- 在 TASK-001 固定的 `src/music/api.zig` 增加已实现 runtime exports；不改变 `src/bugu_audio.zig` 的 façade 指向。
+- 冻结 API thread-affinity/ownership matrix 与 `MusicRuntimeSnapshotV1` version header；game/control/worker/render 每个调用的允许线程、借用期、queue-full 和 stale-handle 行为均逐项列出。
+- 在 TASK-002 的 capacity profile 上冻结 game→control request queue、worker completion queue 和 snapshot/receipt capacity。
 
 ### 明确不包含
 - stinger/acoustic mapping/hot reload/GUI。
 - C ABI。
+
+## 交付检查点
+
+1. API/lifecycle 与 thread-affinity matrix 通过 compile/unit review。
+2. request→plan→scheduler→mixer→receipt 主链通过 offline integration review。
+3. snapshot/capture/restore、device discontinuity 与 shutdown ownership 通过并发/实时安全 review。
+4. 以上检查点全部有当前 commit 证据后才可整体进入 `REVIEW`。
 
 ## 设计与执行细节
 1. `accepted`、`planned`、`executed` 分离。
@@ -39,11 +54,12 @@
 5. legacy event runtime 与 SME 可同 engine 工作且不共享状态图。
 
 ## 接口与数据契约
-公共 API 使用 TASK-001 contract。snapshot 是 immutable copy；caller 不持有内部 slices。tool-only seek 在 shipping mode 返回 `UnsupportedOperation`。
+公共 API 使用 TASK-001 contract。`MusicRuntimeSnapshotV1` 含 schema version、byte size、bank build ID/generation、capture render frame 和 bounded table counts；snapshot 是 immutable owned copy，caller 不持有内部 slices。每个 API 在同一表中定义 allowed thread、ownership、queue-full、invalid/stale handle 与 shutdown 行为。tool-only seek 在 shipping mode 返回 `UnsupportedOperation`。
 
 ## 文件变更
 - 新增 runtime/save_state/tests。
-- engine ownership/public exports。
+- engine ownership；`src/music/api.zig` 增加 public exports，`src/bugu_audio.zig` 不再由本任务修改。
+- `docs/design/sme-runtime-api-v1.md`：新增 API/thread/ownership/snapshot matrix。
 
 ## 验证
 ### 自动化验证
@@ -59,6 +75,11 @@
 - [ ] 生命周期/所有权 tests 无 UAF/leak。
 - [ ] capture/restore 确定。
 - [ ] 公共 API 不泄漏内部/第三方类型。
+- [ ] API thread/ownership matrix、snapshot header 与所有 queue capacity 已冻结并有失败测试。
+
+## 活动日志
+
+- 2026-07-28：根据评审报告完成规格收口；状态保持 `TODO`，未开始代码实施。
 
 ## 风险与注意事项
 本任务不能用直接 start voice 绕过 planner/scheduler 来制造 demo。

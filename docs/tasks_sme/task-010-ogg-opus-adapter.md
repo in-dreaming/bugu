@@ -1,7 +1,13 @@
 # TASK-010：集成 Ogg Opus submodule 与 sample-accurate codec adapter
 
 ## 元数据
-- 状态：待实施
+- 状态：TODO
+- Owner：`UNASSIGNED`
+- Reviewer：`UNASSIGNED`
+- 实施角色：Codec/Third-party Build
+- 评审角色：Codec、许可证、跨平台构建
+- 工作量等级：`L`
+- 证据路径：`docs/validation/sme/TASK-010/evidence.md`（脱敏摘要）、`zig-out/sme-validation/TASK-010/`（原始产物）
 - 执行波次：2
 - 硬依赖：TASK-003
 - 协作关系：TASK-011 消费 decoder/seek contract；TASK-017 compiler 使用 encoder metadata；`build.zig` 本波次唯一修改者
@@ -35,8 +41,9 @@
 1. adapter 对外只暴露 Bugu enums/slices/errors。
 2. decoder allocation 在 worker/control prepare；render 不调用。
 3. seek 结果以 decoded PCM frame 表示，补偿 pre-skip。
-4. test fixture 由受控小文件和 PCM oracle组成。
-5. `build.zig` 通过 `addSmeSteps`/codec helper 接入，不破坏 miniaudio flags。
+4. test fixture 固定在 `tests/fixtures/sme/opus/`，由受控小文件和 PCM oracle 组成；每个文件在同目录 `LICENSES.toml` 记录来源 URL/生成命令、license、copyright、content SHA-256。
+5. `build.zig` 通过 `build_support/sme_steps.zig` 的 `addSmeSteps`/codec helper 接入，不破坏 miniaudio flags。
+6. `third_party_adapters/opus/PINS.toml` 记录 ogg/opus URL、exact commit、build flags、license file 路径与验证 target；`.gitmodules` 与实际 submodule HEAD 必须一致。
 
 ## 接口与数据契约
 `OpusStreamInfo`、`Decoder.prepare/decode/seek/reset`；返回实际 frames 和 EOS。错误区分 invalid container、unsupported channels、decode failure、seek unavailable。
@@ -44,7 +51,7 @@
 ## 文件变更
 - submodules/.gitmodules。
 - opus adapter/C shim。
-- build integration/tests/license note。
+- build integration/tests、`tests/fixtures/sme/opus/LICENSES.toml` 与 `third_party_adapters/opus/PINS.toml`。
 
 ## 验证
 ### 自动化验证
@@ -56,10 +63,15 @@
 - chained Ogg（若不支持则明确拒绝）、unknown mapping family、seek 超界、partial packet。
 
 ## 完成定义
-- [ ] submodule URL/commit 固定且可重复构建。
+- [ ] submodule URL/commit/build flags 在 `.gitmodules`、gitlink 与 `PINS.toml` 三处一致且可重复构建。
+- [ ] 每个 codec fixture 的来源、license 和 SHA-256 可审计。
 - [ ] decoded frame 与 PCM oracle/seek cursor 一致。
 - [ ] 无第三方类型进入公共 API。
 - [ ] render path 不链接调用 decoder。
+
+## 活动日志
+
+- 2026-07-28：根据评审报告完成规格收口；状态保持 `TODO`，未开始代码实施。
 
 ## 风险与注意事项
 不得复制 third-party 源码或依赖系统预装 codec。

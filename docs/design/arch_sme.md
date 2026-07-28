@@ -137,7 +137,7 @@ Trace sinks consume control-thread decisions; they never run in render callback.
 Acoustic Runtime may publish a bounded control parameter; it does not own the graph.
 ```
 
-### 3.1 `music/api.zig`：公共门面
+### 3.1 `src/music/api.zig`：公共门面
 
 职责：
 
@@ -149,7 +149,9 @@ Acoustic Runtime may publish a bounded control parameter; it does not own the gr
 
 它不暴露 mixer voice handle。游戏持有 `MusicRuntimeHandle`、`MusicInstanceHandle` 或稳定的 ID，具体 stem voice 由 Layer Controller 所有。
 
-### 3.2 `music/director.zig`：状态解析与仲裁
+`src/music/root.zig` 只负责内部模块聚合；`src/bugu_audio.zig` 的 `music` namespace 固定转发到 `src/music/api.zig`。两者不得形成两套公共 API。
+
+### 3.2 `src/music/director.zig`：状态解析与仲裁
 
 职责：
 
@@ -161,7 +163,7 @@ Acoustic Runtime may publish a bounded control parameter; it does not own the gr
 
 Director 只在 Audio Control Thread 更新。它不操作 PCM、不读取文件、不直接遍历 mixer voices。
 
-### 3.3 `music/clock.zig`：音乐时间
+### 3.3 `src/music/clock.zig`：音乐时间
 
 职责：
 
@@ -172,7 +174,7 @@ Director 只在 Audio Control Thread 更新。它不操作 PCM、不读取文件
 
 音频硬件/render frame 是唯一权威时钟。游戏帧时间、墙钟和 `delta_ms` 不得用于决定实际切换 sample。
 
-### 3.4 `music/planner.zig`：转换计划
+### 3.4 `src/music/planner.zig`：转换计划
 
 职责：
 
@@ -185,7 +187,7 @@ Director 只在 Audio Control Thread 更新。它不操作 PCM、不读取文件
 
 Planner 不允许在目标资产未准备好时生成一个必然 underrun 的计划。
 
-### 3.5 `music/layers.zig`：同步层控制
+### 3.5 `src/music/layers.zig`：同步层控制
 
 职责：
 
@@ -196,7 +198,7 @@ Planner 不允许在目标资产未准备好时生成一个必然 underrun 的�
 - 在 voice 预算不足时执行声明式降级策略；
 - 汇总 layer telemetry。
 
-### 3.6 `music/assets.zig` 与资产编译器
+### 3.6 `src/assets/music_schema.zig`、`src/assets/music_bank.zig` 与资产编译器
 
 职责：
 
@@ -206,6 +208,8 @@ Planner 不允许在目标资产未准备好时生成一个必然 underrun 的�
 - 检测不可达 state、缺失 transition、无进展 fallback 环和无效 fallback；
 - 生成 waveform/trace 所需的非运行时调试信息；
 - 生成 stream chunk、sample-accurate seek table、codec priming 补偿和 prefetch 信息。
+
+资产 schema 与 loader 延续现有 `src/assets/` 所有权，不新增并行的 `src/music/assets.zig`。公共音乐 API 通过 `src/music/api.zig` 暴露稳定的 bank handle/descriptor，不把内部 asset table 或第三方 codec 类型泄漏给游戏侧。
 
 运行时不解析面向作者的字符串表达式。条件表达式在编译期转为有界 bytecode、小 LUT 或 flat rule table。
 
@@ -828,7 +832,7 @@ Control -> Render: double/triple-buffered immutable ScheduledCommandBlock
 Render -> Control: bounded execution receipt + atomic telemetry
 ```
 
-队列满时返回 `QueueFull` 并计数。不得覆盖未消费的关键状态请求。连续 parameter update 可按 parameter ID 合并，只保留最新值。
+队列满时返回 `CommandQueueFull` 并计数。不得覆盖未消费的关键状态请求。连续 parameter update 可按 parameter ID 合并，只保留最新值。
 
 ### 9.3 所有权
 

@@ -1,7 +1,13 @@
 # TASK-006：实现 music virtual voice 与平台预算策略
 
 ## 元数据
-- 状态：待实施
+- 状态：TODO
+- Owner：`UNASSIGNED`
+- Reviewer：`UNASSIGNED`
+- 实施角色：Mixer Policy/Runtime
+- 评审角色：实时安全、预算策略、QA
+- 工作量等级：`M`
+- 证据路径：`docs/validation/sme/TASK-006/evidence.md`（脱敏摘要）、`zig-out/sme-validation/TASK-006/`（原始产物）
 - 执行波次：3
 - 硬依赖：TASK-004、TASK-005
 - 协作关系：TASK-012 提供 layer target；TASK-014 管理 runtime；PlatformProfile 来自 TASK-003
@@ -21,8 +27,8 @@
 ### 必须完成
 - real/virtual/releasing/stolen 状态机。
 - base/dialogue/stinger protection class。
-- authored `drop_rank`、audibility threshold/hysteresis。
-- platform profile 的 real/virtual/group/stinger 上限。
+- authored `drop_rank`、audibility metric、threshold/hysteresis；metric 必须明确使用的 gain/envelope/priority 输入、dB/linear 单位、平滑窗口和 tie-break。
+- platform profile 的 real/virtual/group/stinger 上限，以及 resident/stream bytes、realize/virtualize 阈值与最小保持 frames；每个 release profile 必须有具体值和内存预算。
 - virtual cursor、loop epoch、automation、stream prefetch intent 推进。
 - realize 时 sample-accurate seek 并加入 group 当前 cursor。
 
@@ -34,11 +40,11 @@
 1. 预算决策仅在 control thread；render 执行已编译 state command。
 2. required base layer 不可 drop；无法保留则整个 transition 推迟/失败。
 3. optional layer 可 virtualize，再按 profile 明确 drop。
-4. 同分 tie-break 使用 stable layer ID，保证 replay。
+4. 同分 tie-break 使用 stable layer ID，保证 replay；排序 tuple 固定为 protection class、authored priority、smoothed audibility、drop rank、stable layer ID，并明确每项升/降序。
 5. telemetry 区分 virtualized、realized、dropped、stolen。
 
 ## 接口与数据契约
-`PlatformProfile` 含 max real/virtual/groups/stingers、resident/stream bytes。`VoiceBudgetExceeded` 必须带 reason enum 和所需/可用数量进入 trace。
+`PlatformProfile` 含 max real/virtual/groups/stingers、resident/stream bytes、audibility window、realize/virtualize threshold、hysteresis 和最小保持 frames；初始化验证 threshold 顺序与所有容量乘法。`VoiceBudgetExceeded` 必须带 reason enum 和所需/可用数量进入 trace。
 
 ## 文件变更
 - 新增 virtualization module/tests。
@@ -47,7 +53,7 @@
 ## 验证
 ### 自动化验证
 - `zig build test`。
-- budget 边界、hysteresis、base protection、deterministic tie-break、virtual 100 bars 后 realize cursor 0 skew、seek failure。
+- release profile exact 值、budget 边界、audibility oracle、hysteresis、base protection、deterministic tie-break、virtual 100 bars 后 realize cursor 0 skew、seek failure。
 ### 手工验证
 - 不需要。
 ### 边界与失败场景
@@ -58,6 +64,11 @@
 - [ ] realize 与 group cursor 对齐。
 - [ ] profile/保护/drop 均有 trace。
 - [ ] 资源不足不静默成功。
+- [ ] release `PlatformProfile` 的具体预算、audibility 口径和 hysteresis 已冻结并写入 evidence。
+
+## 活动日志
+
+- 2026-07-28：根据评审报告完成规格收口；状态保持 `TODO`，未开始代码实施。
 
 ## 风险与注意事项
 不要在 render thread计算 audibility 排序；避免 O(N log N) 和不可预测分配。
