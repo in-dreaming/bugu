@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Task Orchestrator"
+  short_description: "Run resumable Terra implementation and Sol review loops"
+  default_prompt: "Use $codex-task-orchestrator to execute ordered task Markdown files until Sol accepts each task."
