@@ -8,7 +8,7 @@
 - 评审角色：确定性状态机、资产校验、QA
 - 工作量等级：`L`
 - 证据路径：`docs/validation/sme/TASK-008/evidence.md`（脱敏摘要）、`zig-out/sme-validation/TASK-008/`（原始产物）
-- 执行波次：3
+- 执行波次：5
 - 硬依赖：TASK-003、TASK-004、TASK-007
 - 协作关系：TASK-009 消费 transition intent；TASK-014 持有 director；TASK-017 复用 compiler
 - 预计改动范围：`src/music/logic.zig`、`selector.zig`、`director.zig`、`tools/sme_compiler/logic.zig`、`tests/sme/director_test.zig`（新增）
@@ -22,7 +22,7 @@
 ## 前置条件
 - MusicBank state/selector/logic tables。
 - Clock 提供 bar/beat。
-- trace/replay contract。
+- ReplayInputV2 acceptance frame/tick/order与量化参数输入contract；live到达先后不等于canonical request顺序。
 
 ## 实施范围
 ### 必须完成
@@ -62,7 +62,7 @@
 - NaN parameter、unknown context、program 无终止、总权重 0、no-repeat window 大于 pool。
 
 ## 完成定义
-- [ ] 同输入/seed/history 产生相同 intent。
+- [ ] 同完整ReplayInputV2（含acceptance frame）、bank/profile/seed/history产生相同intent；跨平台canonical fixture一致。
 - [ ] committed/pending state 语义正确。
 - [ ] 所有候选和淘汰原因可追踪。
 - [ ] evaluator 无动态分配/脚本回调。
@@ -75,3 +75,7 @@
 ## 风险与注意事项
 Director 在 control thread 运行；不得直接 start voice 或读取 mixer 内部状态。
 
+
+
+## 提前集成与仲裁边界
+TASK-026消费本任务实际Director/selector，从public runtime提交resident直接目标切换并验证next-bar与SFX共存；本任务需提供可用稳定seam，不能等014才运行。新state覆盖旧intent时请求epoch失效，不宣称已取消published/acquired/已执行phase；以render receipt报告实际结果。history提交点必须固定：只在matching target-entry执行成功后提交已选目标；prepared/published被取消不污染committed history，随机selection attempt epoch另行记录供replay，partial-fill失败记录实际选择但不伪造target进入。

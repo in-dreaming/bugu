@@ -8,7 +8,7 @@
 - 评审角色：QA、资产许可、Runtime
 - 工作量等级：`L`
 - 证据路径：`docs/validation/sme/TASK-020/evidence.md`（脱敏摘要）、`zig-out/sme-validation/TASK-020/`（原始产物）
-- 执行波次：10
+- 执行波次：14
 - 硬依赖：TASK-015、TASK-016、TASK-017、TASK-018、TASK-019
 - 协作关系：TASK-021以本任务为E2E fixture；本任务拥有`examples/sme/`
 - 预计改动范围：`examples/sme/`（新增）、`build_support/sme_steps.zig`、`zig-out/sme-validation/TASK-020/demo-report.json`
@@ -75,3 +75,7 @@
 
 ## 风险与注意事项
 demo通过不能代替TASK-021/022的全量矩阵。
+
+
+## 生产路径与验证演示补充
+Demo必须沿ControlRuntime→RenderSnapshot+ScheduledCommandBlock→RuntimeRenderer→RuntimeMiniaudioBackend，offline用RuntimeOfflineBackend；不能用Engine-only或外部播放器冒充。演示SFX+音乐并行、multichannel匹配输出（不支持设备明确拒绝/显式矩阵转换）、记录完整ReplayInputV2并复放相同schedule；设备loss使旧epoch FIFO flush且不重放已生成PCM。继承026早期slice而不是复制第二套runtime。

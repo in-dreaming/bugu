@@ -8,7 +8,7 @@
 - 评审角色：实时安全、DSP 数值、QA
 - 工作量等级：`L`
 - 证据路径：`docs/validation/sme/TASK-013/evidence.md`（脱敏摘要）、`zig-out/sme-validation/TASK-013/`（原始产物）
-- 执行波次：4
+- 执行波次：7
 - 硬依赖：TASK-002、TASK-004、TASK-005、TASK-006
 - 协作关系：TASK-012 写 bus/send targets；TASK-015 发 duck requests；TASK-018/019 读取 meters
 - 预计改动范围：`src/mixer/bus_graph.zig`、`src/mixer/sidechain.zig`（新增）、`src/mixer/mixer.zig`、`tools/sme_compiler/buses.zig`、`tests/sme/sidechain_test.zig`
@@ -41,8 +41,10 @@
 1. graph 在 bank load 编译成 flat node list。
 2. effect state预分配；render只遍历 fixed nodes。
 3. automation 与 signal reduction 分开计算、合并后 clamp。
-4. lookahead 使用固定 ring 并计入 latency。默认 release preset 的 detector/meter window、lookahead 与最大总 latency 必须在实现前冻结；bank 加载报告和 runtime snapshot 同时暴露实际值。
+4. lookahead 使用固定 ring 并计入 latency。默认 release preset 的 detector/meter window、lookahead 与最大总 latency 必须在实现前冻结；bank 加载报告和 runtime snapshot 同时暴露实际值。对 dry/send/return/sidechain 路径编译累计 latency 和补偿关系，不允许 bus route 变化使同组 stems 在输出阶段失去相位；超 profile 预算加载失败。
 5. unknown bus/send/layout load 失败。
+6. 为 TASK-012 交付可直接执行的 Bus/EffectTarget registry、参数单位/范围、scheduled apply seam、每节点 latency 和数值 fixtures，而非仅接口声明；本任务不依赖 TASK-012 的高层 intensity 规则即可用低层 scheduled targets 证明 DSP。
+7. 所有节点输入/输出遵守 TASK-005 canonical layouts；sidechain detector channel weighting 显式序列化，multichannel bus 不经隐藏 stereo 中转。
 
 ## 接口与数据契约
 `BusGraphDesc`、`SidechainPreset`、`DuckAutomationTarget`、`BusMeterSnapshot`。`SidechainPreset` 所有时间均以 frames 存储并在 authoring 层显示毫秒；snapshot 携带 preset ID、window/lookahead/latency frames，避免工具猜测。cycle/unsupported layout/invalid compressor 参数为 bank error。
@@ -55,12 +57,14 @@
 ### 自动化验证
 - `zig build test`。
 - graph topology/cycle、multichannel send、automation combine、真实 dialogue PCM detector、默认 preset exact 值、detector/meter 窗口、attack/release/knee/lookahead/latency、silence、非法或数值不稳定参数。
+- 1/2/6/8 channel matching-layout wet/dry/send/rejoin impulse 对齐、effect target 每字段可观察输出、sidechain routing 无信号串漏、latency budget 超限失败；TASK-012 的消费 fixture 在本任务已可独立运行。
 ### 手工验证
 - offline 对比 dialogue on/off gain reduction trace。
 ### 边界与失败场景
 - zero attack、ratio invalid、feedback send、meter overflow。
 
 ## 完成定义
+- [ ] 本任务已交付测试/fixture 通过 TASK-001 的稳定注册 seam 加入既有 `zig build test`/PR gate，证据随子交付持续产生，不等待 TASK-021 首次接入 CI。
 - [ ] sidechain 由真实 PCM envelope 驱动。
 - [ ] graph/effects render 无分配和锁。
 - [ ] legacy bus 回归。
@@ -70,6 +74,8 @@
 ## 活动日志
 
 - 2026-07-28：根据评审报告完成规格收口；状态保持 `TODO`，未开始代码实施。
+- 2026-10-09：补齐实际依赖、量化/输入契约、独立审查产物与持续 gate；仅修订任务文档，状态保持 `TODO`。
 
 ## 风险与注意事项
 不要把 graph 拓扑排序放到 render callback。
+

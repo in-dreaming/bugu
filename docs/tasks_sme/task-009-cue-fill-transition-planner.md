@@ -8,9 +8,9 @@
 - 评审角色：音乐系统、确定性求解、QA
 - 工作量等级：`L`
 - 证据路径：`docs/validation/sme/TASK-009/evidence.md`（脱敏摘要）、`zig-out/sme-validation/TASK-009/`（原始产物）
-- 执行波次：4
-- 硬依赖：TASK-003、TASK-004、TASK-007、TASK-008
-- 协作关系：TASK-011 提供 resident 查询；TASK-014 执行 plan；TASK-017 复用 solver
+- 执行波次：6
+- 硬依赖：TASK-003、TASK-004、TASK-007、TASK-008、TASK-011
+- 协作关系：TASK-011 已交付真实 readiness/stream 查询（硬依赖）；TASK-014 执行 plan；TASK-017 复用 solver
 - 预计改动范围：`src/music/planner.zig`、`tools/sme_compiler/transitions.zig`、`tests/sme/planner_test.zig`（新增）
 
 ## 目标
@@ -22,6 +22,7 @@ Crossfade 不能掩盖 tempo/meter/phrase 不兼容。和声兼容由作者标�
 ## 前置条件
 - target segment 已由 Director/Selector 解析。
 - tempo grid 和 MusicBank cue/fill tables 可用。
+- TASK-011 的 versioned readiness snapshot、required chunk set 和 ReplayInputV2 ready-frame/result fixture；不能靠mock ready完成本任务。
 
 ## 实施范围
 ### 必须完成
@@ -45,7 +46,7 @@ Crossfade 不能掩盖 tempo/meter/phrase 不兼容。和声兼容由作者标�
 5. hard cut 必须是 authored rule。
 
 ## 接口与数据契约
-`TransitionPlan` 包含 plan/request IDs、source/fill/target/cues、execute/start/end frames、phases、tempo spans、generation、chunks。失败：`TransitionNotFound`、`TargetNotResident`、`UnsupportedCapability`。
+`TransitionPlan` 包含 plan/request IDs、transport_epoch/plan_epoch/phase_id、source/fill/target/cues、execute/start/end frames、phases、tempo spans、generation、chunks和readiness snapshot version。失败：`TransitionNotFound`、`TargetNotResident`、`UnsupportedCapability`。
 
 ## 文件变更
 - 新增 planner/compiler/tests。
@@ -74,3 +75,10 @@ Crossfade 不能掩盖 tempo/meter/phrase 不兼容。和声兼容由作者标�
 ## 风险与注意事项
 不要让 planner 读取文件或等待 worker；它只消费 readiness snapshot。
 
+
+
+## 取消与多阶段执行补充
+
+遵守setup4.12：prepared/published/acquired尚未执行phase均可失效；acquire不是commit。Planner每phase携完整token，Control发cancel_requested，Render gate裁决execution/cancel并给effective frame、已执行prefix和too_late。部分fill已响不能回滚；按最后receipt和活跃groups保留真实cursor、取消后续旧fill/target/automation，再产生新epoch计划。pause/resume、stop、reload分别覆盖发布前/获取后/首fill中/target entry前后，最终state只认matching epoch的target-entry receipt。不能因cancel误释放已执行group或其generation。
+
+验证须使用002执行gate+011实际readiness，故意让worker完成順序不同并记录输入：live可以defer不同，注入同一ReplayInputV2后canonical评分tuple与schedule跨平台相同。候选score不得读取墙钟。无合法partial续接必须显式emergency/stop。0/1/N fill每phase必须exactly-once executed或cancelled，无幽灵target。

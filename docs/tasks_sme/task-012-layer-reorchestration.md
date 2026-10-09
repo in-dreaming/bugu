@@ -8,8 +8,8 @@
 - 评审角色：DSP、音乐时间、QA
 - 工作量等级：`L`
 - 证据路径：`docs/validation/sme/TASK-012/evidence.md`（脱敏摘要）、`zig-out/sme-validation/TASK-012/`（原始产物）
-- 执行波次：4
-- 硬依赖：TASK-004、TASK-005、TASK-006、TASK-007
+- 执行波次：8
+- 硬依赖：TASK-004、TASK-005、TASK-006、TASK-007、TASK-013
 - 协作关系：TASK-008 提供 state/context；TASK-013 提供 bus/effect targets；TASK-014 持有 controller
 - 预计改动范围：`src/music/layers.zig`（新增）、`src/mixer/music_group.zig`、`tools/sme_compiler/layers.zig`、`tests/sme/layer_controller_test.zig`
 
@@ -21,13 +21,13 @@
 
 ## 前置条件
 - atomic group、virtual voice、tempo clock、trace。
-- Bus target 通过稳定 seam 表达，具体 DAG 由 TASK-013 完成。
+- TASK-013 已完成真实 Bus DAG、effect target schema、参数 apply、meters、sidechain latency contract；seam 声明不等于该前置完成，bus/effect/send 的验收必须走真实处理链。
 
 ## 实施范围
 ### 必须完成
 - piecewise curve/LUT、attack/release/hysteresis。
 - complete `LayerTarget` 与 conflict validator；字段至少固定为 gain、audibility/active policy、virtual policy、variant/articulation、per-channel trim、filter、effect sends、bus route、protection class、drop rank 和 ramp domain。
-- continuous ramp 以 musical beat 或 frame 表达。
+- continuous ramp 以显式 `quarter_beats` 或 frame 表达；quarter_beats 继承 TASK-007 的四分音符单位，不等于 6/8 的 pulse beat。
 - discrete articulation/variant cue-bound switch。
 - group/layer target command 编译。
 - muted/virtual layer cursor 始终推进。
@@ -42,6 +42,7 @@
 3. ramp 穿越 tempo span 时通过 grid 分段，不用单一 BPM。
 4. variant source 必须 layout/loop/cue 兼容。
 5. target diff 只发布变化，避免 command flood。
+6. `bus_route`、`effect_sends`、filter targets 由 TASK-013 的真实已编译节点 ID/type contract 解析，unknown/incompatible route 构建失败；路由切换必须遵守该节点的 click-free/latency policy，不能用固定 meter/gain stub 代替 DSP。
 
 ## 接口与数据契约
 `LayerTarget` 的每个字段必须定义单位、默认值、combine mode、continuous/discrete 分类与合法切换边界；`LayerAutomationBlock` 携带 start/end frame 和每字段 ramp；`VariantSwitchPlan` 携带 cue、generation 与 readiness。失败包括 invalid curve、conflicting writers、incompatible variant、budget failure。
@@ -53,7 +54,8 @@
 ## 验证
 ### 自动化验证
 - `zig build test`。
-- intensity 上下扫、hysteresis、tempo ramp attack/release、`layer-conflicts` fixtures、variant cue、virtual realize、每个 `LayerTarget` 字段、NaN/Inf。
+- intensity 上下扫、hysteresis、tempo ramp attack/release、`layer-conflicts` fixtures、variant cue、真实 streaming virtual realize、每个 `LayerTarget` 字段、NaN/Inf。
+- 真实 bus route/filter/effect send 的 impulse/PCM 输出变化与 TASK-013 graph oracle 对照，跨 layout、sidechain lookahead、same-frame target conflicts 必须通过；只断言 command payload 不足以覆盖这些字段。
 - 连续参数使用 impulse/step/ramp oracle，记录最大相邻 sample delta 与频谱旁带阈值；阈值在进入 `REVIEW` 前冻结到 TASK-012 evidence。
 ### 手工验证
 - offline stem envelopes 与 layer trace 对齐。
@@ -61,6 +63,7 @@
 - 0/1 point curve、instant ramp、cue 不可达、variant chunk 未准备。
 
 ## 完成定义
+- [ ] 本任务已交付测试/fixture 通过 TASK-001 的稳定注册 seam 加入既有 `zig build test`/PR gate，证据随子交付持续产生，不等待 TASK-021 首次接入 CI。
 - [ ] `LayerTarget` 字段表的每一项均进入真实 scheduled command 并有独立断言。
 - [ ] click/zipper 的 sample-domain 与频域阈值已量化并通过。
 - [ ] 连续参数无 click/zipper，离散切换只在合法 cue。
@@ -70,7 +73,9 @@
 ## 活动日志
 
 - 2026-07-28：根据评审报告完成规格收口；状态保持 `TODO`，未开始代码实施。
+- 2026-10-09：补齐实际依赖、量化/输入契约、独立审查产物与持续 gate；仅修订任务文档，状态保持 `TODO`。
 
 ## 风险与注意事项
 不要把设计师曲线硬编码在 Zig 分支；全部来自 bank。
+
 

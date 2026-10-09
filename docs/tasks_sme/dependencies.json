@@ -1,0 +1,661 @@
+{
+  "schema_version": 1,
+  "base_commit": "63dec6de2992610865a7a103cede612e28ace203",
+  "edge_direction": "prerequisite -> consumer",
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "file": "task-001-sme-contract-module-seams.md",
+      "title": "冻结 SME 公共契约并建立可编译模块扩展点",
+      "wave": 1,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-025",
+          "kind": "integration"
+        }
+      ]
+    },
+    {
+      "id": "TASK-002",
+      "file": "task-002-absolute-frame-scheduler.md",
+      "title": "实现绝对 render-frame scheduler 与原子 command block",
+      "wave": 3,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-001",
+          "kind": "contract"
+        },
+        {
+          "id": "TASK-004",
+          "kind": "contract"
+        }
+      ]
+    },
+    {
+      "id": "TASK-003",
+      "file": "task-003-versioned-music-bank.md",
+      "title": "实现版本化 MusicBank schema 与 compiler core",
+      "wave": 2,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-001",
+          "kind": "contract"
+        }
+      ]
+    },
+    {
+      "id": "TASK-004",
+      "file": "task-004-trace-telemetry-replay.md",
+      "title": "实现 SME trace、telemetry 与 deterministic replay contract",
+      "wave": 2,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-001",
+          "kind": "contract"
+        }
+      ]
+    },
+    {
+      "id": "TASK-005",
+      "file": "task-005-multichannel-voice-groups.md",
+      "title": "实现 multichannel mixer 与原子 MusicVoiceGroup",
+      "wave": 4,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-002",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-004",
+          "kind": "implementation"
+        }
+      ]
+    },
+    {
+      "id": "TASK-006",
+      "file": "task-006-virtual-voice-budgets.md",
+      "title": "实现 music virtual voice 与平台预算策略",
+      "wave": 6,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-004",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-005",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-011",
+          "kind": "implementation"
+        }
+      ]
+    },
+    {
+      "id": "TASK-007",
+      "file": "task-007-tempo-map-clock.md",
+      "title": "实现复杂 tempo/meter compiler 与 sample-accurate Clock",
+      "wave": 4,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-002",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-003",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-004",
+          "kind": "implementation"
+        }
+      ]
+    },
+    {
+      "id": "TASK-008",
+      "file": "task-008-logic-director-selectors.md",
+      "title": "实现 bounded logic、Music Director 与 SegmentSelector",
+      "wave": 5,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-003",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-004",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-007",
+          "kind": "implementation"
+        }
+      ]
+    },
+    {
+      "id": "TASK-009",
+      "file": "task-009-cue-fill-transition-planner.md",
+      "title": "实现 Entry/Exit Cue、Fill Route 与 Transition Planner",
+      "wave": 6,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-003",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-004",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-007",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-008",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-011",
+          "kind": "implementation"
+        }
+      ]
+    },
+    {
+      "id": "TASK-010",
+      "file": "task-010-ogg-opus-adapter.md",
+      "title": "交付 Ogg Opus、确定性媒体导入与质量/seek 编译产物",
+      "wave": 3,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-003",
+          "kind": "implementation"
+        }
+      ]
+    },
+    {
+      "id": "TASK-011",
+      "file": "task-011-streaming-prefetch-seek.md",
+      "title": "实现音乐 streaming、prefetch、seek 与 emergency recovery",
+      "wave": 5,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-002",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-003",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-004",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-005",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-010",
+          "kind": "implementation"
+        }
+      ]
+    },
+    {
+      "id": "TASK-012",
+      "file": "task-012-layer-reorchestration.md",
+      "title": "实现 Layer Controller 与完整重配器",
+      "wave": 8,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-004",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-005",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-006",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-007",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-013",
+          "kind": "implementation"
+        }
+      ]
+    },
+    {
+      "id": "TASK-013",
+      "file": "task-013-bus-dag-sidechain.md",
+      "title": "实现 Bus DAG、automation ducking 与真实 signal sidechain",
+      "wave": 7,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-002",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-004",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-005",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-006",
+          "kind": "implementation"
+        }
+      ]
+    },
+    {
+      "id": "TASK-014",
+      "file": "task-014-music-runtime-integration.md",
+      "title": "集成完整 MusicRuntime 公共主链与生命周期",
+      "wave": 9,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-004",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-008",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-009",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-011",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-012",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-013",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-026",
+          "kind": "integration"
+        }
+      ]
+    },
+    {
+      "id": "TASK-015",
+      "file": "task-015-stinger-duck-acoustic.md",
+      "title": "实现 Stinger、duck request 与 acoustic-to-music 映射",
+      "wave": 10,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-004",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-013",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-014",
+          "kind": "implementation"
+        }
+      ]
+    },
+    {
+      "id": "TASK-016",
+      "file": "task-016-hot-reload-rollback.md",
+      "title": "实现 MusicBank hot reload、generation migration 与 rollback",
+      "wave": 11,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-003",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-004",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-011",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-014",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-015",
+          "kind": "implementation"
+        }
+      ]
+    },
+    {
+      "id": "TASK-017",
+      "file": "task-017-headless-authoring-cli.md",
+      "title": "实现 headless authoring core 与 SME compiler CLI",
+      "wave": 10,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-003",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-007",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-008",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-009",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-010",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-014",
+          "kind": "implementation"
+        }
+      ]
+    },
+    {
+      "id": "TASK-018",
+      "file": "task-018-gpu-authoring-app.md",
+      "title": "实现 in-dreaming/gpu SME 作者应用",
+      "wave": 12,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-013",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-016",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-017",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-027",
+          "kind": "integration"
+        }
+      ]
+    },
+    {
+      "id": "TASK-019",
+      "file": "task-019-runtime-visual-debugger.md",
+      "title": "实现 in-dreaming/gpu SME runtime 可视调试器",
+      "wave": 13,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-015",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-018",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-027",
+          "kind": "integration"
+        }
+      ]
+    },
+    {
+      "id": "TASK-020",
+      "file": "task-020-complete-sme-demo.md",
+      "title": "交付完整 SME 示例项目与真实运行 demo",
+      "wave": 14,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-015",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-016",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-017",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-018",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-019",
+          "kind": "implementation"
+        }
+      ]
+    },
+    {
+      "id": "TASK-021",
+      "file": "task-021-full-validation-replay-ci.md",
+      "title": "集成并资格验证 SME 全量矩阵、golden replay 与持续 CI",
+      "wave": 15,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-004",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-010",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-011",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-012",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-013",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-014",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-015",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-016",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-020",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-026",
+          "kind": "integration"
+        }
+      ]
+    },
+    {
+      "id": "TASK-022",
+      "file": "task-022-realtime-device-stress.md",
+      "title": "完成实时安全审计、真实设备与 8 小时压力 gate",
+      "wave": 16,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-011",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-013",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-014",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-021",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-025",
+          "kind": "integration"
+        }
+      ]
+    },
+    {
+      "id": "TASK-023",
+      "file": "task-023-packaging-migration-docs.md",
+      "title": "完成 SME release packaging、legacy迁移与用户文档",
+      "wave": 17,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-017",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-018",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-019",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-020",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-021",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-022",
+          "kind": "integration"
+        }
+      ]
+    },
+    {
+      "id": "TASK-024",
+      "file": "task-024-v1-product-qualification.md",
+      "title": "执行 SME v1 产品资格审查并给出唯一发布结论",
+      "wave": 18,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-018",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-019",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-021",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-022",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-023",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-025",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-026",
+          "kind": "integration"
+        },
+        {
+          "id": "TASK-027",
+          "kind": "integration"
+        }
+      ]
+    },
+    {
+      "id": "TASK-025",
+      "file": "task-025-production-runtime-prerequisites.md",
+      "title": "验证并修复生产 runtime 前置不变量",
+      "wave": 0,
+      "status": "TODO",
+      "depends_on": []
+    },
+    {
+      "id": "TASK-026",
+      "file": "task-026-early-public-runtime-slice.md",
+      "title": "验证早期真实音乐与 SFX 公共路径",
+      "wave": 7,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-005",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-007",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-008",
+          "kind": "implementation"
+        },
+        {
+          "id": "TASK-009",
+          "kind": "implementation"
+        }
+      ]
+    },
+    {
+      "id": "TASK-027",
+      "file": "task-027-gpu-ui-input-foundation.md",
+      "title": "补齐 GPU 作者工具输入与文本基础",
+      "wave": 2,
+      "status": "TODO",
+      "depends_on": [
+        {
+          "id": "TASK-001",
+          "kind": "contract"
+        }
+      ]
+    }
+  ]
+}

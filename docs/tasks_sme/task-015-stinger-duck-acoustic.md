@@ -8,7 +8,7 @@
 - 评审角色：DSP、声学集成、实时安全
 - 工作量等级：`M`
 - 证据路径：`docs/validation/sme/TASK-015/evidence.md`（脱敏摘要）、`zig-out/sme-validation/TASK-015/`（原始产物）
-- 执行波次：6
+- 执行波次：10
 - 硬依赖：TASK-004、TASK-013、TASK-014
 - 协作关系：与 TASK-016/017 可并行；只通过 MusicRuntime extension seam
 - 预计改动范围：`src/music/stinger.zig`、`src/music/acoustic_mapping.zig`（新增）、`src/music/runtime.zig` 的注册扩展、`tests/sme/stinger_acoustic_test.zig`
@@ -74,3 +74,7 @@ Stinger 必须使用同一绝对 frame scheduler。声学可影响 layer/filter/
 ## 风险与注意事项
 不要让 stinger 或 acoustic path 绕过 voice budget和stream readiness。
 
+
+
+## 统一调度与重放补充
+Stinger、automation duck与主音乐共用production RuntimeRenderer的scheduler/clock，token含transport/device/generation epoch；stop/pause/reload对未来stinger/duck ramp的策略显式编码，不通过legacy Engine另一mixer播放。声学输入在control接受时量化并记录accepted frame和序号进入ReplayInputV2；重放不等待GPU，不读取本次异步到达顺序。测试same-frame stinger/state/cancel的稳定次序、pending block acquired后失效、旧generation receipt不重新开启duck。

@@ -1,7 +1,8 @@
 # Bugu Sequence Music Engine 架构
 
-状态：Architecture v1.0（范围冻结；实现未开始）
-日期：2026-07-24
+状态：Architecture v1.1 修订草案（完整 v1 范围不变；实现未开始）
+日期：2026-10-09
+代码核对基线：`63dec6de2992610865a7a103cede612e28ace203`；本次仅修订文档，未运行实现测试。
 范围：Bugu 自适应音乐子系统（下文简称 SME）
 输入：`docs/research/kcd.md`、`docs/research/kcd.sme.md`
 上位约束：`docs/tasks/asetup.md`、`docs/design/audio-engine-design.md`、`docs/design/audio-runtime-contract.md`
@@ -44,7 +45,8 @@ SME 是 L9/L8 的音乐导演与资源子系统，不替换下层组件：
 | Event | random、switch、单 RTPC、即时 play/stop | 独立 Music Director、状态图、逻辑表达式、请求仲裁和 sample-accurate 边界调度 |
 | Bus/effect | `sfx`/`music`/`master` 标签、固定 reverb send/return | 音乐组自动化、dialogue detector、真实 sidechain compressor 和可审计 ducking |
 | Bank | 未版本化 TOML manifest + 预加载单声道 float32 blob | 版本化 music metadata、channel layout、tempo/cue/fill、codec/seek/chunk 和 streaming |
-| Backend | miniaudio device + offline render | 不变；SME 只消费 engine clock 和 mixer command contract |
+| Production runtime | `ControlRuntime -> RenderSnapshot -> RuntimeRenderer`；renderer 独立拥有 mixer，公共 Runtime backend 不经过 legacy Engine | 在生产 runtime 内扩展统一 scheduler/clock，兼容冻结的嵌入 API |
+| Backend | `RuntimeMiniaudioBackend` / `RuntimeOfflineBackend` 共用 fixed-quantum adapter；当前 stereo 输出 | matching-layout 协商、FIFO/channel order、device epoch/恢复，不能仅改 legacy Engine |
 | Validation | unit tests、offline WAV、文本报告、CPU/GPU 显式 gate | transition/layer trace、golden schedule、长时同步与 underrun gate |
 | 声学 | CPU reference、GPU spike、`AcousticResponse` 到 mixer 映射 | 可选低频控制输入；不得直接驱动 music state 或阻塞调度 |
 
@@ -172,7 +174,7 @@ Director 只在 Audio Control Thread 更新。它不操作 PCM、不读取文件
 - 为 planner 提供纯函数式时间查询；
 - 对 pause、device discontinuity、offline render 定义一致语义。
 
-音频硬件/render frame 是唯一权威时钟。游戏帧时间、墙钟和 `delta_ms` 不得用于决定实际切换 sample。
+runtime 绝对 render frame 是调度权威；它与设备已交付 frame 必须分开记账（见 9.5）。游戏帧时间、墙钟和 `delta_ms` 不得用于决定实际切换 sample。
 
 ### 3.4 `src/music/planner.zig`：转换计划
 
@@ -236,7 +238,8 @@ SME v1 必须交付可实际制作、检查和预览完整音乐 bank 的作者�
 
 | 现有模块 | SME 依赖方式 | 禁止耦合 |
 |---|---|---|
-| `core/engine.zig` | 提供绝对 render frame、scheduled command 提交和 telemetry 聚合 | Director 直接访问 `Engine.mixer` |
+| `runtime/runtime.zig` | `ControlRuntime` 控制拥有者，`RuntimeRenderer` 唯一 mixer/scheduler/render clock 拥有者 | 第二套 mixer、clock 或控制侧 DSP mutation |
+| `core/engine.zig` | legacy Engine/EventRuntime 通过显式 adapter 迁移；独立旧 demo context 继续兼容 | 将 Engine-only 测试视为 production runtime 验证 |
 | `mixer/mixer.zig` | 执行 sample-offset command、voice group render、music bus automation | mixer 解析 state graph 或资产字符串 |
 | `assets/bank.zig` | 共享 bank 生命周期、sample/blob 所有权和 ID 规则 | 将 music schema 塞入未版本化 `[[sounds]]` 并默默忽略字段 |
 | `events/runtime.zig` | 可由普通 event 触发 music API；stinger 可复用声音解析 | 用 `postEvent` 的即时 voice 启动冒充 beat 同步 |
@@ -296,7 +299,7 @@ Director 在每个 control tick 消费请求并应用以下确定性规则：
 1. `stop`、设备生命周期事件和显式 pause 具有系统优先级；
 2. 高优先级 state 覆盖低优先级 state；
 3. 相同优先级采用最后请求，但保留单调 `request_id`；
-4. 已被更新请求替代、尚未执行的 transition plan 必须取消或重算；
+4. 更新请求使旧 plan 进入取消协议；已发布/已获取的未执行阶段也必须可取消，已跨越执行线性化点的阶段不可回滚（见 6.5）；
 5. `minimum_hold_bars` 和 `cooldown_bars` 防止边界附近抖动；
 6. 参数变化先 clamp，再按声明的 attack/release 平滑；
 7. 随机变体若启用，必须使用显式 seed，并把选择写入 trace。
@@ -383,8 +386,10 @@ Selector 的所有候选、权重、历史窗口和 exhaustion 行为由 bank �
 所有时刻使用从 engine start 起单调递增的 `u64 render_frame` 表示。固定 tempo 区间内：
 
 ```text
-frames_per_beat = sample_rate * 60 / bpm
-frames_per_bar  = frames_per_beat * numerator
+frames_per_quarter = sample_rate * 60 / quarter_note_bpm
+ticks_per_bar = PPQ * numerator * 4 / denominator
+frames_per_bar = frames_per_quarter * numerator * 4 / denominator
+frames_per_group = frames_per_quarter * group_units * 4 / denominator
 ```
 
 SME v1 必须支持：
@@ -404,13 +409,14 @@ pub const TempoRegion = struct {
     end_tick: u64,
     start_milli_bpm: u32,
     end_milli_bpm: u32,
-    curve: TempoCurve, // constant / linear
+    curve: TempoCurve, // constant / linear_seconds（BPM 随秒线性）
 };
 
 pub const MeterChange = struct {
     at_tick: u64,
     numerator: u8,
     denominator: u8,
+    beat_groups: []const u8, // denominator-note units, sum == numerator
 };
 ```
 
@@ -477,6 +483,19 @@ render callback 对当前 `[quantum_start, quantum_end)` 内的命令按 `(execu
 
 同一 transition 的 stop/start/layer automation 使用相同 `execute_frame` 和一个原子 command group。若整组命令无法进入固定容量 block，整组拒绝并增加 telemetry；不得只启动一部分 stem。
 
+
+### 5.5 音乐计量与数值 contract
+
+以下是本修订采用的工程默认值，不声称由用户指定：BPM 始终表示 quarter-note BPM，`milli_bpm` 单位为千分之一四分音符/分钟；PPQ 默认 960，表示每四分音符 ticks。允许 PPQ 24–9600 的24整数倍，且全部 meter/group/subdivision须可整数表达。milliBPM范围1000–1000000（1–1000 BPM），numerator范围1–32，denominator仅1/2/4/8/16/32。tempo region格式安全上限65536，物化grid entries格式安全上限16777216，超限拒绝。这些是本修订提出的编码容量上界，不保证任一平台可以同时达到；TASK-003/007必须按实际entry字节数、索引、峰值compiler内存和runtime驻留预算验证profile有效上限，profile可更低且必须序列化/显式拒绝超限。拍号 denominator 为 2 的幂，bar ticks = `PPQ * numerator * 4 / denominator`，不可整除则拒绝。BPM 必须大于零，溢出范围由 compiler 显式拒绝。
+
+`next_beat` 跟随显式 `beat_groups`，不把 BPM beat 与拍感混为一谈。simple meter 默认每个 denominator-note 一组；6/8、9/8、12/8 默认分别 `[3,3]`、`[3,3,3]`、`[3,3,3,3]`；不规则拍号必须 authored grouping，组和必须等于 numerator。beat/subdivision grid 与 bar grid 分开编码，meter change 只在合法 bar 边界生效；pickup 用显式起始 tick/bar 偏移。
+
+`linear_seconds` 唯一表示 BPM 随 elapsed seconds 线性。给定 region 长度 Q 四分音符、端点 B0/B1，duration `T = 120*Q/(B0+B1)` 秒，`q(t) = (B0*t + (B1-B0)*t*t/(2*T))/60`；按 tick 求时间使用单调逆解。B0=B1 用常速精确有理公式。不得把 BPM 随 ticks 线性的对数积分实现当成同一 curve；未来加入新域需版本化 enum/capability。
+
+编译器从 region/anchor 的绝对坐标求值，只在最终 frame 落点一次 round-to-nearest ties-to-even，不逐 beat 累积舍入。显式 sample anchor 优先于 tempo 推导，但不是任意拉伸：先验证 anchor 残差严格小于 1 sample，再按相邻 anchors 的名义 elapsed-time 比例对端点残差做固定有理线性校正；超限、矛盾的双重 cue 或非单调 anchor 构建失败。首末 loop anchors 及其长度固定，闭合误差必须 0 frame；合法精度不足导致不同必需边界同 frame 时拒绝，不能偷偷去重。校正算法、PPQ、grouping、rounding 进入 compiler version/hash。
+
+TASK-007 的独立 oracle 不复用 production solver：常速有理解析值，ramp 高精度 decimal 数值积分/二分，anchor 校正手算 fixture。至少覆盖 3/8、6/8、7/8 `[2,2,3]`、12/8、跨 meter、pickup、正负 ramp、B0=B1、半 sample tie、长 loop 与边界前/上/后。跨 Windows/Linux 的 canonical grid bytes 必须一致。
+
 ## 6. Transition Planner
 
 ### 6.1 计划结构
@@ -506,7 +525,7 @@ pub const TransitionPlan = struct {
 };
 ```
 
-`asset_generation` 防止 hot reload 后旧计划引用新布局。执行前 generation 不匹配时，control thread 取消并重算。
+`asset_generation` 防止跨代引用；另携带 `transport_epoch`、`plan_epoch`、`phase_id`。Control 请求取消不等于 Render 已确认取消，Render 在每一原子阶段执行点验证 token，详见 6.5。
 
 ### 6.2 规划步骤
 
@@ -582,6 +601,17 @@ Planner 联合选择 `(source_exit, fill_route, target_entry)`，按以下稳定
 和声兼容不是运行时音频分析。作者工具要求 cue 标注调性/和声功能或自定义 compatibility tag，compiler 预计算合法邻接表，Planner 只查询有界表。Fill route 可以包含多个 segment，但必须有固定最大长度、无无进展环，并在 bank 构建时证明最终能进入 target。
 
 Fill 支持自身 tempo map、layers、stinger 和 tail。每一阶段都使用绝对 frame scheduler；source、fill、target 的交接以及重叠窗口均写入同一个 `TransitionPlan`，不得拆成互不关联的即时事件。
+
+
+### 6.5 计划阶段、取消与提交边界
+
+plan 状态为 `prepared -> published -> acquired -> partially_executed -> complete`；prepared/published/acquired 可进入 `cancelled`，部分执行只能终止剩余阶段，终态记录 `superseded_after_partial`。acquired 仅指 render 取得 immutable block 的 lease，不构成播放承诺。每个阶段具有 `(transport_epoch, plan_id, plan_epoch, phase_id, asset_generation)` token 和 exactly-once receipt；Control 只在实际 target-entry receipt 后提交目标 state。
+
+执行与取消由 render 端同一有序命令流裁决：Control 将 invalidation 放入预留系统 lane，render 在 atomic group 执行前处理同 frame 的系统命令并检查 token。系统命令与同 frame 普通阶段冲突时，invalidation 优先；一个 group 内不允许部分取消。线性化点为 render 最终 token 检查并提交 group execution 状态的时刻。取消方收到 receipt 前只能报告 `cancel_requested`；若 execution 已赢得线性化，返回 `too_late` 加实际执行 frame，不能承诺“未听到”。不可只改 Control 内存或撤回 unpublished block。
+
+`commit_horizon` 为 renderer 已进入/完成不可撤销混音的 exclusive frame 上界，含 adapter 已生成尚未交付的 PCM；published/acquired 但未到执行点不自动属于 horizon。新控制命令最早在 render 报告的可接收 frame 执行，Control 预留 lead/capacity，遇到竞争返回实际 acceptance/late 结果，不修改过去的 PCM。普通 supersede 不删除已渲染声音；普通music stop/pause/reload不flush混有SFX的pending PCM，只有device discontinuity执行device-epoch flush；紧急 stop 使用最早安全 frame 的短 ramp，pause 在确认 frame 冻结音乐 cursor，同时 SFX/render_frame 继续。
+
+多 fill route 的每个交接阶段独立 receipt，route 的已发生声音不能回滚。supersede/stop/pause/reload 必须取消旧 epoch 中所有未来 fill/target/automation，然后根据最后实际执行 phase 和尚活跃 groups 重算；若中途无合法续接，用显式 resident emergency 或受控 stop，不能重新发旧 source 或幽灵 target。pause 恢复创建新 epoch 并重新安排未执行阶段；reload 默认让已启动旧代 group 持 lease 收尾，禁止未来旧 plan 阶段启动。TASK-002/009/014/016 共同验证取消在发布前、获取后、首 fill 中、target entry 前后及同 frame 竞争；每一 phase 要么一次 executed，要么一次 cancelled，不可两者兼有。
 
 ## 7. 垂直分层与 Voice Group
 
@@ -709,7 +739,7 @@ initial_segment = "explore_loop"
 
 [[segments]]
 id = "explore_loop"
-loop_frames = [0, 384000]
+loop_frames = [0, 365714]
 tempo_map = "explore_tempo"
 
 [[tempo_maps]]
@@ -721,7 +751,10 @@ start_tick = 0
 end_tick = 15360
 start_bpm = 120.0
 end_bpm = 132.0
-curve = "linear"
+curve = "linear_seconds"
+# 16 quarter notes: T=120*16/(120+132)=160/21 s, 48k endpoint=365714.285714…
+# explicit loop endpoint anchor rounds to 365714, residual -2/7 sample (<1 sample)
+end_anchor_frame = 365714
 
 [[tempo_maps.meters]]
 at_tick = 0
@@ -789,7 +822,7 @@ segments = ["combat_pickup"]
 
 - mono、interleaved stereo、5.1 与 7.1；
 - 声道 mask、顺序和 downmix/upmix matrix；
-- mixer 对 stereo music voice 的 render 路径；
+- mixer 对各受支持 layout 的 music voice render 路径；TASK-005同时拥有backend layout协商、channel order、按channel_count分配的FIFO与matching-layout offline WAV输出，设备不支持时显式报错或调用方选择明确矩阵转换，不能静默强制stereo；
 - 编码器 delay/padding 的导入期补偿；
 - PCM 与至少一种适合长音乐的生产 streaming codec；
 - decoder/codec 作为 git submodule，通过 Zig adapter 隔离；
@@ -840,7 +873,7 @@ Render -> Control: bounded execution receipt + atomic telemetry
 - `MusicRuntime` 持有 bank generation 引用、Director、Planner、Clock 和 groups；
 - `MusicVoiceGroup` 持有逻辑 layer handles，不拥有 sample memory；
 - voice 对 bank generation 保持强引用或等价 lease；
-- hot reload 发布新 generation，旧 generation 直到所有 plan/group/voice 释放后销毁；
+- hot reload 发布新 generation，旧 generation 直到所有 plan/block/snapshot/group/voice、worker job 与 pending PCM 引用释放并得到 drain acknowledgement 后销毁；
 - render command 只能引用在整个执行窗口内稳定的索引或 generation handle。
 
 ### 9.4 生命周期
@@ -862,6 +895,17 @@ Uninitialized
 - `Paused` 默认冻结 music clock 和 group cursor，设备仍可渲染其他 bus；
 - device lost 时记录 discontinuity。恢复策略必须由调用者选择 `resume_phase` 或 `restart_at_bar`，不能依据墙钟猜测；
 - shutdown 先拒绝新请求，再 release groups，等待非实时所有权回收；render thread 不阻塞等待 worker。
+
+
+### 9.5 生产运行时、兼容与设备恢复
+
+每个独立 runtime context 只有一个 `ControlRuntime`，其 control owner 持有主 `MusicRuntime`；对应一个 `RuntimeRenderer` 独占 mixer、scheduled execution 与单调 `render_frame`。生产路径为 `ControlRuntime -> RenderSnapshot + ScheduledCommandBlock -> RuntimeRenderer -> RuntimeFixedQuantumAdapter -> RuntimeMiniaudioBackend/RuntimeOfflineBackend`。Music 与普通 SFX 共用该 mixer、bus、voice budget 和时钟，不能把 Engine 的第二套 mixer 接到旁路。保持 `runtime-embedding-v1.md` 的公开 handle、SampleOwner、completion、thread 与 staged-shutdown 兼容；增加 versioned 扩展入口。legacy `Engine/EventRuntime` 保留独立 demo 行为；需要共存音乐的宿主通过显式 control-command adapter 迁移，不允许两条链同时驱动同一 device。
+
+render voice 必须在 snapshot lease 释放前获得资产 pin；immutable block、正在执行阶段、未消费 completion、decoder job 和 pending PCM 各自的 lease 起止均可审计。关闭顺序：拒绝新请求、取消未来 plan、短 ramp/drain、收齐 execution/completion、停止 backend/flush pending PCM、停止 worker 后由非实时 owner 回收；render 不 join/free/wait。TASK-025 先用强制交错测试核查 MPSC 序号倒置可能阻塞、未更新 snapshot 可能重启已结束 one-shot，并审计 acquireSnapshot/pin 重试上界；这是静态风险而非已复现失败。
+
+区分 `render_frame`（已混音到的 exclusive frame）、`submitted_frames`（交给 backend）、`delivered_frames`（设备已播放位置的可选观测，含quality=`exact/estimated/unavailable`与误差；未知时不得用submitted冒充）和 music cursor。callback 请求 1/127/256/300/513 frames 时 adapter 可以提前生成完整 quantum，不能把已渲染都当作已听到。PCM FIFO 标注 device/transport epoch 与 frame range。设备丢失由真实 backend notification 或独立故障注入进入 bounded control event；callback 不 reopen。Control 记录 discontinuity、失效未来 plan、停止消费旧 epoch FIFO并显式 flush；无法撤回硬件队列的尾声必须记入不确定窗口。render_frame 不倒退、不复用。
+
+默认 recovery 为最后 committed state 的严格下一个合法 bar/cue；显式 resume_phase 仅当已交付位置及其误差满足 profile 阈值、source generation/cache 有效时允许，否则明确失败或调用者允许的 restart_at_bar。重开更新 device epoch，重新预取并经同一 scheduler 启动；不得播放残余旧 PCM。TASK-014/022 必须测试 loss 位于 quantum 中间、生成领先交付、pause/stop/reload 并发、重复通知和 reopen 失败。
 
 ## 10. Ducking、Stinger 与声学输入
 
@@ -998,6 +1042,15 @@ offline 与 realtime 使用同一 trace schema。文本/JSON 序列化发生在�
 
 SME v1 作者工具和运行时调试视图必须显示 state graph、tempo/meter timeline、entry/exit cue、fill route、当前 transport、下一 transition、候选求解结果、layer/bus meters、sidechain gain reduction、stream 水位和 trace timeline。依照仓库约束，图形化工具使用 `in-dreaming/gpu`；headless CI 同时保留 JSON/CSV 输出。可视化不是替代 correctness trace，但它本身属于 v1 交付物。
 
+
+### 12.4 确定性输入与测量可信性
+
+live schedule 会受 Control acceptance frame、worker 完成/失败与 readiness、设备事件影响，单有 bank/seed/request payload 不足以保证相同决策。versioned replay input 必须记录：输入 sequence 与实际 accepted render frame/control tick、量化参数与 acoustic 输入、worker job/content/generation/ready frame/result、readiness snapshot version、device epoch/loss/reopen/flush、pause/resume、平台预算/profile、初始 save state、compiler/schema/algorithm versions。还必须记录每个command/invalidation batch的renderer admission/visibility gate：batch ID、内容hash、gate序号/frame、观察到的commit_horizon、admitted/late/rejected与稳定顺序。Control acceptance到publication之间的线程延迟可改变取消胜负，不能仅记录accepted frame。Replay按录制gate释放真实计算出的batch，再重新执行token/phase裁决，不直接注入executed/cancelled结论。wall-clock durations 只用于诊断，不参与 canonical trace。
+
+确定性保证是“相同 bank/build hash、profile、seed/save state 和完整 replay input，在支持平台得到 bit-identical canonical schedule bytes”。实时录制捕获非确定性输入；replay 在指定 frame 注入它们，不采用本次磁盘/线程的先后，不为虚构 readiness 跳过真实 PCM 准备。测试预先真实解码数据，再按日志延迟可见性；若实际资源无法在录制 ready frame 前准备，replay 明确失败而非悄悄改计划。另跑 live stress 测线程时序韧性，两种验收不可互代。TASK-004/021 保留跨平台 golden corpus 和 schema migration/reject 测试；必须强制延迟Control acceptance后publication，使cancel分别赢/输execution gate，再由同一录制输入跨线程调度复现原race winner。
+
+metrics 必须用正向故障注入证明能增长；零值本身不是无故障证据。分别定义 `stream_starvation`（缺 PCM）、`callback_deadline_miss`（callback 完成超过预算）、backend underrun（由设备报告）与 physical glitch（loopback/外部录音测得）。没有物理测量不能把软件零计数称作无物理 glitch。callback/render/control 耗时采样必须在 Windows/Linux 接通、固定开销并离线聚合；计时不可支持时 gate 明确 BLOCKED。TASK-004 提供注入/清零/单调/并发读测试；TASK-022 先故意饥饿、过载与设备丢失证明计数和事件生效，再运行 nominal 8 小时矩阵。
+
 ## 13. 验证与验收
 
 ### 13.1 单元测试
@@ -1047,7 +1100,7 @@ MusicRequest
 12. bank hot reload 时旧 group 安全播放到释放且可 rollback；
 13. capture/restore 后 state、selector history、seed 和 cue transport 连续，错误 build ID 被拒绝；
 14. 至少 8 小时 realtime/offline 压力运行无 stem skew、underrun、dropout 或泄漏；
-15. 相同 seed、bank 和请求 trace 两次渲染得到相同 schedule；允许 PCM 浮点比较使用明确容差。
+15. 相同 seed、bank/profile/save state 和 12.4 完整 replay inputs 两次渲染得到相同 schedule；允许 PCM 浮点比较使用明确容差。
 
 ### 13.3 通过标准
 
@@ -1116,12 +1169,12 @@ M5 Authoring and release closure
 
 关键依赖：
 
-- M1 依赖 engine 暴露稳定绝对 render frame；
+- M1 依赖 production RuntimeRenderer 暴露稳定绝对 render frame；TASK-025 基线验证先于 TASK-001，TASK-026 在全功能 TASK-014 之前提供真实 public-runtime 垂直切片；
 - M2 依赖 mixer 的 quantum 内 scheduled command 与原子 voice group；
-- 成品 stem 依赖 channel layout/stereo path；
+- 成品 stem 依赖 channel layout 与 matching-layout backend/offline path；
 - M3 streaming 依赖真实 worker/I/O 与预分配 ring buffer；
 - sidechain compressor 依赖 Bus DAG/effect contract；
-- authoring/可视化依赖 `in-dreaming/gpu`，并与 headless correctness gate 同时验收；
+- authoring/可视化依赖 `in-dreaming/gpu`。现有 pinned commit `8b0f2bc657775d899dc4d724918a1e6be9ffa450` 和 C-import adapter 不是完整 UI toolkit；TASK-027 交付输入事件、文本/IME、focus、文字布局/字形与控件基础和已验证的新 pin，TASK-018/019 才能集成；headless gate 不代替此依赖；
 - M5 必须使用 M0-M4 的真实 runtime/compiler，不得另写 preview mock。
 
 每个批次都应先增加自动验证，再扩大能力。M0/M1 通过不代表音频同步播放完成，M2 通过不代表 production streaming 完成，M3/M4 通过不代表 authoring/product workflow 完成。只有完整 v1 release matrix 可以关闭任务。
@@ -1134,7 +1187,7 @@ M5 Authoring and release closure
 
 理由：保持 Zig-first、可审计、可验证，并复用现有 mixer/event/bank。
 
-### ADR-SME-002：硬件 render frame 是唯一音乐时钟
+### ADR-SME-002：Runtime render frame 是唯一调度时钟
 
 决定：transition 基于绝对 sample frame，不基于游戏 delta time 或墙钟。
 
@@ -1174,15 +1227,15 @@ M5 Authoring and release closure
 
 为避免完整功能再次被实现阶段的局部选择延期，v1 冻结以下 contract：
 
-1. 每个 `Engine` 拥有一个主 `MusicRuntime` 和一个主 transport；作者预览或多设备场景通过独立 `Engine` context 隔离，不在同一 mixer 内创建竞争时钟。
+1. 每个 production runtime context 的 `ControlRuntime` 拥有一个主 `MusicRuntime`；对应 `RuntimeRenderer` 独占 mixer、scheduler 和 render clock。作者预览/多设备使用独立 runtime context，legacy Engine 按 9.5 兼容迁移。
 2. Music request 使用独立的 bounded control queue；最终渲染命令编译进引擎统一 `ScheduledCommandBlock`，与 voice/bus 命令共享绝对 frame 排序。
 3. `ChannelLayout` 支持 mono、stereo、5.1、7.1 和显式 channel mask；未知布局加载失败。
-4. Resident PCM 与 Ogg Opus 是 v1 必需格式。`libopus`、`libogg` 以 git submodule 引入，Zig adapter 负责 demux/decode、pre-skip、end padding 和 sample-accurate seek。增加其他 codec 不得改变 Music Bank 语义。
+4. Resident PCM 与 Ogg Opus 是 v1 必需格式。`libopus`、`libogg` 以 git submodule 引入，Zig adapter 的compiler侧负责长WAV强制streaming时实际Opus encode/Ogg mux及可复现配置，播放侧负责 demux/decode、pre-skip、end padding 和 sample-accurate seek。增加其他 codec 不得改变 Music Bank 语义。
 5. Music/SFX voice 预算由 platform profile 编译进 bank；base music layer 和 dialogue 属于保护类，可选 music layer 按 `drop_rank` virtualize，所有抢占都写 trace。
 6. Pause 默认冻结 transport/cursor；device lost 后默认从最后 committed state 的下一个合法 bar/cue 重新进入。API 可显式请求 `resume_phase`，但必须在 stream/cache 仍有效时才允许。
 7. 作者源格式采用版本化、可 diff 的 TOML project + 独立音频文件；`tools/sme_authoring` 与 CLI compiler 读写同一 schema，compiled binary bank 是唯一 runtime 输入。
 8. Bank 采用 `major.minor` schema：major 不兼容即拒绝，minor 通过 capability bits 前向检查。公共 ID 延续 FNV-1a 64 并在构建时检测冲突；整包使用 SHA-256 content hash 与单调 generation。
-9. 调度 trace 必须跨平台 bit-identical；同 backend/target 的 offline PCM 以逐 sample `1e-6` 绝对误差和汇总 peak/RMS 容差校验，不把跨 SIMD/backend PCM bit-identical 作为错误承诺。
+9. 给定 12.4 的完整 versioned replay inputs，canonical 调度 trace 必须跨平台 bit-identical；同 backend/target 的 offline PCM 以逐 sample `1e-6` 绝对误差和汇总 peak/RMS 容差校验，不把跨 SIMD/backend PCM bit-identical 作为错误承诺。
 10. v1 同时交付 Bus DAG、state automation ducking 与真实 signal sidechain compressor；两者使用独立 telemetry，不得互相冒充。
 11. 完整 authoring 与调试 UI 使用 `in-dreaming/gpu`；headless CLI/compiler/validator 不依赖 GPU，并与 UI 共享核心库。
 12. v1 release 必须完成 M0-M5。feature flag 只能控制运行时启用，不得用于发布一个缺表、缺 codec、缺 streaming、缺 sidechain 或缺作者工具的“精简 v1”。
@@ -1198,3 +1251,10 @@ M5 Authoring and release closure
 - `docs/design/audio-zig-api.md`：Zig-first 公共 API 与模块边界。
 - `docs/tasks/asetup.md`：第三方、语言、fallback、anti-mock 和可视化硬约束。
 - `docs/product-readiness-roadmap.md`：当前 prototype 限制与发布 gate。
+
+
+## 18. 修订追踪与工程默认值
+
+TASK 编排、contract/implementation/integration edges、全部验收映射见 `../tasks_sme/setup.md` 及其 `dependencies.json`。TASK-001 起持续 CI，TASK-026 提早验证真实 public backend；最终 TASK-021 仍覆盖完整矩阵，不缩小 v1。工程默认值（tempo 单位/分组/ramp/rounding、单 runtime owner、取消协议）由本修订提出供技术评审，不表示新增用户产品选择。matching-layout 多声道输出仍在 v1 内；若要仅保留 stereo 是需单独批准的产品范围变更，不能由实现者默认裁掉。UI 缺口必须补齐或阻塞 release，不得换 RHI。
+
+资产验收责任：TASK-003 定义 sample-rate conversion/analysis/resident budget/index schema；TASK-010 实现 codec priming 和 seek packet 数据；TASK-010 compiler library 实现确定性 SRC、loop DC/边界连续性、true peak/RMS/integrated loudness、size gate 与 chunk/seek index producer；TASK-017 只调用同一管线并暴露诊断；TASK-011 消费校验 index，TASK-021 用独立 reference/故障资产做最终 gate。分析发生在编译/worker，不进 render。

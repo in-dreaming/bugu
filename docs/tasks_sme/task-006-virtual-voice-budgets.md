@@ -8,8 +8,8 @@
 - 评审角色：实时安全、预算策略、QA
 - 工作量等级：`M`
 - 证据路径：`docs/validation/sme/TASK-006/evidence.md`（脱敏摘要）、`zig-out/sme-validation/TASK-006/`（原始产物）
-- 执行波次：3
-- 硬依赖：TASK-004、TASK-005
+- 执行波次：6
+- 硬依赖：TASK-004、TASK-005、TASK-011
 - 协作关系：TASK-012 提供 layer target；TASK-014 管理 runtime；PlatformProfile 来自 TASK-003
 - 预计改动范围：`src/mixer/virtual_voice.zig`（新增）、`src/mixer/music_group.zig`、`src/mixer/mixer.zig`、`tests/sme/virtual_voice_test.zig`
 
@@ -22,6 +22,7 @@
 ## 前置条件
 - atomic group 和 channel contract 已实现。
 - trace/telemetry 可记录 state transition。
+- TASK-011 的真实 `seek/prepare`、generation/job ticket、readiness snapshot 和 PCM ring 已完成；只用预加载 PCM 或 seek stub 不足以开始本任务的 streaming realize 验收。
 
 ## 实施范围
 ### 必须完成
@@ -42,6 +43,8 @@
 3. optional layer 可 virtualize，再按 profile 明确 drop。
 4. 同分 tie-break 使用 stable layer ID，保证 replay；排序 tuple 固定为 protection class、authored priority、smoothed audibility、drop rank、stable layer ID，并明确每项升/降序。
 5. telemetry 区分 virtualized、realized、dropped、stolen。
+6. virtual stream 的 seek intent 使用目标 `(generation, group, layer, loop_epoch, cursor, realize_frame)`；worker completion 必须经 TASK-011/TASK-004 记录并在 control 边界接受。realize 只在 real slot 和目标 frame 对应 PCM window 同时预留后原子提交。准备迟到则保留 virtual 并重新预测未来 group cursor，不能播放旧 seek 位置、追墙钟或先 real 后补数据。
+7. 实体化前 group 已 loop/seek/pause、job 被取消或 generation 改变时丢弃旧 ticket；required layer 无法满足最小集合沿显式 transition failure/emergency 路径，optional layer 的 deferred/dropped 原因写 trace。
 
 ## 接口与数据契约
 `PlatformProfile` 含 max real/virtual/groups/stingers、resident/stream bytes、audibility window、realize/virtualize threshold、hysteresis 和最小保持 frames；初始化验证 threshold 顺序与所有容量乘法。`VoiceBudgetExceeded` 必须带 reason enum 和所需/可用数量进入 trace。
@@ -54,12 +57,14 @@
 ### 自动化验证
 - `zig build test`。
 - release profile exact 值、budget 边界、audibility oracle、hysteresis、base protection、deterministic tie-break、virtual 100 bars 后 realize cursor 0 skew、seek failure。
+- 真实长 Opus streaming 经至少 100 bars virtual 后 prepare/seek/realize，在完成早/晚、ring wrap、seek 后 loop、pause/resume、cancel/unload、worker completion 逆序时逐 sample 验证 realized cursor 与 group 0 skew；相同已记录 readiness/completion 输入重放相同实体化 frame。
 ### 手工验证
 - 不需要。
 ### 边界与失败场景
 - virtual capacity 也满；required layer 被错误 drop；generation 已回收。
 
 ## 完成定义
+- [ ] 本任务已交付测试/fixture 通过 TASK-001 的稳定注册 seam 加入既有 `zig build test`/PR gate，证据随子交付持续产生，不等待 TASK-021 首次接入 CI。
 - [ ] virtual voice 不执行 sample DSP但推进全部逻辑时间。
 - [ ] realize 与 group cursor 对齐。
 - [ ] profile/保护/drop 均有 trace。
@@ -69,7 +74,9 @@
 ## 活动日志
 
 - 2026-07-28：根据评审报告完成规格收口；状态保持 `TODO`，未开始代码实施。
+- 2026-10-09：补齐实际依赖、量化/输入契约、独立审查产物与持续 gate；仅修订任务文档，状态保持 `TODO`。
 
 ## 风险与注意事项
 不要在 render thread计算 audibility 排序；避免 O(N log N) 和不可预测分配。
+
 
