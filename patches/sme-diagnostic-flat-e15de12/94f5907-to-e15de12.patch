@@ -1,0 +1,830 @@
+diff --git a/src/music/live_bootstrap_test_binding.zig b/src/music/live_bootstrap_test_binding.zig
+index c717a69..2c4f36b 100644
+--- a/src/music/live_bootstrap_test_binding.zig
++++ b/src/music/live_bootstrap_test_binding.zig
+@@ -354,7 +354,7 @@ pub const Session = struct {
+             service.public_causal_exclusion != null or
+             service.public_causal_consumed_sink != null or service.offline_causal_replay != null or
+             service.test_consumed_hook != null or service.test_readiness_hook != null or
+-            service.test_availability_hook != null or service.test_supply_hook != null or
++            service.test_availability_hook != null or service.test_supply_hook != null or service.test_supply_return_hook != null or
+             service.test_frontier_hook != null or service.test_worker_hook != null or
+             service.test_worker_stage_hook != null or service.test_publication_hook != null or
+             service.next_generation != 1 or service.next_job != 1 or service.next_snapshot != 1 or
+diff --git a/src/music/resident_runtime.zig b/src/music/resident_runtime.zig
+index 230bde8..9f34a2e 100644
+--- a/src/music/resident_runtime.zig
++++ b/src/music/resident_runtime.zig
+@@ -750,7 +750,7 @@ pub const MusicRuntime = struct {
+             if (host) try session.validatePublishedBorrowSet(self, service) else try session.validateBorrowSet(self, service);
+             if (self.control.streaming_service != service or !service.runtime_attached or service.public_causal_exclusion != null or
+                 service.test_consumed_hook != null or service.test_readiness_hook != null or service.test_availability_hook != null or
+-                service.test_supply_hook != null or service.test_frontier_hook != null or service.test_worker_hook != null or
++                service.test_supply_hook != null or service.test_supply_return_hook != null or service.test_frontier_hook != null or service.test_worker_hook != null or
+                 service.test_worker_stage_hook != null or service.test_publication_hook != null) return error.InvalidMode;
+             if (self.test_collect_hook != null or self.test_tick_hook != null or self.test_load_hook != null or
+                 self.test_source_observation_unavailable or self.ingress.test_hook != null or self.observer_storage != null or self.observer_handle != null or
+@@ -11420,7 +11420,7 @@ pub const MusicRuntime = struct {
+             service.offline_causal_replay != null or service.replay_mode or
+             (session.bootstrap == null and (service.prerequisite_order_mode != .prerequisite or service.live_slot_guard_points or service.live_availability_points)) or
+             (session.bootstrap == null and (service.test_checkpoint_hook != null or service.test_worker_clock_hook != null or service.test_acceptance_hook != null)) or service.test_consumed_hook != null or
+-            service.test_readiness_hook != null or service.test_availability_hook != null or service.test_supply_hook != null or service.test_frontier_hook != null or
++            service.test_readiness_hook != null or service.test_availability_hook != null or service.test_supply_hook != null or service.test_supply_return_hook != null or service.test_frontier_hook != null or
+             service.test_worker_hook != null or service.test_worker_stage_hook != null or service.test_publication_hook != null) return error.DrainPending;
+         if (session.hasNativeBorrow()) try session.validateNativeFinal();
+         if (session.bootstrap != null and session.phase.load(.acquire) != .borrow_ended) {
+diff --git a/src/streaming/music_stream.zig b/src/streaming/music_stream.zig
+index d55e681..de47c80 100644
+--- a/src/streaming/music_stream.zig
++++ b/src/streaming/music_stream.zig
+@@ -62,6 +62,22 @@ pub const TestSupplyPoint = struct {
+     job_slot: ?u16 = null,
+     job: ?u64 = null,
+ };
++/// Passive test-only terminal observation. Null/false means the original path
++/// did not acquire that field. A nested request returns before its prefetch.
++/// Callbacks must copy synchronously, never reenter or mutate this Service.
++pub const TestSupplyReturn = struct {
++    operation: enum { prefetch, request },
++    handle: Handle,
++    nested_prefetch: bool = false,
++    reason: enum { unobserved, lookup_error, availability_error, high_water, before_lead, above_low_water, nested_request, cancelled, stopped, failed, pending, coordinate_unavailable, zero_count, job_id_exhausted, job_capacity, descriptor_error, queued } = .unobserved,
++    available: ?u64 = null,
++    pending_observed: bool = false,
++    pending_job: ?u16 = null,
++    job_slot: ?u16 = null,
++    job: ?u64 = null,
++    deferred: ?LiveObservationDeferV1 = null,
++    returned_error: ?Error = null,
++};
+ pub const AvailabilityHook = struct { context: *anyopaque, call: *const fn (*anyopaque, AvailabilityStage, u64) void };
+ pub const Consumed = ring.Consumed;
+ pub const ConsumedRange = ring.ConsumedRange;
+@@ -573,6 +589,7 @@ pub const Service = struct {
+     test_readiness_hook: if (@import("builtin").is_test) ?readiness_observation.ReadHook else void = if (@import("builtin").is_test) null else {},
+     test_availability_hook: if (@import("builtin").is_test) ?AvailabilityHook else void = if (@import("builtin").is_test) null else {},
+     test_supply_hook: if (@import("builtin").is_test) ?struct { context: *anyopaque, call: *const fn (*anyopaque, TestSupplyPoint) void } else void = if (@import("builtin").is_test) null else {},
++    test_supply_return_hook: if (@import("builtin").is_test) ?struct { context: *anyopaque, call: *const fn (*anyopaque, TestSupplyReturn) void } else void = if (@import("builtin").is_test) null else {},
+     test_frontier_hook: if (@import("builtin").is_test) ?readiness_observation.FrontierHook else void = if (@import("builtin").is_test) null else {},
+     /// Deterministic race barrier, compiled out of shipping service state.
+     test_worker_hook: if (@import("builtin").is_test) ?struct { context: *anyopaque, call: *const fn (*anyopaque, u64) void } else void = if (@import("builtin").is_test) null else {},
+@@ -1060,6 +1077,12 @@ pub const Service = struct {
+         return .{ .submitted = submitted };
+     }
+     fn prefetchObserved(self: *Service, handle: Handle, observed_control_frame: u64, live: ?*?LiveObservationDeferV1, latest_completed: bool) Error!?u64 {
++        var diagnostic: if (@import("builtin").is_test) TestSupplyReturn else void = if (@import("builtin").is_test) .{ .operation = .prefetch, .handle = handle } else {};
++        defer if (@import("builtin").is_test) if (self.test_supply_return_hook) |hook| hook.call(hook.context, diagnostic);
++        errdefer |err| if (@import("builtin").is_test) {
++            diagnostic.returned_error = err;
++            if (live) |witness| diagnostic.deferred = witness.*;
++        };
+         const sink = self.readiness_supply_sink;
+         const observed = if (sink) |value| value.begin(value.context, .prefetch, handle, observed_control_frame, 0) else null;
+         var observation_open = observed != null;
+@@ -1069,9 +1092,13 @@ pub const Service = struct {
+         errdefer |err| if (observation_open) {
+             observed.?.error_code = @intFromError(err);
+         };
+-        const slot = try self.get(handle);
++        const slot = self.get(handle) catch |err| {
++            if (@import("builtin").is_test) diagnostic.reason = .lookup_error;
++            return @as(Error!?u64, err);
++        };
+         if (@import("builtin").is_test) if (self.test_supply_hook) |hook| hook.call(hook.context, .{ .stage = .prefetch_begin, .handle = handle });
+         const available = self.controlAvailableObserved(slot, if (latest_completed) null else observed_control_frame, if (observed) |value| &value.availability else null, .readiness, live) catch |err| {
++            if (@import("builtin").is_test) diagnostic.reason = .availability_error;
+             // This failure belongs to prefetch's own read, not a later nested
+             // request read. Keep the actual absent exact-frame requirement.
+             if (latest_completed) if (live) |witness| if (witness.*) |*value| {
+@@ -1079,17 +1106,25 @@ pub const Service = struct {
+             };
+             return @as(Error!?u64, err);
+         };
++        if (@import("builtin").is_test) diagnostic.available = available;
+         if (available >= self.profile.high_frames) {
++            if (@import("builtin").is_test) diagnostic.reason = .high_water;
+             slot.filling = false;
+             return null;
+         }
+         switch (slot.options.priority) {
+             .imminent_target_fill, .virtual_soon_realize => {
+-                if (observed_control_frame < slot.options.deadline_frame -| self.profile.prefetch_lead_frames) return null;
++                if (observed_control_frame < slot.options.deadline_frame -| self.profile.prefetch_lead_frames) {
++                    if (@import("builtin").is_test) diagnostic.reason = .before_lead;
++                    return null;
++                }
+                 slot.filling = true;
+             },
+             .active_required, .optional => {
+-                if (!slot.filling and available >= self.profile.low_frames) return null;
++                if (!slot.filling and available >= self.profile.low_frames) {
++                    if (@import("builtin").is_test) diagnostic.reason = .above_low_water;
++                    return null;
++                }
+                 slot.filling = true;
+             },
+         }
+@@ -1099,14 +1134,23 @@ pub const Service = struct {
+             parent = sink.?.finish(sink.?.context);
+             observation_open = false;
+         }
+-        return self.requestObserved(handle, parent, live);
++        if (@import("builtin").is_test) diagnostic.reason = .nested_request;
++        const result = try self.requestObserved(handle, parent, live, if (@import("builtin").is_test) true else {});
++        if (@import("builtin").is_test) diagnostic.job = result;
++        return result;
+     }
+ 
+     /// Single Control owner, at most one outstanding job per stream.
+     pub fn request(self: *Service, handle: Handle) Error!?u64 {
+-        return self.requestObserved(handle, 0, null);
+-    }
+-    fn requestObserved(self: *Service, handle: Handle, parent: u64, live: ?*?LiveObservationDeferV1) Error!?u64 {
++        return self.requestObserved(handle, 0, null, if (@import("builtin").is_test) false else {});
++    }
++    fn requestObserved(self: *Service, handle: Handle, parent: u64, live: ?*?LiveObservationDeferV1, nested_prefetch: if (@import("builtin").is_test) bool else void) Error!?u64 {
++        var diagnostic: if (@import("builtin").is_test) TestSupplyReturn else void = if (@import("builtin").is_test) .{ .operation = .request, .handle = handle, .nested_prefetch = nested_prefetch } else {};
++        defer if (@import("builtin").is_test) if (self.test_supply_return_hook) |hook| hook.call(hook.context, diagnostic);
++        errdefer |err| if (@import("builtin").is_test) {
++            diagnostic.returned_error = err;
++            if (live) |witness| diagnostic.deferred = witness.*;
++        };
+         const sink = self.readiness_supply_sink;
+         const observed = if (sink) |value| value.begin(value.context, .request, handle, null, parent) else null;
+         defer if (observed != null) {
+@@ -1115,44 +1159,77 @@ pub const Service = struct {
+         errdefer |err| if (observed) |value| {
+             value.error_code = @intFromError(err);
+         };
+-        const slot = try self.get(handle);
++        const slot = self.get(handle) catch |err| {
++            if (@import("builtin").is_test) diagnostic.reason = .lookup_error;
++            return @as(Error!?u64, err);
++        };
+         if (@import("builtin").is_test) if (self.test_supply_hook) |hook| hook.call(hook.context, .{ .stage = .request_begin, .handle = handle });
+         const cancelled = slot.cancel.load(.acquire);
+         if (observed) |value| {
+             value.reached |= readiness_observation.bit(.request_cancel);
+             value.cancel = cancelled;
+         }
+-        if (cancelled) return error.InvalidState;
++        if (cancelled) {
++            if (@import("builtin").is_test) diagnostic.reason = .cancelled;
++            return error.InvalidState;
++        }
+         const stopped = slot.pcm_ring.stopped.load(.acquire);
+         if (observed) |value| {
+             value.reached |= readiness_observation.bit(.request_stopped);
+             value.stopped = stopped;
+         }
+-        if (stopped) return error.InvalidState;
++        if (stopped) {
++            if (@import("builtin").is_test) diagnostic.reason = .stopped;
++            return error.InvalidState;
++        }
+         const failed = slot.failed;
+         if (observed) |value| {
+             value.reached |= readiness_observation.bit(.request_failed);
+             value.failure_code = @intFromEnum(failed);
+         }
+-        if (failed != .none) return error.InvalidState;
++        if (failed != .none) {
++            if (@import("builtin").is_test) diagnostic.reason = .failed;
++            return error.InvalidState;
++        }
+         const pending = slot.pending_job;
+         if (observed) |value| {
+             value.reached |= readiness_observation.bit(.request_pending);
+             value.pending_job = pending;
+         }
+-        if (pending != null) return null;
+-        const available = try self.controlAvailableObserved(slot, null, if (observed) |value| &value.availability else null, .readiness, live);
+-        if (available >= self.profile.high_frames) return null;
++        if (@import("builtin").is_test) {
++            diagnostic.pending_observed = true;
++            diagnostic.pending_job = pending;
++        }
++        if (pending != null) {
++            if (@import("builtin").is_test) diagnostic.reason = .pending;
++            return null;
++        }
++        const available = self.controlAvailableObserved(slot, null, if (observed) |value| &value.availability else null, .readiness, live) catch |err| {
++            if (@import("builtin").is_test) diagnostic.reason = .availability_error;
++            return @as(Error!?u64, err);
++        };
++        if (@import("builtin").is_test) diagnostic.available = available;
++        if (available >= self.profile.high_frames) {
++            if (@import("builtin").is_test) diagnostic.reason = .high_water;
++            return null;
++        }
+         const ordinal = slot.pcm_ring.produced.load(.monotonic);
+         if (observed) |value| {
+             value.reached |= readiness_observation.bit(.request_ordinal);
+             value.ordinal = ordinal;
+         }
+-        const coordinate = slot.pcm_ring.coordinate(ordinal) orelse return null;
++        const coordinate = slot.pcm_ring.coordinate(ordinal) orelse {
++            if (@import("builtin").is_test) diagnostic.reason = .coordinate_unavailable;
++            return null;
++        };
+         const remaining = (if (slot.options.loop) |loop| loop.end else slot.asset.sound.frames) - coordinate.cursor;
+         const count: u32 = @intCast(@min(remaining, @min(self.profile.decode_chunk_frames, self.profile.high_frames - available)));
+-        if (count == 0 or self.next_job == std.math.maxInt(u64)) return error.InvalidState;
++        if (count == 0 or self.next_job == std.math.maxInt(u64)) {
++            if (@import("builtin").is_test) diagnostic.reason = if (count == 0) .zero_count else .job_id_exhausted;
++            return error.InvalidState;
++        }
+         if (self.free_job_count == 0) {
++            if (@import("builtin").is_test) diagnostic.reason = .job_capacity;
+             self.job_overflows +|= 1;
+             return error.JobCapacity;
+         }
+@@ -1169,7 +1246,10 @@ pub const Service = struct {
+         job.hash = @splat(0);
+         job.elapsed_ns = 0;
+         job.descriptor = .{ .job = self.next_job, .asset = slot.asset.sound.key.id, .generation = slot.options.generation, .transport_epoch = slot.options.transport_epoch, .operation = if (ordinal == 0) slot.options.operation else .decode, .group = slot.options.group, .layer = slot.options.layer, .loop_epoch = coordinate.loop_epoch, .target_cursor = coordinate.cursor, .realize_frame = slot.options.deadline_frame };
+-        job.descriptor_len = (trace.replay.encodeJobDescriptor(&job.descriptor_bytes, job.descriptor) catch return error.InvalidState).len;
++        job.descriptor_len = (trace.replay.encodeJobDescriptor(&job.descriptor_bytes, job.descriptor) catch {
++            if (@import("builtin").is_test) diagnostic.reason = .descriptor_error;
++            return @as(Error!?u64, error.InvalidState);
++        }).len;
+         slot.pending_job = @intCast(job_index);
+         self.free_job_count -= 1;
+         self.next_job += 1;
+@@ -1186,6 +1266,11 @@ pub const Service = struct {
+             value.result_job = queued_descriptor.job;
+         }
+         if (@import("builtin").is_test) if (self.test_supply_hook) |hook| hook.call(hook.context, .{ .stage = .request_queued, .handle = handle, .job_slot = job_index, .job = queued_descriptor.job });
++        if (@import("builtin").is_test) {
++            diagnostic.reason = .queued;
++            diagnostic.job_slot = job_index;
++            diagnostic.job = queued_descriptor.job;
++        }
+         return queued_descriptor.job;
+     }
+     fn before(a: *const Job, b: *const Job) bool {
+@@ -2198,7 +2283,7 @@ pub const Service = struct {
+         if (comptime @import("builtin").is_test) {
+             if (self.test_checkpoint_hook != null or self.test_worker_clock_hook != null or
+                 self.test_consumed_hook != null or self.test_readiness_hook != null or
+-                self.test_availability_hook != null or self.test_supply_hook != null or
++                self.test_availability_hook != null or self.test_supply_hook != null or self.test_supply_return_hook != null or
+                 self.test_frontier_hook != null or self.test_worker_hook != null or
+                 self.test_worker_stage_hook != null or self.test_acceptance_hook != null or
+                 self.test_publication_hook != null) return error.InvalidState;
+diff --git a/tests/sme/author_live_default_chronology_test.zig b/tests/sme/author_live_default_chronology_test.zig
+index ae6313a..3db5138 100644
+--- a/tests/sme/author_live_default_chronology_test.zig
++++ b/tests/sme/author_live_default_chronology_test.zig
+@@ -50,6 +50,70 @@ fn launch(bytes: []const u8) live.Launch {
+     std.crypto.hash.sha2.Sha256.hash(f.authored_source, &hash, .{});
+     return .{ .document_id = 19, .revision = 7, .draft_hash = hash, .state = f.state, .compiled = bytes };
+ }
++// Stable diagnostic text v1. Only owned typed fields are accepted: no pointer
++// or free-string formatter can hide data or insert unescaped token separators.
++// Dotted keys, explicit optional presence/null, tagged payloads, decimal scalar
++// values, enum name+code, and complete lowercase hex bytes have no depth limit.
++const FlatDiagnostic = struct {
++    fn fields(writer: *std.Io.Writer, comptime key: []const u8, value: anytype) std.Io.Writer.Error!void {
++        @setEvalBranchQuota(100_000);
++        const T = @TypeOf(value);
++        switch (@typeInfo(T)) {
++            .bool => try writer.print(" {s}={}", .{ key, value }),
++            .int, .comptime_int => try writer.print(" {s}={d}", .{ key, value }),
++            .float, .comptime_float => try writer.print(" {s}={d}", .{ key, value }),
++            .@"enum" => try writer.print(" {s}={s} {s}.code={d}", .{ key, std.enums.tagName(T, value) orelse "unnamed", key, @intFromEnum(value) }),
++            .error_set => try writer.print(" {s}={s}", .{ key, @errorName(value) }),
++            .optional => {
++                try writer.print(" {s}.present={}", .{ key, value != null });
++                if (value) |child| try fields(writer, key, child) else try writer.print(" {s}=null", .{key});
++            },
++            .@"struct" => |info| inline for (info.fields) |field| {
++                try fields(writer, key ++ "." ++ field.name, @field(value, field.name));
++            },
++            .@"union" => |info| {
++                const Tag = info.tag_type orelse @compileError("diagnostic unions must be tagged");
++                const tag = std.meta.activeTag(value);
++                try writer.print(" {s}.tag={s}", .{ key, @tagName(tag) });
++                inline for (info.fields) |field| {
++                    if (tag == @field(Tag, field.name)) try fields(writer, key ++ "." ++ field.name, @field(value, field.name));
++                }
++            },
++            .array => |info| {
++                if (info.child == u8) {
++                    try writer.print(" {s}=", .{key});
++                    for (value) |byte| try writer.print("{x:0>2}", .{byte});
++                } else {
++                    inline for (0..info.len) |i| {
++                        try fields(writer, std.fmt.comptimePrint("{s}[{d}]", .{ key, i }), value[i]);
++                    }
++                }
++            },
++            .void => try writer.print(" {s}=void", .{key}),
++            else => @compileError("unsupported diagnostic field type: " ++ @typeName(T)),
++        }
++    }
++    fn line(writer: *std.Io.Writer, comptime marker: []const u8, comptime key: []const u8, value: anytype) std.Io.Writer.Error!void {
++        try writer.writeAll(marker ++ " schema=1");
++        try fields(writer, key, value);
++        try writer.writeByte('\n');
++    }
++    // All callers are post-join paths. Buffering streams to stderr; there is no
++    // fixed output-length cap or allocator, and writer errors are not success.
++    fn stderrLine(comptime marker: []const u8, comptime key: []const u8, value: anytype) void {
++        var buffer: [1024]u8 = undefined;
++        const stderr = std.debug.lockStderr(&buffer);
++        defer std.debug.unlockStderr();
++        const writer = &stderr.file_writer.interface;
++        const result: std.Io.Writer.Error!void = blk: {
++            line(writer, marker, key, value) catch |err| break :blk err;
++            break :blk writer.flush();
++        };
++        result catch {
++            stderr.file_writer.interface.writeAll("\nDEFAULT_HOST_DIAGNOSTIC_WRITE_ERROR schema=1 output_incomplete=true\n") catch {};
++        };
++    }
++};
+ const Pcm = struct {
+     const Record = struct { epoch: u64, first: u64, offset: usize, frames: usize, thread: u64 };
+     /// Callback-owned scalars only. Preserve the first failure before publishing
+@@ -110,8 +174,7 @@ const Pcm = struct {
+         _ = self.callbacks.fetchAdd(1, .release);
+     }
+     fn reportFailureAfterJoin(self: *const Pcm) void {
+-        if (self.failure) |value|
+-            std.debug.print("DEFAULT_HOST_PCM_CAPACITY_OR_SHAPE {any}\n", .{value});
++        FlatDiagnostic.stderrLine("DEFAULT_HOST_PCM_CAPACITY_OR_SHAPE", "failure", self.failure);
+     }
+     fn check(self: *const Pcm, oracle: *const f.Oracle, play: u64, stop: u64, closed: live.Status) !void {
+         if (self.failed.load(.acquire)) return error.DefaultPcmCapacityOrShape;
+@@ -229,6 +292,7 @@ const NativeDiagnostics = struct {
+         position: Position,
+         value: union(enum) {
+             supply: Supply,
++            supply_return: stream.TestSupplyReturn,
+             acceptance: Acceptance,
+             public_worker: trace.schema.Worker,
+             admission: trace.schema.Admission,
+@@ -236,6 +300,8 @@ const NativeDiagnostics = struct {
+         },
+     };
+     const WorkerEvent = struct { kind: enum { running, completed }, job: u64, identity: ?JobIdentity = null };
++    const ControlTail = DiagnosticTail(ControlEvent, control_capacity);
++    const WorkerTail = DiagnosticTail(WorkerEvent, worker_capacity);
+     // Set on Control before worker_ready, then immutable. Service is installed
+     // by the initial load Worker before its actual load.completed release.
+     owner: ?*f.music.MusicRuntime = null,
+@@ -243,8 +309,8 @@ const NativeDiagnostics = struct {
+     installed: bool = false, // Worker only until joins.
+     setup_failed: bool = false, // Worker only until joins.
+     worker_identity_missing: u64 = 0,
+-    control: DiagnosticTail(ControlEvent, control_capacity) = .{},
+-    worker: DiagnosticTail(WorkerEvent, worker_capacity) = .{},
++    control: ControlTail = .{},
++    worker: WorkerTail = .{},
+     first_control_failure: ?struct { next_ordinal: u64, position: Position, failure: anyerror } = null,
+     control_after_failure_omitted: u64 = 0,
+ 
+@@ -270,6 +336,7 @@ const NativeDiagnostics = struct {
+         }
+         self.service = service;
+         service.test_supply_hook = .{ .context = self, .call = supply };
++        service.test_supply_return_hook = .{ .context = self, .call = supplyReturn };
+         service.test_worker_hook = .{ .context = self, .call = running };
+         service.test_worker_stage_hook = .{ .context = self, .call = workerStage };
+         self.installed = true;
+@@ -303,6 +370,12 @@ const NativeDiagnostics = struct {
+         }
+         self.appendControl(.{ .position = self.position(), .value = .{ .supply = value } });
+     }
++    fn supplyReturn(raw: *anyopaque, value: stream.TestSupplyReturn) void {
++        const self: *NativeDiagnostics = @ptrCast(@alignCast(raw));
++        // The Service supplies only owned facts from reached locals. In
++        // particular, null availability is not a measured zero.
++        self.appendControl(.{ .position = self.position(), .value = .{ .supply_return = value } });
++    }
+     fn running(raw: *anyopaque, id: u64) void {
+         const self: *NativeDiagnostics = @ptrCast(@alignCast(raw));
+         var value: WorkerEvent = .{ .kind = .running, .job = id };
+@@ -357,12 +430,36 @@ const NativeDiagnostics = struct {
+             else => {},
+         };
+     }
+-    fn reportAfterJoin(self: *const NativeDiagnostics) void {
++    fn writeControlEvent(writer: *std.Io.Writer, entry: ControlTail.Entry) std.Io.Writer.Error!void {
++        try writer.print("DEFAULT_HOST_CONTROL_EVENT schema=1 ordinal={d}", .{entry.ordinal});
++        try FlatDiagnostic.fields(writer, "position", entry.value.position);
++        try FlatDiagnostic.fields(writer, "event", entry.value.value);
++        try writer.writeByte('\n');
++    }
++    fn writeWorkerEvent(writer: *std.Io.Writer, entry: WorkerTail.Entry) std.Io.Writer.Error!void {
++        try writer.print("DEFAULT_HOST_WORKER_EVENT schema=1 ordinal={d}", .{entry.ordinal});
++        try FlatDiagnostic.fields(writer, "event", entry.value);
++        try writer.writeByte('\n');
++    }
++    fn writeAfterJoin(self: *const NativeDiagnostics, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+         const incomplete = !self.installed or self.setup_failed or self.worker_identity_missing != 0 or self.control.overwritten != 0 or self.worker.overwritten != 0 or self.control.counter_exhausted or self.worker.counter_exhausted or self.control_after_failure_omitted != 0;
+-        std.debug.print("DEFAULT_HOST_EVENT_TAIL selected_hooks_only=true global_order=false replay_certificate=false per_prefetch_return_unobserved=true missing_request_reason_unclassified=true worker_lookup_max_slots=256 timing_perturbation=true incomplete={} storage_bytes={d} installed={} setup_failed={} worker_identity_missing={d} control_capacity={d} control_retained={d} control_next={d} control_overwritten={d} control_counter_exhausted={} control_after_failure_omitted={d} worker_capacity={d} worker_retained={d} worker_next={d} worker_overwritten={d} worker_counter_exhausted={}\n", .{ incomplete, @sizeOf(NativeDiagnostics), self.installed, self.setup_failed, self.worker_identity_missing, control_capacity, self.control.len, self.control.next, self.control.overwritten, self.control.counter_exhausted, self.control_after_failure_omitted, worker_capacity, self.worker.len, self.worker.next, self.worker.overwritten, self.worker.counter_exhausted });
+-        if (self.first_control_failure) |value| std.debug.print("DEFAULT_HOST_EVENT_FAILURE {any}\n", .{value});
+-        for (0..self.control.len) |i| std.debug.print("DEFAULT_HOST_CONTROL_EVENT {any}\n", .{self.control.at(i)});
+-        for (0..self.worker.len) |i| std.debug.print("DEFAULT_HOST_WORKER_EVENT {any}\n", .{self.worker.at(i)});
++        try writer.print("DEFAULT_HOST_EVENT_TAIL schema=1 selected_hooks_only=true global_order=false replay_certificate=false supply_return_observer=true reached_locals_only=true null_availability_not_zero=true worker_lookup_max_slots=256 timing_perturbation=true incomplete={} storage_bytes={d} installed={} setup_failed={} worker_identity_missing={d} control_capacity={d} control_retained={d} control_next={d} control_overwritten={d} control_counter_exhausted={} control_after_failure_omitted={d} worker_capacity={d} worker_retained={d} worker_next={d} worker_overwritten={d} worker_counter_exhausted={}\n", .{ incomplete, @sizeOf(NativeDiagnostics), self.installed, self.setup_failed, self.worker_identity_missing, control_capacity, self.control.len, self.control.next, self.control.overwritten, self.control.counter_exhausted, self.control_after_failure_omitted, worker_capacity, self.worker.len, self.worker.next, self.worker.overwritten, self.worker.counter_exhausted });
++        try FlatDiagnostic.line(writer, "DEFAULT_HOST_EVENT_FAILURE", "failure", self.first_control_failure);
++        for (0..self.control.len) |i| try writeControlEvent(writer, self.control.at(i));
++        for (0..self.worker.len) |i| try writeWorkerEvent(writer, self.worker.at(i));
++    }
++    fn reportAfterJoin(self: *const NativeDiagnostics) void {
++        var buffer: [1024]u8 = undefined;
++        const stderr = std.debug.lockStderr(&buffer);
++        defer std.debug.unlockStderr();
++        const writer = &stderr.file_writer.interface;
++        const result: std.Io.Writer.Error!void = blk: {
++            self.writeAfterJoin(writer) catch |err| break :blk err;
++            break :blk writer.flush();
++        };
++        result catch {
++            stderr.file_writer.interface.writeAll("\nDEFAULT_HOST_DIAGNOSTIC_WRITE_ERROR schema=1 output_incomplete=true\n") catch {};
++        };
+     }
+ };
+ const Probe = struct {
+@@ -575,9 +672,8 @@ const Probe = struct {
+         std.debug.print("DEFAULT_HOST_CHRONOLOGY tick={d} first={d} later={d} callbacks={d}->{d} inputs={d} schedule={d} request_matches={d} executed={d} legacy_diagnostic_incomplete={d} capture=unavailable\n", .{ self.first.?.position.control_tick, self.first.?.position.accepted_control_frame, self.later.?.position.accepted_control_frame, self.callbacks_before, self.callbacks_after, self.input_count, self.schedule_count, self.request_schedules, self.executed_schedules, self.legacy_diagnostic_incomplete });
+     }
+     fn reportFailureAfterJoin(self: *const Probe) void {
+-        if (self.runtime_diagnostic) |value|
+-            std.debug.print("DEFAULT_HOST_RUNTIME_DIAGNOSTICS {any}\n", .{value});
+-        if (self.failure) |err| std.debug.print("DEFAULT_HOST_PROBE_ERROR {s}\n", .{@errorName(err)});
++        FlatDiagnostic.stderrLine("DEFAULT_HOST_RUNTIME_DIAGNOSTICS", "runtime", self.runtime_diagnostic);
++        FlatDiagnostic.stderrLine("DEFAULT_HOST_PROBE_ERROR", "failure", self.failure);
+     }
+ };
+ const Receipts = struct {
+@@ -705,9 +801,9 @@ test "default Host without capture accepts cross-frame completions and preserves
+         if (alive) {
+             if (closeActual(host)) |closed| {
+                 joined_for_report = true;
+-                std.debug.print("DEFAULT_HOST_FAILURE_CLEANUP worker_joined={any} provider={any} sample_leases={d} live_instances={d} cleanup_error={any}\n", .{ closed.worker_joined, closed.provider, closed.sample_leases, closed.live_instances, closed.cleanup_error });
++                FlatDiagnostic.stderrLine("DEFAULT_HOST_FAILURE_CLEANUP", "cleanup", .{ .worker_joined = closed.worker_joined, .provider = closed.provider, .sample_leases = closed.sample_leases, .live_instances = closed.live_instances, .cleanup_error = closed.cleanup_error });
+             } else |cleanup_error| {
+-                std.debug.print("DEFAULT_HOST_FAILURE_CLEANUP_FAILED error={s} joined={any} cleanup_complete=false\n", .{ @errorName(cleanup_error), host.joined });
++                std.debug.print("DEFAULT_HOST_FAILURE_CLEANUP_FAILED error={s} joined={} cleanup_complete=false\n", .{ @errorName(cleanup_error), host.joined });
+                 safe_to_free = false;
+                 // A failure after join (for example an unread Close credit)
+                 // retains storage but no longer has a concurrent producer.
+@@ -796,6 +892,20 @@ test "PCM diagnostic preserves the first shape or capacity failure without overw
+         try t.expectEqual(cause == .samples, first.sample_capacity_exceeded);
+         Pcm.observe(&pcm, 99, 123, 9, &.{0});
+         try t.expectEqualDeep(first, pcm.failure.?);
++        var text: [2048]u8 = undefined;
++        var writer: std.Io.Writer = .fixed(&text);
++        try FlatDiagnostic.line(&writer, "DEFAULT_HOST_PCM_CAPACITY_OR_SHAPE", "failure", pcm.failure);
++        try FlatFixture.tokens(writer.buffered(), &.{
++            "DEFAULT_HOST_PCM_CAPACITY_OR_SHAPE schema=1 failure.present=true",
++            "failure.epoch=7",
++            "failure.first_frame=11",
++            "failure.record_capacity=1024",
++            "failure.used_samples=2",
++            "failure.sample_capacity=4",
++            "failure.remaining_samples=2",
++            "failure.captured_callbacks_before=1",
++            "failure.captured_frames_before=1",
++        });
+     }
+ }
+ 
+@@ -831,3 +941,219 @@ test "acceptance diagnostic copies initialized optional facts without retaining
+     try t.expectEqual(@as(?u64, 17), owned.deferred.?.sequence_before);
+     try t.expect(!owned.runtime_finished and owned.selected == null and owned.accepted == null and owned.publication == null);
+ }
++
++// Detached text fixtures exercise exactly the post-join writers. These are not
++// native execution evidence and are never installed in an engine or observer.
++const FlatFixture = struct {
++    const position: Position = .{ .control_tick = 43, .input_order = 7, .accepted_control_frame = 12288 };
++    const handle: stream.Handle = .{ .index = 2, .generation = 9 };
++    const identity: NativeDiagnostics.JobIdentity = .{
++        .slot = 7,
++        .handle = handle,
++        .descriptor = .{ .job = 101, .asset = 11, .generation = 13, .transport_epoch = 17, .operation = .decode, .group = 19, .layer = 23, .loop_epoch = 29, .target_cursor = 11264, .realize_frame = 31 },
++        .ordinal = 1024,
++        .count = 1024,
++    };
++    const worker: trace.schema.Worker = .{
++        .job = 101,
++        .asset = 11,
++        .generation = 13,
++        .transport_epoch = 17,
++        .operation = .decode,
++        .state = .ready,
++        .pcm_start = 11264,
++        .pcm_end = 12288,
++        .available_frames = 1024,
++        .channel_count = 2,
++        .content_hash = @splat(0xab),
++        .readiness_version = 37,
++        .failure_code = 0,
++        .group = 19,
++        .layer = 23,
++        .loop_epoch = 29,
++        .target_cursor = 11264,
++        .realize_frame = 31,
++        .job_descriptor_hash = @splat(0xcd),
++    };
++    const observation: stream.LiveObservationDeferV1 = .{ .reason = .sequence_changed, .operation = .prefetch, .handle = handle, .requested_frame = 12288, .observed_frame = 12352, .sequence_before = 40, .sequence_after = 42 };
++    const stop: f.music.MusicRuntime.LiveStopDeferV1 = .{
++        .control_tick = 43,
++        .accepted_control_frame = 12288,
++        .ticket = .{ .context = 53, .request_id = 59, .bank = .{ .context = 53, .handle = .{ .index = 3, .generation = 61 }, .asset_generation = 13 } },
++        .group = .{ .index = 5, .generation = 67 },
++        .plan_id = 71,
++        .prepare = .{ .start_frame = 12352, .end_frame = 12416, .observed_horizon = 12416, .minimum_frame = 12480 },
++    };
++    fn acceptance() NativeDiagnostics.Acceptance {
++        var attempt: stream.LiveAcceptanceAttemptV1 = .{ .incoming = position };
++        var result = NativeDiagnostics.attemptSummary(&attempt, 12352, true);
++        result.batch_id = 55;
++        result.outcome = .accepted;
++        result.cut = .{ .sequence = 42, .frame = 12352, .consumed = 11264, .produced = 12288, .available = 1024 };
++        result.selected = .{ .identity = identity, .outcome = .ready, .failure_code = 0 };
++        result.availability = .{ .attached = true, .requested_frame = 12352, .sequence_before = 42, .frame = 12352, .consumed = 11264, .produced = 12288, .sequence_after = 42, .available = 1024 };
++        result.ring_capacity = 4096;
++        result.publication_preflight = .{ .head = 57, .tail = 56, .capacity = 64 };
++        result.publication = .{ .batch_id = 55, .handle = handle, .worker_job = 101, .prefix_start = 11264, .prefix_end = 12288, .target_cursor = 11264, .loop_epoch = 29 };
++        result.effects = .{ .pcm_published = true, .publication_published = true, .job_released = true };
++        result.accepted = .{ .handle = handle, .position = position, .worker = worker };
++        return result;
++    }
++    fn tokens(text: []const u8, expected: []const []const u8) !void {
++        try t.expect(std.mem.indexOf(u8, text, "...") == null);
++        try t.expect(std.mem.indexOf(u8, text, ".{") == null);
++        for (expected) |token| {
++            if (std.mem.indexOf(u8, text, token) == null) {
++                std.debug.print("missing flat diagnostic token: {s}\n", .{token});
++                return error.MissingFlatDiagnosticToken;
++            }
++        }
++    }
++};
++
++test "flat role output preserves every event kind and deep causal identity without ellipsis" {
++    var buffer: [32768]u8 = undefined;
++    var writer: std.Io.Writer = .fixed(&buffer);
++    const values = [_]NativeDiagnostics.ControlEvent{
++        .{ .position = FlatFixture.position, .value = .{ .supply = .{ .point = .{ .stage = .request_queued, .handle = FlatFixture.handle, .job_slot = 7, .job = 101 }, .group = 19, .layer = 23, .pending_job = 7, .queued = FlatFixture.identity } } },
++        .{ .position = FlatFixture.position, .value = .{ .supply_return = .{ .operation = .request, .handle = FlatFixture.handle, .nested_prefetch = true, .reason = .queued, .available = 0, .pending_observed = true, .job_slot = 7, .job = 101 } } },
++        .{ .position = FlatFixture.position, .value = .{ .acceptance = FlatFixture.acceptance() } },
++        .{ .position = FlatFixture.position, .value = .{ .public_worker = FlatFixture.worker } },
++        .{ .position = FlatFixture.position, .value = .{ .admission = .{ .batch_id = 55, .content_hash = @splat(0xef), .kind = .stream_visibility, .gate = 73, .frame = 12416, .commit_horizon = 12480, .gate_order = 3, .disposition = .admitted } } },
++        .{ .position = FlatFixture.position, .value = .{ .tick = .{ .drained = 1, .deferred = .{ .stage = .background_supply, .control_tick = 43, .accepted_control_frame = 12288, .observation = FlatFixture.observation }, .stop_deferred = FlatFixture.stop, .cold_start_deferred = FlatFixture.stop } } },
++    };
++    for (values, 0..) |value, i| try NativeDiagnostics.writeControlEvent(&writer, .{ .ordinal = i, .value = value });
++    try NativeDiagnostics.writeWorkerEvent(&writer, .{ .ordinal = 4, .value = .{ .kind = .running, .job = 101, .identity = FlatFixture.identity } });
++    try NativeDiagnostics.writeWorkerEvent(&writer, .{ .ordinal = 5, .value = .{ .kind = .completed, .job = 101 } });
++    try FlatFixture.tokens(writer.buffered(), &.{
++        "DEFAULT_HOST_CONTROL_EVENT schema=1 ordinal=0 position.accepted_control_frame=12288 position.control_tick=43 position.input_order=7 event.tag=supply",
++        "event.supply.point.stage=request_queued",
++        "event.supply.point.handle.generation=9",
++        "event.supply.queued.present=true",
++        "event.supply.queued.slot=7",
++        "event.supply.queued.descriptor.job=101",
++        "event.supply.queued.descriptor.target_cursor=11264",
++        "event.supply.queued.ordinal=1024",
++        "event.supply.queued.count=1024",
++        "event.tag=supply_return",
++        "event.supply_return.operation=request",
++        "event.supply_return.reason=queued",
++        "event.supply_return.available.present=true event.supply_return.available=0",
++        "event.supply_return.pending_observed=true",
++        "event.supply_return.pending_job.present=false event.supply_return.pending_job=null",
++        "event.supply_return.returned_error.present=false",
++        "event.supply_return.deferred.present=false",
++        "event.tag=acceptance",
++        "event.acceptance.cut.available=1024",
++        "event.acceptance.selected.identity.handle.index=2",
++        "event.acceptance.selected.identity.handle.generation=9",
++        "event.acceptance.selected.identity.descriptor.job=101",
++        "event.acceptance.selected.outcome=ready",
++        "event.acceptance.availability.sequence_after=42",
++        "event.acceptance.publication_preflight.capacity=64",
++        "event.acceptance.publication.batch_id=55",
++        "event.acceptance.publication.worker_job=101",
++        "event.acceptance.publication.prefix_end=12288",
++        "event.acceptance.accepted.worker.job=101",
++        "event.acceptance.accepted.worker.job_descriptor_hash=" ++ "cd" ** 32,
++        "event.tag=public_worker event.public_worker.job=101",
++        "event.public_worker.content_hash=" ++ "ab" ** 32,
++        "event.tag=admission event.admission.batch_id=55",
++        "event.admission.content_hash=" ++ "ef" ** 32,
++        "event.admission.kind=stream_visibility",
++        "event.admission.disposition=admitted",
++        "event.tag=tick",
++        "event.tick.deferred.observation.handle.generation=9",
++        "event.tick.deferred.observation.sequence_after=42",
++        "event.tick.stop_deferred.ticket.bank.handle.generation=61",
++        "event.tick.stop_deferred.group.generation=67",
++        "event.tick.stop_deferred.prepare.observed_horizon=12416",
++        "event.tick.cold_start_deferred.ticket.request_id=59",
++        "event.tick.cold_start_deferred.prepare.minimum_frame=12480",
++        "DEFAULT_HOST_WORKER_EVENT schema=1 ordinal=4 event.kind=running",
++        "event.identity.descriptor.job=101",
++        "event.identity.descriptor.generation=13",
++        "event.identity.descriptor.layer=23",
++        "event.identity.ordinal=1024",
++        "event.identity.count=1024",
++        "DEFAULT_HOST_WORKER_EVENT schema=1 ordinal=5 event.kind=completed",
++        "event.identity.present=false event.identity=null",
++    });
++}
++
++test "flat diagnostic return and defer output distinguishes absent from measured zero and errors" {
++    var buffer: [8192]u8 = undefined;
++    var writer: std.Io.Writer = .fixed(&buffer);
++    var value: NativeDiagnostics.ControlEvent = .{ .position = FlatFixture.position, .value = .{ .supply_return = .{ .operation = .prefetch, .handle = FlatFixture.handle, .reason = .availability_error, .deferred = FlatFixture.observation, .returned_error = error.IncompleteTrace } } };
++    try NativeDiagnostics.writeControlEvent(&writer, .{ .ordinal = 0, .value = value });
++    var attempt: stream.LiveAcceptanceAttemptV1 = .{ .incoming = FlatFixture.position, .deferred = .{ .reason = .odd_sequence, .handle = FlatFixture.handle, .observed_frame = null, .sequence_before = 0, .sequence_after = null }, .returned_error = error.IncompleteTrace };
++    attempt.evidence.outcome = .availability_unavailable;
++    value.value = .{ .acceptance = NativeDiagnostics.attemptSummary(&attempt, 12288, false) };
++    try NativeDiagnostics.writeControlEvent(&writer, .{ .ordinal = 1, .value = value });
++    try FlatFixture.tokens(writer.buffered(), &.{
++        "event.supply_return.available.present=false event.supply_return.available=null", "event.supply_return.pending_observed=false",                             "event.supply_return.deferred.present=true",       "event.supply_return.deferred.reason=sequence_changed", "event.supply_return.deferred.operation=prefetch",                                                      "event.supply_return.deferred.handle.index=2",                                                        "event.supply_return.returned_error.present=true event.supply_return.returned_error=IncompleteTrace",
++        "event.acceptance.runtime_finished=false",                                        "event.acceptance.outcome=availability_unavailable",                      "event.acceptance.deferred.present=true",          "event.acceptance.deferred.reason=odd_sequence",        "event.acceptance.deferred.observed_frame.present=false event.acceptance.deferred.observed_frame=null", "event.acceptance.deferred.sequence_before.present=true event.acceptance.deferred.sequence_before=0", "event.acceptance.deferred.sequence_after.present=false",
++        "event.acceptance.selected.present=false event.acceptance.selected=null",         "event.acceptance.accepted.present=false event.acceptance.accepted=null", "event.acceptance.returned_error=IncompleteTrace",
++    });
++}
++
++test "flat runtime failure output retains actual fault identity and complete optional status" {
++    var buffer: [16384]u8 = undefined;
++    var writer: std.Io.Writer = .fixed(&buffer);
++    const runtime: ?Probe.RuntimeDiagnostic = .{
++        .status = .{ .context = 53, .kind = .authoring, .state = .playing, .bank = FlatFixture.stop.ticket.bank, .bank_content_hash = @splat(0xff), .committed_state = @enumFromInt(79), .committed_segment = @enumFromInt(83), .render_frame = 12416, .transport_epoch = 17, .pending = false, .outstanding_sample_leases = 4, .observation_sequence = 42, .complete = false, .dropped_observations = 0, .stream_fault_count = 1, .stream_fault = .{ .group_index = 5, .group_incarnation = 67, .asset_generation = 13, .segment = @enumFromInt(83), .boundary_frame = 12416, .last_sample_frame = 12415, .cursor = 11264, .loop_epoch = 29, .layer = 2 }, .source_switch = .{ .group_index = 5, .group_incarnation = 67, .asset_generation = 13, .original_segment = @enumFromInt(83), .fallback_segment = @enumFromInt(89), .frame = 12416, .cursor = 11264, .loop_epoch = 29, .layer = 2, .source_incarnation = 97 } },
++        .control_delay_ms = 16,
++        .tick = 43,
++        .control_frame = 12288,
++        .tick_frame = 12288,
++        .chronology_frontier = 12288,
++        .owner_observation_sequence = 42,
++        .owner_stream_fault_count = 1,
++        .pause_armed = true,
++        .pause_used = true,
++        .cancelled = false,
++        .first = .{ .position = FlatFixture.position, .job = 101 },
++        .later = null,
++        .callbacks_before = 40,
++        .callbacks_after = 42,
++        .callbacks_at_failure = 48,
++        .submitted_frames = 12288,
++        .input_begin = 100,
++        .input_count = 4,
++        .schedule_begin = 10,
++        .schedule_count = 2,
++    };
++    try FlatDiagnostic.line(&writer, "DEFAULT_HOST_RUNTIME_DIAGNOSTICS", "runtime", runtime);
++    try FlatDiagnostic.line(&writer, "DEFAULT_HOST_PROBE_ERROR", "failure", @as(?anyerror, error.DefaultRuntimeDiagnostics));
++    try FlatFixture.tokens(writer.buffered(), &.{
++        "DEFAULT_HOST_RUNTIME_DIAGNOSTICS schema=1 runtime.present=true", "runtime.status.state=playing", "runtime.status.bank.handle.generation=61", "runtime.status.bank_content_hash=" ++ "ff" ** 32, "runtime.status.committed_state=unnamed runtime.status.committed_state.code=79", "runtime.status.complete=false", "runtime.status.stream_fault_count=1", "runtime.status.stream_fault.present=true", "runtime.status.stream_fault.group_index=5", "runtime.status.stream_fault.group_incarnation=67", "runtime.status.stream_fault.asset_generation=13", "runtime.status.stream_fault.segment.code=83", "runtime.status.stream_fault.boundary_frame=12416", "runtime.status.stream_fault.last_sample_frame=12415", "runtime.status.stream_fault.cursor.present=true runtime.status.stream_fault.cursor=11264", "runtime.status.stream_fault.loop_epoch=29", "runtime.status.stream_fault.layer=2", "runtime.status.source_switch.fallback_segment.code=89", "runtime.status.source_switch.source_incarnation=97", "runtime.first.position.input_order=7", "runtime.later.present=false runtime.later=null", "runtime.input_count=4", "failure.present=true failure=DefaultRuntimeDiagnostics",
++    });
++}
++
++test "flat tail report emits retained ordinal order pinned failure and bounded truncation" {
++    const diagnostics = try a.create(NativeDiagnostics);
++    defer a.destroy(diagnostics);
++    diagnostics.* = .{ .installed = true };
++    for (0..NativeDiagnostics.control_capacity + 2) |_| diagnostics.control.append(.{ .position = FlatFixture.position, .value = .{ .tick = .{ .drained = 0 } } });
++    diagnostics.worker.append(.{ .kind = .completed, .job = 101 });
++    diagnostics.first_control_failure = .{ .next_ordinal = diagnostics.control.next, .position = FlatFixture.position, .failure = error.DefaultRuntimeDiagnostics };
++    diagnostics.control_after_failure_omitted = 3;
++    var writer: std.Io.Writer.Allocating = .init(a);
++    defer writer.deinit();
++    try diagnostics.writeAfterJoin(&writer.writer);
++    const text = writer.written();
++    try FlatFixture.tokens(text, &.{
++        "DEFAULT_HOST_EVENT_TAIL schema=1", "supply_return_observer=true", "reached_locals_only=true", "incomplete=true", "control_capacity=256 control_retained=256 control_next=258 control_overwritten=2", "control_after_failure_omitted=3", "worker_capacity=128", "DEFAULT_HOST_EVENT_FAILURE schema=1 failure.present=true failure.next_ordinal=258", "failure.position.control_tick=43", "failure.failure=DefaultRuntimeDiagnostics", "DEFAULT_HOST_CONTROL_EVENT schema=1 ordinal=2 ", "DEFAULT_HOST_CONTROL_EVENT schema=1 ordinal=257 ",
++    });
++    const first = std.mem.indexOf(u8, text, "DEFAULT_HOST_CONTROL_EVENT schema=1 ordinal=2 ").?;
++    const last = std.mem.indexOf(u8, text, "DEFAULT_HOST_CONTROL_EVENT schema=1 ordinal=257 ").?;
++    try t.expect(first < last);
++    try t.expect(std.mem.indexOf(u8, text, "DEFAULT_HOST_CONTROL_EVENT schema=1 ordinal=0 ") == null);
++    var tiny: [1]u8 = undefined;
++    var bounded: std.Io.Writer = .fixed(&tiny);
++    try t.expectError(error.WriteFailed, diagnostics.writeAfterJoin(&bounded));
++    var hash_buffer: [128]u8 = undefined;
++    var hashes: std.Io.Writer = .fixed(&hash_buffer);
++    try FlatDiagnostic.line(&hashes, "TEST_HASH", "bytes", [_]u8{ 0, 1, 15, 16, 127, 128, 255 });
++    try t.expectEqualStrings("TEST_HASH schema=1 bytes=00010f107f80ff\n", hashes.buffered());
++}
+diff --git a/tests/sme/live_background_supply_test.zig b/tests/sme/live_background_supply_test.zig
+index cd246dc..abc0d1f 100644
+--- a/tests/sme/live_background_supply_test.zig
++++ b/tests/sme/live_background_supply_test.zig
+@@ -51,6 +51,19 @@ const Probe = struct {
+     rendered: bool = false,
+     visits: [4]usize = @splat(0),
+     queued: [4]usize = @splat(0),
++    returns: [16]stream.TestSupplyReturn = undefined,
++    return_count: usize = 0,
++    return_overflow: bool = false,
++    fn returned(raw: *anyopaque, point: stream.TestSupplyReturn) void {
++        const self: *Probe = @ptrCast(@alignCast(raw));
++        if (!self.armed) return;
++        if (self.return_count == self.returns.len) {
++            self.return_overflow = true;
++            return;
++        }
++        self.returns[self.return_count] = point;
++        self.return_count += 1;
++    }
+     fn tick(raw: *anyopaque, stage: f.music.MusicRuntime.TickStage) void {
+         const self: *Probe = @ptrCast(@alignCast(raw));
+         if (stage == .before_background_supply) self.armed = true;
+@@ -152,10 +165,12 @@ fn exercise(case: Case) !void {
+     var probe: Probe = .{ .owner = owner, .renderer = rig.engine.run.renderer, .handles = handles };
+     owner.test_tick_hook = .{ .context = &probe, .call = Probe.tick };
+     service.test_supply_hook = .{ .context = &probe, .call = Probe.supply };
++    service.test_supply_return_hook = .{ .context = &probe, .call = Probe.returned };
+     service.test_availability_hook = .{ .context = &probe, .call = Probe.availability };
+     defer {
+         owner.test_tick_hook = null;
+         service.test_supply_hook = null;
++        service.test_supply_return_hook = null;
+         service.test_availability_hook = null;
+     }
+     if (case == .later_error) try service.cancel(handles[1]);
+@@ -181,6 +196,22 @@ fn exercise(case: Case) !void {
+             try t.expect(probe.rendered);
+             try t.expectEqual([4]usize{ 1, 1, 0, 0 }, probe.visits);
+             try t.expectEqual([4]usize{ 0, 0, 0, 0 }, probe.queued);
++            try t.expect(!probe.return_overflow);
++            try t.expectEqual(@as(usize, 3), probe.return_count);
++            try t.expectEqual(.availability_error, probe.returns[0].reason);
++            const rejected = probe.returns[1];
++            try t.expectEqual(.request, rejected.operation);
++            try t.expect(rejected.nested_prefetch);
++            try t.expectEqual(.cancelled, rejected.reason);
++            try t.expectEqual(error.InvalidState, rejected.returned_error.?);
++            try t.expect(rejected.available == null and !rejected.pending_observed and rejected.pending_job == null);
++            try t.expect(rejected.job == null and rejected.job_slot == null and rejected.deferred == null);
++            const outer = probe.returns[2];
++            try t.expectEqual(.prefetch, outer.operation);
++            try t.expectEqual(.nested_request, outer.reason);
++            try t.expectEqualDeep(handles[1], outer.handle);
++            try t.expectEqual(error.InvalidState, outer.returned_error.?);
++            try t.expect(outer.available != null and outer.job == null and !outer.pending_observed);
+             return;
+         },
+     };
+@@ -191,6 +222,54 @@ fn exercise(case: Case) !void {
+     std.debug.print("BACKGROUND_SWEEP actual_defer={s} visits={any} queued={any}\n", .{ @tagName(observed.reason), probe.visits, probe.queued });
+     try t.expectEqual(if (case == .chronology) [4]usize{ 1, 1, 1, 1 } else [4]usize{ 1, 0, 0, 0 }, probe.visits);
+     try t.expectEqual(if (case == .chronology) [4]usize{ 0, 1, 1, 1 } else [4]usize{ 0, 0, 0, 0 }, probe.queued);
++    try t.expect(!probe.return_overflow);
++    try t.expectEqual(@as(usize, if (case == .chronology) 7 else 1), probe.return_count);
++    const first = probe.returns[0];
++    try t.expectEqual(.prefetch, first.operation);
++    try t.expectEqual(.availability_error, first.reason);
++    try t.expectEqual(error.InvalidState, first.returned_error.?);
++    try t.expectEqualDeep(observed, first.deferred.?);
++    try t.expect(first.available == null and !first.pending_observed and first.pending_job == null);
++    try t.expect(first.job == null and first.job_slot == null and !first.nested_prefetch);
++    if (case == .chronology) {
++        for (1..4) |i| {
++            const inner = probe.returns[1 + (i - 1) * 2];
++            const outer = probe.returns[2 + (i - 1) * 2];
++            try t.expectEqual(.request, inner.operation);
++            try t.expect(inner.nested_prefetch);
++            try t.expectEqual(.queued, inner.reason);
++            try t.expectEqualDeep(handles[i], inner.handle);
++            try t.expect(inner.available != null and inner.pending_observed and inner.pending_job == null);
++            try t.expect(inner.job != null and inner.job_slot != null and inner.returned_error == null and inner.deferred == null);
++            try t.expectEqual(.prefetch, outer.operation);
++            try t.expectEqual(.nested_request, outer.reason);
++            try t.expectEqualDeep(inner.handle, outer.handle);
++            try t.expectEqual(inner.job, outer.job);
++            try t.expect(outer.available != null and !outer.pending_observed and outer.returned_error == null);
++        }
++        // No Worker pump occurs between the actual enqueue and this request.
++        // The real pending branch must not invent an availability acquire.
++        probe.armed = true;
++        try t.expectEqual(@as(?u64, null), try service.request(handles[1]));
++        const pending = probe.returns[7];
++        try t.expectEqual(@as(usize, 8), probe.return_count);
++        try t.expectEqual(.pending, pending.reason);
++        try t.expect(!pending.nested_prefetch and pending.pending_observed);
++        try t.expectEqual(probe.returns[1].job_slot, pending.pending_job);
++        try t.expect(pending.available == null and pending.job == null and pending.returned_error == null);
++        // An explicitly invalid caller handle exercises initialization before get.
++        var stale = handles[1];
++        stale.generation += 1;
++        try t.expectError(error.StaleStream, service.request(stale));
++        try t.expectEqual(@as(usize, 9), probe.return_count);
++        const invalid = probe.returns[8];
++        try t.expectEqual(.lookup_error, invalid.reason);
++        try t.expectEqualDeep(stale, invalid.handle);
++        try t.expectEqual(error.StaleStream, invalid.returned_error.?);
++        try t.expect(!invalid.pending_observed and invalid.pending_job == null and invalid.available == null);
++        try t.expect(invalid.job == null and invalid.job_slot == null and invalid.deferred == null);
++        probe.armed = false;
++    }
+     try t.expectEqual(@as(u64, 0), (try owner.snapshotV1()).stream_fault_count);
+ }
+ 
