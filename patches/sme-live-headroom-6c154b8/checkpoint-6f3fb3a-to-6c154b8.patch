@@ -1,0 +1,769 @@
+diff --git a/build_support/sme_tasks/task-017.zon b/build_support/sme_tasks/task-017.zon
+index c9507095304f0c0e9825676eb07a7b184a9f5d0f..b7a2aad6802d295cacb62cc2578a6252a280e57a 100644
+--- a/build_support/sme_tasks/task-017.zon
++++ b/build_support/sme_tasks/task-017.zon
+@@ -38,6 +38,7 @@
+         .install = false,
+     }, .{ .name = "sme-public-causal-recording", .root_source_file = "examples/sme/public_causal_recording_main.zig", .kind = .executable, .imports = .{.{ .name = "sme-public-causal-example", .module = "sme-public-causal-example" }} }, .{ .name = "sme-public-causal-recording-partitioned544", .root_source_file = "examples/sme/public_causal_recording_partitioned544_main.zig", .kind = .executable, .imports = .{ .{ .name = "sme-public-causal-example", .module = "sme-public-causal-example" }, .{ .name = "music", .module = "music" } }, .causal_resource_profile = .partitioned544 }, .{ .name = "sme-compiler", .root_source_file = "tools/sme_authoring/cli/main.zig", .kind = .executable, .imports = .{.{ .name = "sme-authoring-cli", .module = "sme-authoring-cli" }} } },
+     .checks = .{
++        .{ .name = "sme-live-initial-headroom-test", .tests = .{"tests/sme/live_initial_headroom_test.zig"} },
+         .{ .name = "sme-author-live-default-chronology-test", .tests = .{"tests/sme/author_live_default_chronology_test.zig"} },
+         .{ .name = "sme-author-live-default-mode-test", .tests = .{"tests/sme/author_live_default_mode_test.zig"} },
+         .{ .name = "sme-live-semantic-exclusion-schedule-check", .tests = .{"tests/sme/live_semantic_exclusion_schedule_test.zig"} },
+diff --git a/docs/sme/author-live-owner-usage.md b/docs/sme/author-live-owner-usage.md
+index 20bf7ec3a5eaf0c85043482acb007c40771f363e..e1d63d2be9b7b104b7cfef9f1858e1583d4a4821 100644
+--- a/docs/sme/author-live-owner-usage.md
++++ b/docs/sme/author-live-owner-usage.md
+@@ -152,3 +152,9 @@ The separate explicit-profile ReleaseSafe recording on this same revision passed
+ The additional Debug semantic capture did **not** qualify on this revision: its fixed 4 MiB Control queue overflowed after 33,280 submitted frames. It was not retried or published as a valid tape; the failure evidence was retained, the Worker joined, all 16 sources closed, and leases/instances returned to zero. Consequently the combined Debug build was 47/48, despite all 40 default-integration tests passing. Earlier same-build semantic checkpoints do not substitute for a fresh Debug tape on this revision.
+ 
+ Evidence identifiers in the qualification bundle are `panel-underrun-fix/default-chronology-{debug,release}-r25/raw.log` and `live-chronology/semantic-boundary-r1/actual-host-controlled-release-r25/qualification.json` (with its pinned tape, bank, exact executable, recording and fresh-process results). The failed Debug capture is retained under `actual-host-controlled-debug-r25`. These artifacts distinguish default playback, explicit capture admission, fresh replay, and safe capture failure; none implies automatic panel recording or legacy offline tape compatibility.
++
++### First-entry PCM lead
++
++Chronology Live now holds the original initial-direct Play request until all four selected streams have genuine decoded readiness and Control has acknowledged Render admission of the existing configured high-water prefix (6144 frames by default, within the unchanged 8192-frame ring). A short nonloop source uses its actual remaining span; looping streams may accumulate the prefix through genuine repeated loop decoding. No Recorder is required and no readiness or PCM is synthesized. This adds initial admission latency rather than starting with one decode chunk and assuming the next Control/Worker cycle can refill before it is consumed. It is not a guarantee against unbounded scheduling stalls or an unsustainable source decoder.
++
++The visible-prefix cache is derived only from actual admitted visibility receipts and resets on real stream-slot open. Rejected or discarded publications grant no credit. An impossible descriptor identity/contiguity latches invalid state; identity corruption may retain custody rather than falsely claim cleanup. Direct legacy Live and offline serial APIs do not use this chronology-only initial gate.
+diff --git a/src/music/resident_runtime.zig b/src/music/resident_runtime.zig
+index a4eed9d7c5ad6b2138b4948f6ec9086773cc681b..d234ad2374937ae3ad7a7de86e1213c85869e34d 100644
+--- a/src/music/resident_runtime.zig
++++ b/src/music/resident_runtime.zig
+@@ -8072,6 +8072,60 @@ pub const MusicRuntime = struct {
+         };
+         return .{ .segment = phase.segment, .cue = phase.cue, .occurrence = occurrence };
+     }
++    /// Chronology-only first-entry lead. All reads below are immutable identity,
++    /// this tick's actual readiness, or Control-owned acknowledged receipts.
++    /// No new Render counter sampling, forecast, or manufactured ready value.
++    fn initialChronologyHeadroomReady(self: *MusicRuntime, request_id: u64, plan: *const planner.TransitionPlan, ready: *const planner.ReadinessSnapshot) !bool {
++        const generation = self.generation orelse return error.InvalidState;
++        const service = generation.service orelse return error.InvalidState;
++        if (!ready.complete or ready.count > planner.max_bindings or plan.phases.count != 1) return error.InvalidState;
++        const phase = plan.phases.items[0];
++        if (phase.kind != .target_entry or phase.source_cursor != 0) return error.InvalidState;
++        const window = entryWindow(plan.phases.slice(), 0);
++        const segment = generation.loaded.tables.segments[try find(generation.loaded.tables.segments, phase.segment)];
++        if (segment.layers.count != 4) return error.UnsupportedCapability;
++        var all_ready = true;
++        for (generation.loaded.tables.layers[segment.layers.first..][0..segment.layers.count]) |layer| {
++            const sound = generation.loaded.tables.sounds[layer.sound];
++            if (sound.storage != .streaming) return error.UnsupportedCapability;
++            var selected: ?usize = null;
++            for (ready.bindings[0..ready.count], 0..) |binding, index| {
++                if (binding.segment != window.segment or binding.cue != window.cue or binding.occurrence != window.occurrence or binding.layer != layer.key.id) continue;
++                if (selected != null or binding.sound != sound.key.id or binding.source_cursor != layer.source_start) return error.InvalidState;
++                selected = index;
++            }
++            const index = selected orelse return error.InvalidState;
++            const binding = ready.bindings[index];
++            var owned = false;
++            for (generation.windows) |item| if (item) |entry| {
++                if (entry.retiring or entry.scope != .request or entry.request_id != request_id or !std.meta.eql(entry.binding, binding)) continue;
++                if (owned) return error.InvalidState;
++                owned = true;
++            };
++            if (!owned) return error.InvalidState;
++            const identity = ready.identities[index];
++            const readiness_input = ready.observations[index];
++            if (readiness_input.payload != .readiness_snapshot or ready.failures[index] != .none) return error.SourceReadFailed;
++            const facts = readiness_input.payload.readiness_snapshot.facts;
++            if (identity.asset != sound.key.id or identity.asset_generation != generation.runtime_generation or
++                identity.transport_epoch != generation.transport.transport_epoch or identity.stream_generation != binding.handle.generation or
++                identity.start_cursor != binding.source_cursor or identity.start_loop_epoch != 0 or
++                facts.asset != sound.key.id or facts.generation != generation.runtime_generation or
++                facts.transport_epoch != generation.transport.transport_epoch or facts.pcm_start != binding.source_cursor or
++                readiness_input.position.accepted_control_frame != self.control_frame or readiness_input.position.control_tick != self.tick)
++                return error.InvalidState;
++            const end = if (identity.loop) |loop| loop.end else identity.frame_count;
++            if (binding.source_cursor >= end) return error.InvalidState;
++            // Existing readiness covers one contiguous source interval. Actual
++            // admitted ordinal prefixes may span multiple real loop decodes.
++            const contiguous = @min(@as(u64, service.profile.high_frames), end - binding.source_cursor);
++            const ordinal_needed = if (identity.loop != null) @as(u64, service.profile.high_frames) else contiguous;
++            const acknowledged = try service.acknowledgedVisiblePrefix(binding.handle);
++            if (facts.available_frames < contiguous or facts.pcm_end < try std.math.add(u64, binding.source_cursor, contiguous) or
++                acknowledged < ordinal_needed) all_ready = false;
++        }
++        return all_ready;
++    }
+     /// Wait for the exact PCM coverage certified by Planner to cross the real
+     /// Render visibility gate. Full-span is the default; explicitly rolling
+     /// long fills certify a high-watermark entry prefix, not their future PCM.
+@@ -8296,6 +8350,14 @@ pub const MusicRuntime = struct {
+             projected == null and execution_phases.count == 1 and execution_phases.items[0].kind == .target_entry and
+             execution_phases.items[0].source_cursor == 0;
+         if (self.preparing) |prepared| if (prepared.cold_candidate != null and !cold_start) return error.InvalidState;
++        if (cold_start and self.live_chronology_frontier != null and
++            !try self.initialChronologyHeadroomReady(intent.request_id, plan, ready orelse return error.InvalidState))
++        {
++            // Planner consumed this ID. Keep the original request/windows but
++            // advance its watermark; the existing issued errdefer forgets it.
++            self.preparing.?.plan_id = try self.takePlan();
++            return error.StreamNotReady;
++        }
+         self.tickHook(.before_schedule_prepare);
+         defer self.tickHook(.after_schedule_prepare);
+         const target_token = try plan.targetToken();
+diff --git a/src/streaming/music_stream.zig b/src/streaming/music_stream.zig
+index ec4d4822a3d138189aa46a6e27a8f27f90f36d0f..d55e68136d1971c0be5f5908a85c2df08fb50b90 100644
+--- a/src/streaming/music_stream.zig
++++ b/src/streaming/music_stream.zig
+@@ -172,6 +172,8 @@ const Slot = struct {
+     snapshot_version: u64 = 1,
+     replay_readiness: ?trace.Input = null,
+     visibility_refs: u32 = 0,
++    // Control-owned, derived only from real admitted visibility receipts.
++    acknowledged_visible_prefix: u64 = 0,
+ };
+ const SourceContext = struct { service: *Service, slot: *Slot, job: u64 = 0 };
+ pub const Memory = struct { owned_bytes: usize, native_decoder_bytes: usize, peak_native_decoder_bytes: usize, total_requested_bytes: usize, pcm_capacity_bytes: usize };
+@@ -497,6 +499,7 @@ pub const Service = struct {
+     jobs: []Job,
+     slot_guards: []std.atomic.Value(u8), // 0 live, 1 bounded render pin, 2 closed
+     publications: []visibility.Entry,
++    acknowledged_visibility_invalid: bool = false,
+     publication_head: std.atomic.Value(u64) = .init(0),
+     publication_read: std.atomic.Value(u64) = .init(0),
+     publication_tail: std.atomic.Value(u64) = .init(0),
+@@ -2598,6 +2601,42 @@ pub const Service = struct {
+         if (!entry.replay_prepared.load(.acquire) or !std.meta.eql(release, entry.replay_release) or actual.batch_id != release.batch_id or actual.gate != release.gate or actual.frame != release.frame or actual.gate_order != release.gate_order) return error.ReplayMismatch;
+         return .{ .commit_horizon = actual.commit_horizon, .disposition = actual.disposition };
+     }
++    /// Control-only proof from receipts already acquired by pollVisibility.
++    /// Never reads a Render-owned counter or manufactures readiness.
++    pub fn acknowledgedVisiblePrefix(self: *Service, handle: Handle) Error!u64 {
++        const slot = try self.get(handle);
++        if (self.acknowledged_visibility_invalid) return error.InvalidState;
++        return slot.acknowledged_visible_prefix;
++    }
++    pub const VisibilityReceiptTests = if (@import("builtin").is_test) struct {
++        // Isolated malformed-receipt negatives only; never a Live source.
++        pub fn acknowledge(service: *Service, entry: *const visibility.Entry) bool {
++            return service.noteAcknowledgedVisibility(entry);
++        }
++    } else struct {};
++    fn noteAcknowledgedVisibility(self: *Service, entry: *const visibility.Entry) bool {
++        const d = entry.descriptor;
++        if (d.stream_slot >= self.slots.len) {
++            self.acknowledged_visibility_invalid = true;
++            return false;
++        }
++        const slot = &self.slots[d.stream_slot];
++        if (!slot.occupied or slot.generation != d.stream_generation or entry.ring != &slot.pcm_ring) {
++            self.acknowledged_visibility_invalid = true;
++            return false;
++        }
++        if (entry.admission.disposition != .admitted) return true;
++        if (entry.admission.kind != .stream_visibility or entry.admission.batch_id != d.batch_id or
++            !std.mem.eql(u8, &entry.admission.content_hash, &entry.hash) or
++            d.prefix_start != slot.acknowledged_visible_prefix or d.prefix_end <= d.prefix_start or
++            d.prefix_end - d.prefix_start > self.profile.decode_chunk_frames)
++        {
++            self.acknowledged_visibility_invalid = true;
++            return true; // Identity is valid; original ledger custody still retires.
++        }
++        slot.acknowledged_visible_prefix = d.prefix_end;
++        return true;
++    }
+     /// Control receipt acknowledgement releases the ledger's stream lease.
+     /// Recorder loss is handled by the caller after this live decision.
+     pub fn pollVisibility(self: *Service) ?trace.schema.Admission {
+@@ -2619,7 +2658,11 @@ pub const Service = struct {
+         }
+         if (tail == read) return null;
+         const entry = &self.publications[@intCast(tail % self.publications.len)];
+-        self.slots[entry.descriptor.stream_slot].visibility_refs -= 1;
++        // publication_read acquire above follows Render's actual visible store.
++        // Derive before returning the ledger cell to its producer. A corrupt
++        // generation must never grant credit to a reused stream slot.
++        if (self.noteAcknowledgedVisibility(entry))
++            self.slots[entry.descriptor.stream_slot].visibility_refs -= 1;
+         const result = entry.admission;
+         if (observed) |value| {
+             value.admission = result;
+diff --git a/tests/sme/author_live_default_chronology_test.zig b/tests/sme/author_live_default_chronology_test.zig
+index 4c31be465534187e37ee6b6bef007d4f8b50835d..7f695e6e660f3c28460b914c13a35e4a03f11995 100644
+--- a/tests/sme/author_live_default_chronology_test.zig
++++ b/tests/sme/author_live_default_chronology_test.zig
+@@ -1,5 +1,6 @@
+ //! Ordinary Host regression: no semantic session, Recorder, Driver or manual
+-//! Render. Only Control pauses once; actual null callbacks supply all PCM.
++//! Render. Control has one cross-frame pause plus an optional diagnostic-only
++//! cadence delay; actual null callbacks supply all PCM.
+ const std = @import("std");
+ const live = @import("sme-author-live-owner");
+ const f = @import("sme-stream-reload-fixture");
+@@ -9,6 +10,18 @@ const trace = f.music.trace;
+ const Position = trace.schema.Position;
+ const deadline_ns = 20 * std.time.ns_per_s;
+ const playback_frames = 32768;
++// Diagnostic experiment only. This does not reproduce a Windows timer or
++// change the default regression's acceptance conditions.
++fn controlDelayMilliseconds() !u8 {
++    const value = std.process.Environ.getAlloc(t.environ, a, "SME_DEFAULT_CONTROL_DELAY_MS") catch |err| switch (err) {
++        error.EnvironmentVariableMissing => return 0,
++        else => return err,
++    };
++    defer a.free(value);
++    if (std.mem.eql(u8, value, "0")) return 0;
++    if (std.mem.eql(u8, value, "16")) return 16;
++    return error.DefaultUnsupportedControlDelay;
++}
+ fn pause() void {
+     std.Io.sleep(t.io, .fromMilliseconds(1), .awake) catch {};
+ }
+@@ -92,14 +105,41 @@ const Pcm = struct {
+ const Probe = struct {
+     const Accepted = struct { position: Position, job: u64 };
+     const Request = struct { id: u64, context: u64, position: Position };
++    /// First failing observation only. Control copies owned facts; UI prints
++    /// them only after a genuine join, never from a native audio callback.
++    const RuntimeDiagnostic = struct {
++        status: f.music.MusicRuntimeStatusV1,
++        control_delay_ms: u8,
++        tick: u64,
++        control_frame: u64,
++        tick_frame: u64,
++        chronology_frontier: ?u64,
++        owner_observation_sequence: u64,
++        owner_stream_fault_count: u64,
++        pause_armed: bool,
++        pause_used: bool,
++        cancelled: bool,
++        first: ?Accepted,
++        later: ?Accepted,
++        callbacks_before: u64,
++        callbacks_after: u64,
++        callbacks_at_failure: u64,
++        submitted_frames: u64,
++        input_begin: u64,
++        input_count: usize,
++        schedule_begin: u64,
++        schedule_count: usize,
++    };
+     owner: ?*f.music.MusicRuntime = null, // Control only, never read by UI.
+     pcm: *Pcm,
++    control_delay_ms: u8 = 0,
+     inputs: []trace.Input,
+     schedule: []trace.ScheduleEntry,
+     armed: std.atomic.Value(bool) = .init(false),
+     cancelled: std.atomic.Value(bool) = .init(false),
+     failed: std.atomic.Value(bool) = .init(false),
+     failure: ?anyerror = null, // Control only until genuine joins.
++    runtime_diagnostic: ?RuntimeDiagnostic = null,
+     used: bool = false,
+     first: ?Accepted = null,
+     later: ?Accepted = null,
+@@ -156,7 +196,20 @@ const Probe = struct {
+     }
+     fn outcome(raw: *anyopaque, _: f.music.MusicRuntime.LiveControlTickOutcomeV1) void {
+         const self: *Probe = @ptrCast(@alignCast(raw));
+-        if (!self.failed.load(.acquire)) self.collect() catch |err| self.fail(err);
++        if (self.failed.load(.acquire)) return;
++        self.collect() catch |err| {
++            self.fail(err);
++            return;
++        };
++        // The Host invokes this after a successful real live tick. Trace
++        // collection and every original assertion run before the delay.
++        // Cancellation prevents adding further delay to genuine cleanup.
++        if (self.control_delay_ms == 16 and !self.cancelled.load(.acquire)) {
++            std.Io.sleep(t.io, .fromMilliseconds(16), .awake) catch |err| {
++                self.fail(err);
++                return;
++            };
++        }
+     }
+     fn collect(self: *Probe) !void {
+         const owner = self.owner orelse return error.DefaultMissingOwner;
+@@ -178,7 +231,32 @@ const Probe = struct {
+         // The legacy serial-trace concurrency flag may mark diagnostics incomplete
+         // without losing these retained prefixes. Verify actual loss separately.
+         if (!status.diagnostics_complete) self.legacy_diagnostic_incomplete += 1;
+-        if (status.complete or status.stream_fault_count != 0) return error.DefaultRuntimeDiagnostics;
++        if (status.complete or status.stream_fault_count != 0) {
++            if (self.runtime_diagnostic == null) self.runtime_diagnostic = .{
++                .status = status,
++                .control_delay_ms = self.control_delay_ms,
++                .tick = owner.tick,
++                .control_frame = owner.control_frame,
++                .tick_frame = owner.control.tick_v1.frame,
++                .chronology_frontier = owner.live_chronology_frontier,
++                .owner_observation_sequence = owner.observation_sequence,
++                .owner_stream_fault_count = owner.stream_fault_count,
++                .pause_armed = self.armed.load(.acquire),
++                .pause_used = self.used,
++                .cancelled = self.cancelled.load(.acquire),
++                .first = self.first,
++                .later = self.later,
++                .callbacks_before = self.callbacks_before,
++                .callbacks_after = self.callbacks_after,
++                .callbacks_at_failure = self.pcm.callbacks.load(.acquire),
++                .submitted_frames = self.pcm.submitted_frames.load(.acquire),
++                .input_begin = batch.input_begin,
++                .input_count = batch.input_count,
++                .schedule_begin = batch.schedule_begin,
++                .schedule_count = batch.schedule_count,
++            };
++            return error.DefaultRuntimeDiagnostics;
++        }
+         for (self.inputs[0..batch.input_count]) |input| {
+             if (self.last_input) |previous| {
+                 if (!trace.schema.before(previous, input.position) or input.position.accepted_control_frame < previous.accepted_control_frame) return error.DefaultInputPositionRegression;
+@@ -225,6 +303,11 @@ const Probe = struct {
+         try t.expect(self.worker_inputs > 0 and self.request_schedules >= 2 and self.executed_schedules >= 2 and self.provenance_checks > 0 and self.legacy_rejected);
+         std.debug.print("DEFAULT_HOST_CHRONOLOGY tick={d} first={d} later={d} callbacks={d}->{d} inputs={d} schedule={d} request_matches={d} executed={d} legacy_diagnostic_incomplete={d} capture=unavailable\n", .{ self.first.?.position.control_tick, self.first.?.position.accepted_control_frame, self.later.?.position.accepted_control_frame, self.callbacks_before, self.callbacks_after, self.input_count, self.schedule_count, self.request_schedules, self.executed_schedules, self.legacy_diagnostic_incomplete });
+     }
++    fn reportFailureAfterJoin(self: *const Probe) void {
++        if (self.runtime_diagnostic) |value|
++            std.debug.print("DEFAULT_HOST_RUNTIME_DIAGNOSTICS {any}\n", .{value});
++        if (self.failure) |err| std.debug.print("DEFAULT_HOST_PROBE_ERROR {s}\n", .{@errorName(err)});
++    }
+ };
+ const Receipts = struct {
+     ids: [2]u64 = @splat(0),
+@@ -298,6 +381,8 @@ fn closeActual(host: *live.Host) !live.Status {
+ }
+ 
+ test "default Host without capture accepts cross-frame completions and preserves four-stem PCM" {
++    const control_delay_ms = try controlDelayMilliseconds();
++    if (control_delay_ms != 0) std.debug.print("DEFAULT_HOST_CONTROL_CADENCE_EXPERIMENT classification=controlled_cadence_experiment delay_ms={d} windows_reproduction=false acceptance=false\n", .{control_delay_ms});
+     const bytes = try buildBank();
+     defer a.free(bytes);
+     var oracle = try f.Oracle.decode(bytes);
+@@ -316,7 +401,7 @@ test "default Host without capture accepts cross-frame completions and preserves
+     defer if (safe_to_free) a.free(schedule);
+     const probe = try a.create(Probe);
+     defer if (safe_to_free) a.destroy(probe);
+-    probe.* = .{ .pcm = pcm, .inputs = inputs, .schedule = schedule };
++    probe.* = .{ .pcm = pcm, .inputs = inputs, .schedule = schedule, .control_delay_ms = control_delay_ms };
+     const memory = try a.create(live.TestAllocator);
+     defer if (safe_to_free) {
+         if (memory.deinit() != .ok) @panic("default Host leaked native allocations");
+@@ -337,12 +422,18 @@ test "default Host without capture accepts cross-frame completions and preserves
+     var alive = true;
+     errdefer {
+         probe.cancelled.store(true, .release);
++        var joined_for_report = !alive;
+         if (alive) {
+-            if (closeActual(host)) |_| {} else |_| {
++            if (closeActual(host)) |_| {
++                joined_for_report = true;
++            } else |_| {
+                 safe_to_free = false;
++                // A failure after join (for example an unread Close credit)
++                // retains storage but no longer has a concurrent producer.
++                joined_for_report = host.joined;
+             }
+         }
+-        if (safe_to_free) if (probe.failure) |err| std.debug.print("DEFAULT_HOST_PROBE_ERROR {s}\n", .{@errorName(err)});
++        if (joined_for_report) probe.reportFailureAfterJoin();
+     }
+     try t.expect(host.options.semantic == null and host.options.test_capture == null);
+     var receipts: Receipts = .{};
+diff --git a/tests/sme/author_live_default_mode_test.zig b/tests/sme/author_live_default_mode_test.zig
+index b450b6a52f131d641623c09c71ad22cac19d34fe..6cdf4328e3063954f7f2c5c359eead17b179547c 100644
+--- a/tests/sme/author_live_default_mode_test.zig
++++ b/tests/sme/author_live_default_mode_test.zig
+@@ -89,3 +89,53 @@ test "default never-started initial cleanup retains legacy mode and history" {
+     _ = try owner.controlTickV1(f.rt.max_control_drain);
+     try t.expect(owner.live_chronology_frontier == null);
+ }
++
++test "initial chronology waits for fourth actual visible highwater stem without replacing request" {
++    const bytes = try bank();
++    defer a.free(bytes);
++    const rig = try Rig.create(bytes);
++    defer rig.finish(true) catch @panic("headroom wait retained native custody");
++    const owner = rig.engine.run.owner;
++    const original = try owner.start(rig.engine.run.bank.?, f.state);
++    var saw_wait = false;
++    var saw_three = false;
++    var published = false;
++    var previous_plan: u64 = 0;
++    for (0..512) |_| {
++        _ = try owner.controlTickLiveChronologyV1(f.rt.max_control_drain, null);
++        const readiness = owner.generation.?.readiness.?;
++        var ready_count: usize = 0;
++        if (readiness.complete and readiness.count == 4) {
++            for (readiness.bindings[0..readiness.count]) |binding| {
++                if (try owner.owned_streaming.?.acknowledgedVisiblePrefix(binding.handle) >= owner.owned_streaming.?.profile.high_frames)
++                    ready_count += 1;
++            }
++        }
++        if (owner.pending != null) {
++            try t.expectEqual(@as(usize, 4), ready_count);
++            published = true;
++            break;
++        }
++        if (owner.preparing) |preparing| {
++            saw_wait = true;
++            try t.expectEqual(original.request_id, preparing.intent.request_id);
++            try t.expect(preparing.plan_id >= previous_plan);
++            previous_plan = preparing.plan_id;
++            // No execution/group is allocated by the headroom wait itself.
++            try t.expect(preparing.cold_candidate == null);
++        }
++        if (ready_count == 3) saw_three = true;
++        // One genuine decode per turn exposes the missing-final-stem boundary.
++        _ = try rig.engine.workerOne();
++        const pcm = try rig.engine.run.render(256);
++        a.free(pcm);
++    }
++    try t.expect(saw_wait and saw_three and published);
++    var accepted: usize = 0;
++    while (try owner.pollReceiptV1()) |receipt| {
++        try t.expectEqualDeep(original, receipt.ticket);
++        if (receipt.event == .accepted) accepted += 1;
++        if (receipt.event == .terminal) try t.expect(receipt.event.terminal == .executed);
++    }
++    try t.expectEqual(@as(usize, 1), accepted);
++}
+diff --git a/tests/sme/live_initial_headroom_test.zig b/tests/sme/live_initial_headroom_test.zig
+new file mode 100644
+index 0000000000000000000000000000000000000000..021f0d2e7b206782582cc8fcd5ffb8d2f676be41
+--- /dev/null
++++ b/tests/sme/live_initial_headroom_test.zig
+@@ -0,0 +1,295 @@
++//! Initial headroom comes only from actual Render receipts acquired by Control.
++//! These single-owner tests decode the existing Opus source. Actual-flow cases
++//! fabricate no PCM, descriptor, admission, or acknowledged prefix. Separately
++//! labeled invariant negatives corrupt only detached copies of real receipts.
++const std = @import("std");
++const t = std.testing;
++const streaming = @import("sme-streaming");
++const stream = streaming.stream;
++const opus = @import("sme-opus");
++const indexer = @import("sme-stream-index");
++const fixtures = @import("sme-opus-fixtures");
++
++fn profile() streaming.StreamCapacityProfile {
++    // Preserve the production ring/chunk/watermark values, including 6144 high.
++    // Only the fixture's stream, job, ledger, and encoded-byte bounds are small.
++    return .{ .max_streams = 2, .job_capacity = 2, .completion_capacity = 2, .visibility_capacity = 2, .max_encoded_chunk_bytes = 65536 };
++}
++
++const Memory = struct {
++    bytes: []const u8 = fixtures.cases[0].encoded,
++    reads: usize = 0,
++
++    fn read(raw: *anyopaque, offset: u64, destination: []u8) opus.Error!void {
++        const self: *Memory = @ptrCast(@alignCast(raw));
++        self.reads += 1;
++        if (offset > self.bytes.len or destination.len > self.bytes.len - offset) return error.TruncatedContainer;
++        @memcpy(destination, self.bytes[@intCast(offset)..][0..destination.len]);
++    }
++};
++
++const Fixture = struct {
++    memory: Memory = .{},
++    index: indexer.Index = undefined,
++    service: *streaming.Service = undefined,
++    asset: streaming.Asset = undefined,
++
++    fn initInPlace(self: *Fixture) !void {
++        self.index = try indexer.build(t.allocator, self.memory.bytes, .{ .interval_frames = 4800, .target_chunk_bytes = 1024, .max_chunk_bytes = 65536 });
++        errdefer self.index.deinit();
++        self.service = try streaming.Service.create(t.allocator, profile());
++        errdefer self.service.destroy() catch unreachable;
++        self.service.clock = null;
++        self.asset = try self.service.prepareAsset(.{
++            .sound_index = 0,
++            .sound = .{ .key = .{ .id = 11 }, .storage = .streaming, .layout = self.index.info.layout, .channels = self.index.info.channels, .channel_mask = self.index.info.channel_mask, .frames = self.index.info.audible_frames, .blob_length = self.memory.bytes.len, .audio_hash = self.index.encoded_hash, .chunks = .{ .count = @intCast(self.index.chunks.len) }, .seeks = .{ .count = @intCast(self.index.seeks.len) } },
++            .codec = self.index.info.codec(@splat(1)),
++            .chunks = self.index.chunks,
++            .seeks = self.index.seeks,
++            .source = .{ .context = &self.memory, .length = self.memory.bytes.len, .read_at = Memory.read },
++        });
++        errdefer self.asset.retire();
++        try self.service.attachRuntime();
++    }
++
++    fn deinit(self: *Fixture) void {
++        self.service.detachRuntimeQuiescent() catch unreachable;
++        self.asset.retire();
++        std.debug.assert(self.asset.canDestroy());
++        self.service.destroy() catch unreachable;
++        self.index.deinit();
++    }
++
++    fn open(self: *Fixture, layer: u64, cursor: u64) !stream.Handle {
++        return self.service.open(&self.asset, .{ .generation = 1, .transport_epoch = 1, .group = 21, .layer = layer, .start_cursor = cursor });
++    }
++
++    fn accept(self: *Fixture, handle: stream.Handle, serial: u64) !stream.Accepted {
++        const prefix = try self.service.acknowledgedVisiblePrefix(handle);
++        const job = (try self.service.request(handle)).?;
++        try t.expectEqual(prefix, try self.service.acknowledgedVisiblePrefix(handle));
++        try t.expectEqual(job, (try self.service.workerOne()).?);
++        // The real verified source may legitimately remain in the byte cache.
++        try t.expect(self.memory.reads > 0);
++        try t.expectEqual(prefix, try self.service.acknowledgedVisiblePrefix(handle));
++        var attempt: stream.LiveAcceptanceAttemptV1 = undefined;
++        const accepted = (try self.service.acceptCompletedLiveV1(.{ .accepted_control_frame = 0, .control_tick = serial, .input_order = 0 }, serial, &attempt)).?;
++        try t.expectEqual(job, accepted.input.payload.worker.job);
++        try t.expectEqual(.ready, accepted.input.payload.worker.state);
++        try t.expectEqual(@as(u64, 0), attempt.cut.?.frame);
++        try t.expectEqual(prefix, try self.service.acknowledgedVisiblePrefix(handle));
++        return accepted;
++    }
++};
++
++test "initial 6144 headroom requires each actual admitted receipt to be polled by Control" {
++    var fixture: Fixture = .{};
++    try fixture.initInPlace();
++    defer fixture.deinit();
++    const service = fixture.service;
++    const handle = try fixture.open(31, 0);
++    defer service.close(handle) catch unreachable;
++    const untouched = try fixture.open(32, 0);
++    defer service.close(untouched) catch unreachable;
++    const pcm = try service.ringFor(handle);
++    try t.expectEqual(@as(u32, 6144), service.profile.high_frames);
++    try t.expectEqual(@as(u64, 0), try service.acknowledgedVisiblePrefix(handle));
++    try t.expectEqual(@as(u64, 0), try service.acknowledgedVisiblePrefix(untouched));
++    var empty: stream.observation.Visibility = .{};
++    try t.expect(service.pollVisibilityObserved(&empty) == null);
++    try t.expect(!empty.acknowledged);
++
++    var prefix: u64 = 0;
++    var serial: u64 = 1;
++    while (prefix < service.profile.high_frames) : (serial += 1) {
++        const accepted = try fixture.accept(handle, serial);
++        const produced = pcm.produced.load(.acquire);
++        try t.expectEqual(prefix + service.profile.decode_chunk_frames, produced);
++        try t.expectEqual(prefix, pcm.visible_produced.load(.acquire));
++        // Accepted worker bytes and the publication frontier are not receipts.
++        try t.expect(service.pollVisibilityObserved(&empty) == null);
++        try t.expect(!empty.acknowledged);
++        try t.expectEqual(prefix, try service.acknowledgedVisiblePrefix(handle));
++
++        service.beginRenderGate(serial, 0);
++        const admission = (try service.admitPublication(service.publicationFrontier(), serial, 0, 0)).?;
++        try t.expectEqual(.admitted, admission.disposition);
++        service.endRenderSpan(0);
++        try t.expectEqual(produced, pcm.visible_produced.load(.acquire));
++        // Even genuine Render visibility grants no Control credit before poll.
++        try t.expectEqual(prefix, try service.acknowledgedVisiblePrefix(handle));
++        if (produced == service.profile.high_frames) {
++            try t.expect(prefix < service.profile.high_frames);
++            try t.expectEqual(@as(u64, 6144), produced);
++        }
++
++        var receipt: stream.observation.Visibility = .{};
++        try t.expectEqualDeep(admission, service.pollVisibilityObserved(&receipt).?);
++        try t.expect(receipt.acknowledged);
++        const descriptor = receipt.descriptor.?;
++        try t.expectEqual(handle.index, descriptor.stream_slot);
++        try t.expectEqual(handle.generation, descriptor.stream_generation);
++        try t.expectEqual(accepted.input.payload.worker.job, descriptor.worker_job);
++        try t.expectEqual(prefix, descriptor.prefix_start);
++        try t.expectEqual(produced, descriptor.prefix_end);
++        prefix = descriptor.prefix_end;
++        try t.expectEqual(prefix, try service.acknowledgedVisiblePrefix(handle));
++        try t.expectEqual(@as(u64, 0), try service.acknowledgedVisiblePrefix(untouched));
++        try t.expect(service.pollVisibilityObserved(&empty) == null);
++        try t.expect(!empty.acknowledged);
++        try t.expectEqual(prefix, try service.acknowledgedVisiblePrefix(handle));
++    }
++    try t.expectEqual(@as(u64, 6144), prefix);
++    try t.expect((try service.request(handle)) == null);
++}
++
++fn stoppedReceipts(initially_admitted: bool) !void {
++    var fixture: Fixture = .{};
++    try fixture.initInPlace();
++    defer fixture.deinit();
++    const service = fixture.service;
++    const handle = try fixture.open(31, 0);
++    defer service.close(handle) catch unreachable;
++    const pcm = try service.ringFor(handle);
++    var serial: u64 = 1;
++    var prefix: u64 = 0;
++    if (initially_admitted) {
++        _ = try fixture.accept(handle, serial);
++        service.beginRenderGate(serial, 0);
++        const admitted = (try service.admitPublication(service.publicationFrontier(), serial, 0, 0)).?;
++        try t.expectEqual(.admitted, admitted.disposition);
++        service.endRenderSpan(0);
++        try t.expectEqualDeep(admitted, service.pollVisibility().?);
++        prefix = try service.acknowledgedVisiblePrefix(handle);
++        try t.expectEqual(@as(u64, service.profile.decode_chunk_frames), prefix);
++        serial += 1;
++    }
++    _ = try fixture.accept(handle, serial);
++    _ = try fixture.accept(handle, serial + 1);
++    // Isolated stopped-input negative, not normal stop-lifecycle qualification.
++    // The ensuing dispositions and receipt descriptors come exclusively from
++    // admitPublication and pollVisibilityObserved, not injected output.
++    pcm.stopped.store(true, .release);
++    service.beginRenderGate(serial, 0);
++    const frontier = service.publicationFrontier();
++    for (0..2) |ordinal| {
++        const admission = (try service.admitPublication(frontier, serial, 0, @intCast(ordinal))).?;
++        try t.expectEqual(.rejected, admission.disposition);
++        try t.expectEqual(prefix, try service.acknowledgedVisiblePrefix(handle));
++        var receipt: stream.observation.Visibility = .{};
++        try t.expectEqualDeep(admission, service.pollVisibilityObserved(&receipt).?);
++        try t.expect(receipt.acknowledged);
++        try t.expectEqual(prefix + ordinal * service.profile.decode_chunk_frames, receipt.descriptor.?.prefix_start);
++        try t.expectEqual(prefix + (ordinal + 1) * service.profile.decode_chunk_frames, receipt.descriptor.?.prefix_end);
++        try t.expectEqual(prefix, try service.acknowledgedVisiblePrefix(handle));
++    }
++    service.endRenderSpan(0);
++    try t.expectEqual(prefix + 2 * service.profile.decode_chunk_frames, pcm.visible_produced.load(.acquire));
++    try t.expect(service.pollVisibility() == null);
++    try t.expectEqual(prefix, try service.acknowledgedVisiblePrefix(handle));
++    var sample: [1]f32 = undefined;
++    try t.expect(!pcm.peek(0, 0, &sample));
++}
++
++test "stopped rejected receipts give no initial prefix credit" {
++    try stoppedReceipts(false);
++}
++
++test "stopped rejected receipts preserve but never extend an admitted prefix" {
++    try stoppedReceipts(true);
++}
++
++test "close and reopen reject stale handles and reset receipt credit for a reused slot" {
++    var fixture: Fixture = .{};
++    try fixture.initInPlace();
++    defer fixture.deinit();
++    const service = fixture.service;
++    var current: ?stream.Handle = try fixture.open(31, 0);
++    defer if (current) |handle| service.close(handle) catch unreachable;
++    const old = current.?;
++    _ = try fixture.accept(old, 1);
++    service.beginRenderGate(1, 0);
++    const first = (try service.admitPublication(service.publicationFrontier(), 1, 0, 0)).?;
++    service.endRenderSpan(0);
++    try t.expectError(error.DrainPending, service.close(old));
++    try t.expectEqual(@as(u64, 0), try service.acknowledgedVisiblePrefix(old));
++    try t.expectEqualDeep(first, service.pollVisibility().?);
++    try t.expectEqual(@as(u64, service.profile.decode_chunk_frames), try service.acknowledgedVisiblePrefix(old));
++    try service.close(old);
++    current = null;
++    try t.expectError(error.StaleStream, service.acknowledgedVisiblePrefix(old));
++
++    current = try fixture.open(31, 4096);
++    const fresh = current.?;
++    try t.expectEqual(old.index, fresh.index);
++    try t.expect(fresh.generation != old.generation);
++    try t.expectError(error.StaleStream, service.acknowledgedVisiblePrefix(old));
++    try t.expectEqual(@as(u64, 0), try service.acknowledgedVisiblePrefix(fresh));
++    try t.expect(service.pollVisibility() == null);
++    try t.expectEqual(@as(u64, 0), try service.acknowledgedVisiblePrefix(fresh));
++    _ = try fixture.accept(fresh, 2);
++    service.beginRenderGate(2, 0);
++    const second = (try service.admitPublication(service.publicationFrontier(), 2, 0, 0)).?;
++    service.endRenderSpan(0);
++    try t.expectEqual(@as(u64, 0), try service.acknowledgedVisiblePrefix(fresh));
++    var receipt: stream.observation.Visibility = .{};
++    try t.expectEqualDeep(second, service.pollVisibilityObserved(&receipt).?);
++    try t.expect(receipt.acknowledged);
++    try t.expectEqual(fresh.generation, receipt.descriptor.?.stream_generation);
++    try t.expectEqual(@as(u64, 4096), receipt.descriptor.?.target_cursor);
++    try t.expectEqual(@as(u64, 0), receipt.descriptor.?.prefix_start);
++    try t.expectEqual(@as(u64, service.profile.decode_chunk_frames), try service.acknowledgedVisiblePrefix(fresh));
++    try t.expectError(error.StaleStream, service.acknowledgedVisiblePrefix(old));
++}
++
++const ReceiptCorruption = enum { stale_generation, noncontiguous };
++
++fn malformedReceipt(kind: ReceiptCorruption) !void {
++    var fixture: Fixture = .{};
++    try fixture.initInPlace();
++    defer fixture.deinit();
++    const service = fixture.service;
++    const handle = try fixture.open(31, 0);
++    defer service.close(handle) catch unreachable;
++    _ = try fixture.accept(handle, 1);
++    service.beginRenderGate(1, 0);
++    const admission = (try service.admitPublication(service.publicationFrontier(), 1, 0, 0)).?;
++    service.endRenderSpan(0);
++    try t.expectEqual(.admitted, admission.disposition);
++    try t.expectEqual(@as(u64, 0), try service.acknowledgedVisiblePrefix(handle));
++
++    // Isolated invariant negative, not evidence of a reachable native receipt.
++    // Corrupt a detached copy only. The real ledger, its leases, actual receipt,
++    // PCM, and all prefix counters are untouched by this test setup.
++    const tail = service.publication_tail.load(.monotonic);
++    const actual = &service.publications[@intCast(tail % service.publications.len)];
++    var malformed = actual.*;
++    switch (kind) {
++        .stale_generation => malformed.descriptor.stream_generation += 1,
++        .noncontiguous => malformed.descriptor.prefix_start += 1,
++    }
++    const identity_valid = streaming.Service.VisibilityReceiptTests.acknowledge(service, &malformed);
++    try t.expectEqual(kind == .noncontiguous, identity_valid);
++    try t.expectEqual(@as(u64, 0), service.slots[handle.index].acknowledged_visible_prefix);
++    try t.expectError(error.InvalidState, service.acknowledgedVisiblePrefix(handle));
++    try t.expectEqual(handle.generation, actual.descriptor.stream_generation);
++    try t.expectEqual(@as(u64, 0), actual.descriptor.prefix_start);
++    try t.expectEqualDeep(admission, actual.admission);
++
++    // Drain the intact real receipt through the normal acquire/acknowledgement
++    // path. Valid later traffic must not clear the previously latched failure.
++    var receipt: stream.observation.Visibility = .{};
++    try t.expectEqualDeep(admission, service.pollVisibilityObserved(&receipt).?);
++    try t.expect(receipt.acknowledged);
++    try t.expectError(error.InvalidState, service.acknowledgedVisiblePrefix(handle));
++    try t.expect(service.pollVisibility() == null);
++    try t.expectError(error.InvalidState, service.acknowledgedVisiblePrefix(handle));
++}
++
++test "isolated copied stale-generation receipt cannot credit a slot and permanently invalidates proof" {
++    try malformedReceipt(.stale_generation);
++}
++
++test "isolated copied noncontiguous receipt cannot grant credit and permanently invalidates proof" {
++    try malformedReceipt(.noncontiguous);
++}
+diff --git a/tools/sme_authoring/core/live_owner.zig b/tools/sme_authoring/core/live_owner.zig
+index 2dd07866d4f2cd54135d289026791f903c83794f..885f98747f8e36c3144e05fd67a2a9818255fb4b 100644
+--- a/tools/sme_authoring/core/live_owner.zig
++++ b/tools/sme_authoring/core/live_owner.zig
+@@ -1009,6 +1009,11 @@ pub const Host = struct {
+                 switch (receipt.event) {
+                     .accepted => try self.publishAcceptedObserved(pending.command, receipt),
+                     .terminal => |terminal| {
++                        if (@import("builtin").is_test) {
++                            if (self.options.semantic == null and self.options.test_capture == null and
++                                pending.command.kind == .stop and terminal == .rejected)
++                                self.reportRejectedStopForTest(receipt);
++                        }
+                         const result: mailbox.Terminal = switch (terminal) {
+                             .executed, .unchanged, .control_applied => .executed,
+                             .rejected => .rejected,
+@@ -1031,6 +1036,30 @@ pub const Host = struct {
+         }
+         self.status.receipt_budget_saturated +|= 1;
+     }
++    /// Failure-only ordinary-Host diagnostics, on Control after a real receipt.
++    /// No callback I/O, semantic observations, or replacement command outcome.
++    fn reportRejectedStopForTest(self: *Host, receipt: music.MusicRuntimeReceiptV1) void {
++        if (!@import("builtin").is_test) return;
++        const owner = self.owner.?;
++        // Keep the error union as diagnostic data: snapshot failure must not
++        // escape collect(), alter the terminal, or skip normal ledger cleanup.
++        const published = owner.snapshotV1();
++        std.debug.print("DEFAULT_HOST_REJECTED_STOP host_phase={s} play_executed={} state={s} active_group={} pending={} action={any} tick={d} frame={d} last_error={any} fault_count={d} fault={any} receipt={any} published={any}\n", .{
++            @tagName(self.status.phase),
++            self.status.play_executed,
++            @tagName(owner.state),
++            owner.active_group != null,
++            owner.pending != null,
++            owner.action,
++            owner.tick,
++            owner.control_frame,
++            owner.last_error,
++            owner.stream_fault_count,
++            owner.last_stream_fault,
++            receipt,
++            published,
++        });
++    }
+     fn closeTurn(self: *Host) !void {
+         // An outstanding park is retained custody: finish its snapshot or
+         // resume before any further fallible shutdown/tick work.
