@@ -1,0 +1,883 @@
+diff --git a/build_support/sme_tasks/task-017.zon b/build_support/sme_tasks/task-017.zon
+index b7a2aad..def1a7c 100644
+--- a/build_support/sme_tasks/task-017.zon
++++ b/build_support/sme_tasks/task-017.zon
+@@ -38,6 +38,7 @@
+         .install = false,
+     }, .{ .name = "sme-public-causal-recording", .root_source_file = "examples/sme/public_causal_recording_main.zig", .kind = .executable, .imports = .{.{ .name = "sme-public-causal-example", .module = "sme-public-causal-example" }} }, .{ .name = "sme-public-causal-recording-partitioned544", .root_source_file = "examples/sme/public_causal_recording_partitioned544_main.zig", .kind = .executable, .imports = .{ .{ .name = "sme-public-causal-example", .module = "sme-public-causal-example" }, .{ .name = "music", .module = "music" } }, .causal_resource_profile = .partitioned544 }, .{ .name = "sme-compiler", .root_source_file = "tools/sme_authoring/cli/main.zig", .kind = .executable, .imports = .{.{ .name = "sme-authoring-cli", .module = "sme-authoring-cli" }} } },
+     .checks = .{
++        .{ .name = "sme-live-background-supply-test", .tests = .{"tests/sme/live_background_supply_test.zig"} },
+         .{ .name = "sme-live-initial-headroom-test", .tests = .{"tests/sme/live_initial_headroom_test.zig"} },
+         .{ .name = "sme-author-live-default-chronology-test", .tests = .{"tests/sme/author_live_default_chronology_test.zig"} },
+         .{ .name = "sme-author-live-default-mode-test", .tests = .{"tests/sme/author_live_default_mode_test.zig"} },
+diff --git a/src/music/resident_runtime.zig b/src/music/resident_runtime.zig
+index d234ad2..230bde8 100644
+--- a/src/music/resident_runtime.zig
++++ b/src/music/resident_runtime.zig
+@@ -4889,7 +4889,7 @@ pub const MusicRuntime = struct {
+                 if (origin.generation != generation.runtime_generation or !origin.group.eql(group)) break :blk null;
+                 break :blk group;
+             };
+-            if (try generation.prefetchStableActiveWindowsLiveV1(excluded, frame, active)) |observation|
++            if (try (if (self.live_chronology_frontier != null) generation.prefetchChronologyActiveWindowsLiveV1(excluded, frame, active) else generation.prefetchStableActiveWindowsLiveV1(excluded, frame, active))) |observation|
+                 return self.deferLiveTick(attempt, .background_supply, observation);
+         } else try self.prefetchMusicWindows(generation, frame);
+     }
+diff --git a/src/music/runtime_assets.zig b/src/music/runtime_assets.zig
+index c805c0c..d6fa996 100644
+--- a/src/music/runtime_assets.zig
++++ b/src/music/runtime_assets.zig
+@@ -1445,8 +1445,18 @@ pub const Generation = struct {
+     pub fn prefetchStableActiveWindowsLiveV1(self: *Generation, excluded: ?WindowKey, frame: u64, active: ?rt.GroupHandle) !?streaming.stream.LiveObservationDeferV1 {
+         return self.prefetchSelectedWindows(null, excluded, false, frame, true, active);
+     }
++    /// Chronology background fairness: every eligible window gets one actual
++    /// supply opportunity. A typed defer is not a failure of the other stems.
++    /// Request-scoped and legacy callers retain their first-defer contract.
++    pub fn prefetchChronologyActiveWindowsLiveV1(self: *Generation, excluded: ?WindowKey, frame: u64, active: ?rt.GroupHandle) !?streaming.stream.LiveObservationDeferV1 {
++        return self.prefetchSelectedWindowsPolicy(null, excluded, false, frame, true, active, true);
++    }
+     fn prefetchSelectedWindows(self: *Generation, selected: ?WindowKey, excluded: ?WindowKey, entry_only: bool, frame: u64, live: bool, active: ?rt.GroupHandle) !?streaming.stream.LiveObservationDeferV1 {
++        return self.prefetchSelectedWindowsPolicy(selected, excluded, entry_only, frame, live, active, false);
++    }
++    fn prefetchSelectedWindowsPolicy(self: *Generation, selected: ?WindowKey, excluded: ?WindowKey, entry_only: bool, frame: u64, live: bool, active: ?rt.GroupHandle, complete_background_sweep: bool) !?streaming.stream.LiveObservationDeferV1 {
+         const service = self.service orelse return null;
++        var first_defer: ?streaming.stream.LiveObservationDeferV1 = null;
+         for (self.windows) |entry| if (entry) |window| {
+             if (window.retiring) continue;
+             if (selected) |owned| if (!window.ownedBy(owned.scope, owned.request_id)) continue;
+@@ -1464,11 +1474,14 @@ pub const Generation = struct {
+                 const stable = if (active) |group| if (window.group) |bound| group.eql(bound) else false else false;
+                 switch (try (if (stable) service.prefetchActiveLiveV1(window.binding.handle, frame) else service.prefetchLiveV1(window.binding.handle, frame))) {
+                     .submitted => {},
+-                    .deferred => |value| return value,
++                    .deferred => |value| {
++                        if (!complete_background_sweep) return value;
++                        if (first_defer == null) first_defer = value;
++                    },
+                 }
+             } else _ = try service.prefetch(window.binding.handle, frame);
+         };
+-        return null;
++        return first_defer;
+     }
+     pub fn windowCount(self: *const Generation) u32 {
+         var count: u32 = 0;
+diff --git a/src/runtime/runtime.zig b/src/runtime/runtime.zig
+index cb7155d..2cd6ec2 100644
+--- a/src/runtime/runtime.zig
++++ b/src/runtime/runtime.zig
+@@ -915,6 +915,8 @@ pub const ControlRuntime = struct {
+     test_control_frontier_hook: if (@import("builtin").is_test) ?ControlFrontierHook else void = if (@import("builtin").is_test) null else {},
+     /// Test-only workload pause after a completed real acceptance, never an output sink.
+     test_after_live_acceptance: if (@import("builtin").is_test) ?TestAfterLiveAcceptance else void = if (@import("builtin").is_test) null else {},
++    /// Passive test-only copy of the same initialized attempt. No result channel.
++    test_live_acceptance_attempt: if (@import("builtin").is_test) ?TestLiveAcceptanceAttempt else void = if (@import("builtin").is_test) null else {},
+     test_before_collection_hook: if (@import("builtin").is_test) ?ControlCollectionHook else void = if (@import("builtin").is_test) null else {},
+     snapshots: [snapshot_count]SnapshotSlot = [_]SnapshotSlot{.{}} ** snapshot_count,
+     published_slot: std.atomic.Value(u8) = std.atomic.Value(u8).init(0),
+@@ -1938,6 +1940,10 @@ pub const ControlRuntime = struct {
+         context: *anyopaque,
+         call: *const fn (*anyopaque, u64, u64) void,
+     };
++    pub const TestLiveAcceptanceAttempt = struct {
++        context: *anyopaque,
++        call: *const fn (*anyopaque, *const streaming.stream.LiveAcceptanceAttemptV1, u64, bool) void,
++    };
+     pub const LiveAcceptanceSinkV1 = struct {
+         context: *anyopaque,
+         emit: *const fn (*anyopaque, *const streaming.stream.LiveAcceptanceAttemptV1, u64) void,
+@@ -1970,6 +1976,10 @@ pub const ControlRuntime = struct {
+             var acceptance_finished = false;
+             defer {
+                 if (sink) |value| value.emit(value.context, &attempt, self.tick_v1.frame);
++                // Service initializes attempt before every return, including
++                // null/defer/error. This observer cannot supply engine values.
++                if (@import("builtin").is_test) if (self.test_live_acceptance_attempt) |hook|
++                    hook.call(hook.context, &attempt, self.tick_v1.frame, acceptance_finished);
+                 // The output-only Recorder callback has returned before this
+                 // explicit test workload seam can pause Control. Render never
+                 // waits here; neither callback can provide engine results.
+diff --git a/tests/sme/author_live_default_chronology_test.zig b/tests/sme/author_live_default_chronology_test.zig
+index 7f695e6..ae6313a 100644
+--- a/tests/sme/author_live_default_chronology_test.zig
++++ b/tests/sme/author_live_default_chronology_test.zig
+@@ -8,6 +8,7 @@ const t = std.testing;
+ const a = t.allocator;
+ const trace = f.music.trace;
+ const Position = trace.schema.Position;
++const stream = f.rt.streaming.stream;
+ const deadline_ns = 20 * std.time.ns_per_s;
+ const playback_frames = 32768;
+ // Diagnostic experiment only. This does not reproduce a Windows timer or
+@@ -22,6 +23,17 @@ fn controlDelayMilliseconds() !u8 {
+     if (std.mem.eql(u8, value, "16")) return 16;
+     return error.DefaultUnsupportedControlDelay;
+ }
++// Fixed diagnostic workload selection, validated before bank/Host creation.
++fn workerDelayMilliseconds() !u8 {
++    const value = std.process.Environ.getAlloc(t.environ, a, "SME_DEFAULT_WORKER_DELAY_MS") catch |err| switch (err) {
++        error.EnvironmentVariableMissing => return 1,
++        else => return err,
++    };
++    defer a.free(value);
++    if (std.mem.eql(u8, value, "1")) return 1;
++    if (std.mem.eql(u8, value, "16")) return 16;
++    return error.DefaultUnsupportedWorkerDelay;
++}
+ fn pause() void {
+     std.Io.sleep(t.io, .fromMilliseconds(1), .awake) catch {};
+ }
+@@ -40,16 +52,53 @@ fn launch(bytes: []const u8) live.Launch {
+ }
+ const Pcm = struct {
+     const Record = struct { epoch: u64, first: u64, offset: usize, frames: usize, thread: u64 };
++    /// Callback-owned scalars only. Preserve the first failure before publishing
++    /// failed; UI reads them only after genuine callback and Control joins.
++    const Failure = struct {
++        epoch: u64,
++        first_frame: u64,
++        channels: u16,
++        sample_count: usize,
++        stored_records: usize,
++        record_capacity: usize,
++        used_samples: usize,
++        sample_capacity: usize,
++        remaining_samples: usize,
++        captured_callbacks_before: u64,
++        captured_frames_before: u64,
++        invalid_channels: bool,
++        odd_sample_count: bool,
++        records_full: bool,
++        sample_capacity_exceeded: bool,
++    };
+     samples: []f32,
+     records: [1024]Record = undefined,
+     len: usize = 0,
+     used: usize = 0,
++    failure: ?Failure = null,
+     callbacks: std.atomic.Value(u64) = .init(0),
+     submitted_frames: std.atomic.Value(u64) = .init(0),
+     failed: std.atomic.Value(bool) = .init(false),
+     fn observe(raw: *anyopaque, epoch: u64, first: u64, channels: u16, samples: []const f32) void {
+         const self: *Pcm = @ptrCast(@alignCast(raw));
+         if (channels != 2 or samples.len % 2 != 0 or self.len == self.records.len or samples.len > self.samples.len - self.used) {
++            if (self.failure == null) self.failure = .{
++                .epoch = epoch,
++                .first_frame = first,
++                .channels = channels,
++                .sample_count = samples.len,
++                .stored_records = self.len,
++                .record_capacity = self.records.len,
++                .used_samples = self.used,
++                .sample_capacity = self.samples.len,
++                .remaining_samples = self.samples.len - self.used,
++                .captured_callbacks_before = self.callbacks.load(.acquire),
++                .captured_frames_before = self.submitted_frames.load(.acquire),
++                .invalid_channels = channels != 2,
++                .odd_sample_count = samples.len % 2 != 0,
++                .records_full = self.len == self.records.len,
++                .sample_capacity_exceeded = samples.len > self.samples.len - self.used,
++            };
+             self.failed.store(true, .release);
+             return;
+         }
+@@ -60,6 +109,10 @@ const Pcm = struct {
+         _ = self.submitted_frames.fetchAdd(samples.len / 2, .release);
+         _ = self.callbacks.fetchAdd(1, .release);
+     }
++    fn reportFailureAfterJoin(self: *const Pcm) void {
++        if (self.failure) |value|
++            std.debug.print("DEFAULT_HOST_PCM_CAPACITY_OR_SHAPE {any}\n", .{value});
++    }
+     fn check(self: *const Pcm, oracle: *const f.Oracle, play: u64, stop: u64, closed: live.Status) !void {
+         if (self.failed.load(.acquire)) return error.DefaultPcmCapacityOrShape;
+         try t.expect(self.len > 0 and stop >= play + playback_frames);
+@@ -102,6 +155,216 @@ const Pcm = struct {
+         std.debug.print("DEFAULT_HOST_PCM frames={d} audible={d} nonzero={d} ramp={d} silence_after={d} all_four_stems=true\n", .{ next, audible, nonzero, ramp, silent_after });
+     }
+ };
++// Each role owns its tail and counters exclusively. No merged/global clock is
++// implied: Worker completion publication can precede its completion callback.
++fn DiagnosticTail(comptime T: type, comptime capacity: usize) type {
++    return struct {
++        const Entry = struct { ordinal: u64, value: T };
++        entries: [capacity]Entry = undefined,
++        next: u64 = 0,
++        len: usize = 0,
++        overwritten: u64 = 0,
++        counter_exhausted: bool = false,
++        fn append(self: *@This(), value: T) void {
++            if (self.next == std.math.maxInt(u64)) {
++                self.counter_exhausted = true;
++                return;
++            }
++            self.entries[@intCast(self.next % capacity)] = .{ .ordinal = self.next, .value = value };
++            self.next += 1;
++            if (self.len < capacity) self.len += 1 else self.overwritten +|= 1;
++        }
++        fn at(self: *const @This(), retained_index: usize) Entry {
++            std.debug.assert(retained_index < self.len);
++            return self.entries[@intCast((self.next - self.len + retained_index) % capacity)];
++        }
++    };
++}
++const NativeDiagnostics = struct {
++    const control_capacity = 256;
++    const worker_capacity = 128;
++    const JobIdentity = struct {
++        slot: u16,
++        handle: stream.Handle,
++        descriptor: trace.schema.readiness.JobDescriptor,
++        ordinal: u64,
++        count: u32,
++    };
++    const Supply = struct {
++        point: stream.TestSupplyPoint,
++        group: u64,
++        layer: u64,
++        pending_job: ?u16,
++        queued: ?JobIdentity = null,
++    };
++    const Acceptance = struct {
++        incoming: Position,
++        effective_frame: u64,
++        runtime_finished: bool,
++        batch_id: u64,
++        outcome: stream.observation.Outcome,
++        error_code: u32,
++        returned_error: ?stream.Error,
++        cut: ?stream.CompletedDspCutV1,
++        deferred: @FieldType(stream.LiveAcceptanceAttemptV1, "deferred"),
++        selected: ?struct { identity: JobIdentity, outcome: trace.schema.Readiness, failure_code: u16 },
++        availability: stream.observation.Availability,
++        ring_capacity: ?u32,
++        publication_preflight: ?stream.observation.PublicationCut,
++        publication: ?struct {
++            batch_id: u64,
++            handle: stream.Handle,
++            worker_job: u64,
++            prefix_start: u64,
++            prefix_end: u64,
++            target_cursor: u64,
++            loop_epoch: u64,
++        },
++        effects: stream.observation.Effects,
++        accepted: ?struct { handle: stream.Handle, position: Position, worker: trace.schema.Worker },
++    };
++    const ControlEvent = struct {
++        // Supply/tick entries use the current Control position, not a claimed
++        // operation-local accepted frame. Public inputs retain their own position.
++        position: Position,
++        value: union(enum) {
++            supply: Supply,
++            acceptance: Acceptance,
++            public_worker: trace.schema.Worker,
++            admission: trace.schema.Admission,
++            tick: f.music.MusicRuntime.LiveControlTickOutcomeV1,
++        },
++    };
++    const WorkerEvent = struct { kind: enum { running, completed }, job: u64, identity: ?JobIdentity = null };
++    // Set on Control before worker_ready, then immutable. Service is installed
++    // by the initial load Worker before its actual load.completed release.
++    owner: ?*f.music.MusicRuntime = null,
++    service: ?*f.rt.streaming.Service = null,
++    installed: bool = false, // Worker only until joins.
++    setup_failed: bool = false, // Worker only until joins.
++    worker_identity_missing: u64 = 0,
++    control: DiagnosticTail(ControlEvent, control_capacity) = .{},
++    worker: DiagnosticTail(WorkerEvent, worker_capacity) = .{},
++    first_control_failure: ?struct { next_ordinal: u64, position: Position, failure: anyerror } = null,
++    control_after_failure_omitted: u64 = 0,
++
++    fn beforeWorker(raw: *anyopaque, owner: *f.music.MusicRuntime) void {
++        const self: *NativeDiagnostics = @ptrCast(@alignCast(raw));
++        self.owner = owner;
++        owner.test_load_hook = .{ .context = self, .call = loaded };
++    }
++    fn loaded(raw: *anyopaque, stage: f.music.MusicRuntime.LoadStage) void {
++        const self: *NativeDiagnostics = @ptrCast(@alignCast(raw));
++        if (stage != .prepared) return;
++        const candidate = self.owner.?.load.candidate orelse {
++            self.setup_failed = true;
++            return;
++        };
++        const service = candidate.service orelse {
++            self.setup_failed = true;
++            return;
++        };
++        if (self.installed) {
++            self.setup_failed = true;
++            return;
++        }
++        self.service = service;
++        service.test_supply_hook = .{ .context = self, .call = supply };
++        service.test_worker_hook = .{ .context = self, .call = running };
++        service.test_worker_stage_hook = .{ .context = self, .call = workerStage };
++        self.installed = true;
++    }
++    fn position(self: *const NativeDiagnostics) Position {
++        const owner = self.owner.?;
++        return .{ .control_tick = owner.control.stream_control_tick, .input_order = owner.control.stream_input_order, .accepted_control_frame = owner.control.tick_v1.frame };
++    }
++    fn appendControl(self: *NativeDiagnostics, value: ControlEvent) void {
++        if (self.first_control_failure != null) {
++            self.control_after_failure_omitted +|= 1;
++            return;
++        }
++        self.control.append(value);
++    }
++    fn freezeControl(self: *NativeDiagnostics, failure: anyerror) void {
++        if (self.first_control_failure == null) self.first_control_failure = .{ .next_ordinal = self.control.next, .position = self.position(), .failure = failure };
++    }
++    fn supply(raw: *anyopaque, point: stream.TestSupplyPoint) void {
++        const self: *NativeDiagnostics = @ptrCast(@alignCast(raw));
++        const service = self.service.?;
++        // get(handle) succeeded before the hook; these fields are Control-owned.
++        const slot = &service.slots[point.handle.index];
++        var value: Supply = .{ .point = point, .group = slot.options.group, .layer = slot.options.layer, .pending_job = slot.pending_job };
++        if (point.stage == .request_queued) {
++            const index = point.job_slot.?;
++            const job = &service.jobs[index];
++            // Worker may now run, but cannot modify these immutable request
++            // fields; this sole Control cannot retire/reuse while in the hook.
++            value.queued = .{ .slot = index, .handle = job.handle, .descriptor = job.descriptor, .ordinal = job.ordinal, .count = job.count };
++        }
++        self.appendControl(.{ .position = self.position(), .value = .{ .supply = value } });
++    }
++    fn running(raw: *anyopaque, id: u64) void {
++        const self: *NativeDiagnostics = @ptrCast(@alignCast(raw));
++        var value: WorkerEvent = .{ .kind = .running, .job = id };
++        // Only inspect the one running job while this Worker owns its claim.
++        // Never read free/completed descriptors or Control's diagnostic lane.
++        // Validated Service profiles bound this search to at most 256 slots.
++        // This test-only observer has real overhead and can perturb timing.
++        for (self.service.?.jobs, 0..) |*job, i| {
++            if (job.state.load(.acquire) != .running) continue;
++            if (job.descriptor.job != id) continue;
++            value.identity = .{ .slot = @intCast(i), .handle = job.handle, .descriptor = job.descriptor, .ordinal = job.ordinal, .count = job.count };
++            break;
++        }
++        if (value.identity == null) self.worker_identity_missing +|= 1;
++        self.worker.append(value);
++    }
++    fn workerStage(raw: *anyopaque, stage: stream.WorkerStage, id: u64) void {
++        const self: *NativeDiagnostics = @ptrCast(@alignCast(raw));
++        if (stage != .after_completed) return;
++        // The released slot may already be reused. Only the argument is safe.
++        self.worker.append(.{ .kind = .completed, .job = id });
++    }
++    fn attemptSummary(attempt: *const stream.LiveAcceptanceAttemptV1, frame: u64, finished: bool) Acceptance {
++        const evidence = &attempt.evidence;
++        return .{
++            .incoming = attempt.incoming,
++            .effective_frame = frame,
++            .runtime_finished = finished,
++            .batch_id = evidence.batch_id,
++            .outcome = evidence.outcome,
++            .error_code = evidence.error_code,
++            .returned_error = attempt.returned_error,
++            .cut = attempt.cut,
++            .deferred = attempt.deferred,
++            .selected = if (evidence.selected) |selected| .{ .identity = .{ .slot = selected.slot, .handle = selected.handle, .descriptor = selected.descriptor, .ordinal = selected.ordinal, .count = selected.count }, .outcome = selected.outcome, .failure_code = selected.failure_code } else null,
++            .availability = evidence.availability,
++            .ring_capacity = evidence.ring_capacity,
++            .publication_preflight = evidence.publication_preflight,
++            .publication = if (evidence.publication) |value| .{ .batch_id = value.batch_id, .handle = .{ .index = value.stream_slot, .generation = value.stream_generation }, .worker_job = value.worker_job, .prefix_start = value.prefix_start, .prefix_end = value.prefix_end, .target_cursor = value.target_cursor, .loop_epoch = value.loop_epoch } else null,
++            .effects = evidence.effects,
++            .accepted = if (evidence.accepted) |value| .{ .handle = value.handle, .position = value.input.position, .worker = value.input.payload.worker } else null,
++        };
++    }
++    fn acceptance(raw: *anyopaque, attempt: *const stream.LiveAcceptanceAttemptV1, frame: u64, finished: bool) void {
++        const self: *NativeDiagnostics = @ptrCast(@alignCast(raw));
++        self.appendControl(.{ .position = attempt.incoming, .value = .{ .acceptance = attemptSummary(attempt, frame, finished) } });
++    }
++    fn publicInputs(self: *NativeDiagnostics, inputs: []const trace.Input) void {
++        for (inputs) |input| switch (input.payload) {
++            .worker => |value| self.appendControl(.{ .position = input.position, .value = .{ .public_worker = value } }),
++            .admission => |value| self.appendControl(.{ .position = input.position, .value = .{ .admission = value } }),
++            else => {},
++        };
++    }
++    fn reportAfterJoin(self: *const NativeDiagnostics) void {
++        const incomplete = !self.installed or self.setup_failed or self.worker_identity_missing != 0 or self.control.overwritten != 0 or self.worker.overwritten != 0 or self.control.counter_exhausted or self.worker.counter_exhausted or self.control_after_failure_omitted != 0;
++        std.debug.print("DEFAULT_HOST_EVENT_TAIL selected_hooks_only=true global_order=false replay_certificate=false per_prefetch_return_unobserved=true missing_request_reason_unclassified=true worker_lookup_max_slots=256 timing_perturbation=true incomplete={} storage_bytes={d} installed={} setup_failed={} worker_identity_missing={d} control_capacity={d} control_retained={d} control_next={d} control_overwritten={d} control_counter_exhausted={} control_after_failure_omitted={d} worker_capacity={d} worker_retained={d} worker_next={d} worker_overwritten={d} worker_counter_exhausted={}\n", .{ incomplete, @sizeOf(NativeDiagnostics), self.installed, self.setup_failed, self.worker_identity_missing, control_capacity, self.control.len, self.control.next, self.control.overwritten, self.control.counter_exhausted, self.control_after_failure_omitted, worker_capacity, self.worker.len, self.worker.next, self.worker.overwritten, self.worker.counter_exhausted });
++        if (self.first_control_failure) |value| std.debug.print("DEFAULT_HOST_EVENT_FAILURE {any}\n", .{value});
++        for (0..self.control.len) |i| std.debug.print("DEFAULT_HOST_CONTROL_EVENT {any}\n", .{self.control.at(i)});
++        for (0..self.worker.len) |i| std.debug.print("DEFAULT_HOST_WORKER_EVENT {any}\n", .{self.worker.at(i)});
++    }
++};
+ const Probe = struct {
+     const Accepted = struct { position: Position, job: u64 };
+     const Request = struct { id: u64, context: u64, position: Position };
+@@ -132,6 +395,7 @@ const Probe = struct {
+     };
+     owner: ?*f.music.MusicRuntime = null, // Control only, never read by UI.
+     pcm: *Pcm,
++    diagnostics: *NativeDiagnostics,
+     control_delay_ms: u8 = 0,
+     inputs: []trace.Input,
+     schedule: []trace.ScheduleEntry,
+@@ -159,12 +423,14 @@ const Probe = struct {
+     legacy_diagnostic_incomplete: u64 = 0,
+     legacy_rejected: bool = false,
+     fn fail(self: *Probe, err: anyerror) void {
++        self.diagnostics.freezeControl(err);
+         if (self.failure == null) self.failure = err;
+         self.failed.store(true, .release);
+     }
+     fn install(raw: *anyopaque, owner: *f.music.MusicRuntime) void {
+         const self: *Probe = @ptrCast(@alignCast(raw));
+         self.owner = owner;
++        owner.control.test_live_acceptance_attempt = .{ .context = self.diagnostics, .call = NativeDiagnostics.acceptance };
+     }
+     fn acceptance(raw: *anyopaque, tick: u64, frame: u64) void {
+         const self: *Probe = @ptrCast(@alignCast(raw));
+@@ -194,13 +460,15 @@ const Probe = struct {
+         }
+         self.callbacks_after = self.pcm.callbacks.load(.acquire);
+     }
+-    fn outcome(raw: *anyopaque, _: f.music.MusicRuntime.LiveControlTickOutcomeV1) void {
++    fn outcome(raw: *anyopaque, value: f.music.MusicRuntime.LiveControlTickOutcomeV1) void {
+         const self: *Probe = @ptrCast(@alignCast(raw));
++        self.diagnostics.appendControl(.{ .position = self.diagnostics.position(), .value = .{ .tick = value } });
+         if (self.failed.load(.acquire)) return;
+         self.collect() catch |err| {
+             self.fail(err);
+             return;
+         };
++        if (self.pcm.failed.load(.acquire)) self.diagnostics.freezeControl(error.DefaultPcmCapacityOrShape);
+         // The Host invokes this after a successful real live tick. Trace
+         // collection and every original assertion run before the delay.
+         // Cancellation prevents adding further delay to genuine cleanup.
+@@ -215,6 +483,9 @@ const Probe = struct {
+         const owner = self.owner orelse return error.DefaultMissingOwner;
+         const result = try owner.copyAndDrainTraceWithProvenanceV1(self.inputs, self.schedule);
+         const batch = result.batch;
++        // Copy the actual drained failure-tick prefix before the original
++        // status guard can return. Diagnostic copies do not advance test counts.
++        self.diagnostics.publicInputs(self.inputs[0..batch.input_count]);
+         if (batch.inputs_dropped != 0 or batch.schedule_dropped != 0 or batch.counter_exhausted) return error.DefaultPublicTraceLost;
+         try t.expectEqual(self.input_count, batch.input_begin);
+         try t.expectEqual(self.schedule_count, batch.schedule_begin);
+@@ -382,6 +653,8 @@ fn closeActual(host: *live.Host) !live.Status {
+ 
+ test "default Host without capture accepts cross-frame completions and preserves four-stem PCM" {
+     const control_delay_ms = try controlDelayMilliseconds();
++    const worker_delay_ms = try workerDelayMilliseconds();
++    if (worker_delay_ms != 1) std.debug.print("DEFAULT_HOST_WORKER_CADENCE_EXPERIMENT classification=controlled_dual_cadence control_delay_ms={d} worker_wait_ms={d} windows_reproduction=false acceptance=false\n", .{ control_delay_ms, worker_delay_ms });
+     if (control_delay_ms != 0) std.debug.print("DEFAULT_HOST_CONTROL_CADENCE_EXPERIMENT classification=controlled_cadence_experiment delay_ms={d} windows_reproduction=false acceptance=false\n", .{control_delay_ms});
+     const bytes = try buildBank();
+     defer a.free(bytes);
+@@ -399,9 +672,12 @@ test "default Host without capture accepts cross-frame completions and preserves
+     defer if (safe_to_free) a.free(inputs);
+     const schedule = try a.alloc(trace.ScheduleEntry, @typeInfo(@FieldType(f.music.MusicRuntime, "observations")).array.len);
+     defer if (safe_to_free) a.free(schedule);
++    const diagnostics = try a.create(NativeDiagnostics);
++    defer if (safe_to_free) a.destroy(diagnostics);
++    diagnostics.* = .{};
+     const probe = try a.create(Probe);
+     defer if (safe_to_free) a.destroy(probe);
+-    probe.* = .{ .pcm = pcm, .inputs = inputs, .schedule = schedule, .control_delay_ms = control_delay_ms };
++    probe.* = .{ .pcm = pcm, .diagnostics = diagnostics, .inputs = inputs, .schedule = schedule, .control_delay_ms = control_delay_ms };
+     const memory = try a.create(live.TestAllocator);
+     defer if (safe_to_free) {
+         if (memory.deinit() != .ok) @panic("default Host leaked native allocations");
+@@ -413,6 +689,8 @@ test "default Host without capture accepts cross-frame completions and preserves
+         .device = .{ .backend = .null_backend },
+         .semantic = null,
+         .test_capture = null,
++        .test_worker_wait_ms = worker_delay_ms,
++        .test_before_worker = .{ .context = diagnostics, .call = NativeDiagnostics.beforeWorker },
+         .test_setup = .{ .context = probe, .call = Probe.install },
+         .test_tick_outcome = .{ .context = probe, .call = Probe.outcome },
+         .test_after_live_acceptance = .{ .context = probe, .call = Probe.acceptance },
+@@ -420,20 +698,27 @@ test "default Host without capture accepts cross-frame completions and preserves
+     };
+     const host = try live.Host.createWithTestAllocator(memory, launch(bytes), options);
+     var alive = true;
++    var diagnostics_reported = false;
+     errdefer {
+         probe.cancelled.store(true, .release);
+         var joined_for_report = !alive;
+         if (alive) {
+-            if (closeActual(host)) |_| {
++            if (closeActual(host)) |closed| {
+                 joined_for_report = true;
+-            } else |_| {
++                std.debug.print("DEFAULT_HOST_FAILURE_CLEANUP worker_joined={any} provider={any} sample_leases={d} live_instances={d} cleanup_error={any}\n", .{ closed.worker_joined, closed.provider, closed.sample_leases, closed.live_instances, closed.cleanup_error });
++            } else |cleanup_error| {
++                std.debug.print("DEFAULT_HOST_FAILURE_CLEANUP_FAILED error={s} joined={any} cleanup_complete=false\n", .{ @errorName(cleanup_error), host.joined });
+                 safe_to_free = false;
+                 // A failure after join (for example an unread Close credit)
+                 // retains storage but no longer has a concurrent producer.
+                 joined_for_report = host.joined;
+             }
+         }
+-        if (joined_for_report) probe.reportFailureAfterJoin();
++        if (joined_for_report) {
++            if (!diagnostics_reported) diagnostics.reportAfterJoin();
++            pcm.reportFailureAfterJoin();
++            probe.reportFailureAfterJoin();
++        }
+     }
+     try t.expect(host.options.semantic == null and host.options.test_capture == null);
+     var receipts: Receipts = .{};
+@@ -462,6 +747,8 @@ test "default Host without capture accepts cross-frame completions and preserves
+     probe.cancelled.store(true, .release);
+     const closed = try closeActual(host);
+     alive = false;
++    diagnostics.reportAfterJoin();
++    diagnostics_reported = true;
+     try t.expectEqual(.closed, closed.phase);
+     try t.expect(closed.first_error == null and closed.cleanup_error == null and closed.worker_joined);
+     try t.expect(closed.play_executed and closed.stop_executed and closed.callback_sequence > 0 and closed.worker_calls > 0);
+@@ -474,3 +761,73 @@ test "default Host without capture accepts cross-frame completions and preserves
+     try probe.check();
+     try pcm.check(&oracle, play, stop, closed);
+ }
++
++test "PCM diagnostic preserves the first shape or capacity failure without overwriting it" {
++    // Isolated observer cases, not engine state or a substitute native run.
++    const Cause = enum { channels, odd_samples, records, samples };
++    for (std.enums.values(Cause)) |cause| {
++        var storage: [4]f32 = undefined;
++        var pcm: Pcm = .{ .samples = &storage };
++        Pcm.observe(&pcm, 1, 0, 2, &.{ 0, 0 });
++        if (cause == .records) pcm.len = pcm.records.len;
++        const input: []const f32 = switch (cause) {
++            .odd_samples => &.{0},
++            .samples => &.{ 0, 0, 0, 0 },
++            else => &.{ 0, 0 },
++        };
++        const channels: u16 = if (cause == .channels) 1 else 2;
++        Pcm.observe(&pcm, 7, 11, channels, input);
++        try t.expect(pcm.failed.load(.acquire));
++        const first = pcm.failure orelse return error.MissingPcmFailureDiagnostic;
++        try t.expectEqual(@as(u64, 7), first.epoch);
++        try t.expectEqual(@as(u64, 11), first.first_frame);
++        try t.expectEqual(channels, first.channels);
++        try t.expectEqual(input.len, first.sample_count);
++        try t.expectEqual(if (cause == .records) @as(usize, 1024) else 1, first.stored_records);
++        try t.expectEqual(@as(usize, 1024), first.record_capacity);
++        try t.expectEqual(@as(usize, 2), first.used_samples);
++        try t.expectEqual(@as(usize, 4), first.sample_capacity);
++        try t.expectEqual(@as(usize, 2), first.remaining_samples);
++        try t.expectEqual(@as(u64, 1), first.captured_callbacks_before);
++        try t.expectEqual(@as(u64, 1), first.captured_frames_before);
++        try t.expectEqual(cause == .channels, first.invalid_channels);
++        try t.expectEqual(cause == .odd_samples, first.odd_sample_count);
++        try t.expectEqual(cause == .records, first.records_full);
++        try t.expectEqual(cause == .samples, first.sample_capacity_exceeded);
++        Pcm.observe(&pcm, 99, 123, 9, &.{0});
++        try t.expectEqualDeep(first, pcm.failure.?);
++    }
++}
++
++test "diagnostic role tails retain exact rolling ordinals and mark truncation" {
++    var tail: DiagnosticTail(u64, 2) = .{};
++    tail.append(10);
++    tail.append(20);
++    tail.append(30);
++    try t.expectEqual(@as(usize, 2), tail.len);
++    try t.expectEqual(@as(u64, 3), tail.next);
++    try t.expectEqual(@as(u64, 1), tail.overwritten);
++    try t.expectEqual(@as(u64, 1), tail.at(0).ordinal);
++    try t.expectEqual(@as(u64, 20), tail.at(0).value);
++    try t.expectEqual(@as(u64, 2), tail.at(1).ordinal);
++    try t.expectEqual(@as(u64, 30), tail.at(1).value);
++    // Detached bookkeeping only, not a native engine counter.
++    tail.next = std.math.maxInt(u64);
++    tail.append(40);
++    try t.expect(tail.counter_exhausted);
++}
++
++test "acceptance diagnostic copies initialized optional facts without retaining the attempt" {
++    var attempt: stream.LiveAcceptanceAttemptV1 = .{
++        .incoming = .{ .control_tick = 3, .input_order = 4, .accepted_control_frame = 512 },
++        .deferred = .{ .reason = .odd_sequence, .handle = .{ .index = 2, .generation = 9 }, .observed_frame = null, .sequence_before = 17, .sequence_after = null },
++    };
++    attempt.evidence.outcome = .availability_unavailable;
++    const owned = NativeDiagnostics.attemptSummary(&attempt, 512, false);
++    attempt.deferred = null;
++    attempt.evidence.outcome = .failed;
++    try t.expectEqual(.availability_unavailable, owned.outcome);
++    try t.expectEqual(.odd_sequence, owned.deferred.?.reason);
++    try t.expectEqual(@as(?u64, 17), owned.deferred.?.sequence_before);
++    try t.expect(!owned.runtime_finished and owned.selected == null and owned.accepted == null and owned.publication == null);
++}
+diff --git a/tests/sme/live_background_supply_test.zig b/tests/sme/live_background_supply_test.zig
+new file mode 100644
+index 0000000..cd246dc
+--- /dev/null
++++ b/tests/sme/live_background_supply_test.zig
+@@ -0,0 +1,208 @@
++//! Deterministic actual-DSP first-defer background supply regression.
++//! Offline workload only, not a native scheduling or Windows qualification.
++const std = @import("std");
++const f = @import("sme-stream-reload-fixture");
++const source = @import("sme-author-preview-v1").source;
++const t = std.testing;
++const a = t.allocator;
++
++const Rig = struct {
++    engine: *f.Rig,
++    provider: *source.Provider,
++    fn create(bytes: []const u8) !Rig {
++        const provider = try source.Provider.create(a, bytes, .{});
++        errdefer provider.destroy() catch @panic("provider retained");
++        const engine = try f.Rig.createWithConfig(.{ .kind = .authoring, .control_driver = .integrated, .quantum_frames = 256 });
++        errdefer engine.finish() catch @panic("owner retained");
++        try engine.enableWorkerThread();
++        const ticket = try engine.run.owner.loadBankWithSources(bytes, provider.provider());
++        for (0..128) |_| {
++            _ = try engine.workerOne();
++            switch (try engine.run.owner.pollLoad(ticket)) {
++                .pending => {},
++                .failed => return error.LoadFailed,
++                .ready => |ready| {
++                    engine.run.bank = ready.bank;
++                    try engine.run.owner.acknowledgeLoad(ticket);
++                    return .{ .engine = engine, .provider = provider };
++                },
++            }
++        }
++        return error.LoadDidNotFinish;
++    }
++    fn finish(self: Rig, chronology: bool) !void {
++        if (chronology) try self.engine.finishChronology() else try self.engine.finish();
++        try self.provider.destroy();
++    }
++};
++fn bank() ![]u8 {
++    const text = try std.mem.replaceOwned(u8, a, f.authored_source, "max_chunk_bytes=262144", "max_chunk_bytes=65536");
++    defer a.free(text);
++    return f.buildSource(.a, text, null);
++}
++
++const stream = @import("sme-streaming").stream;
++const Probe = struct {
++    owner: *f.music.MusicRuntime,
++    renderer: *f.runtime.audio.RuntimeRenderer,
++    handles: [4]stream.Handle,
++    current: ?usize = null,
++    armed: bool = false,
++    rendered: bool = false,
++    visits: [4]usize = @splat(0),
++    queued: [4]usize = @splat(0),
++    fn tick(raw: *anyopaque, stage: f.music.MusicRuntime.TickStage) void {
++        const self: *Probe = @ptrCast(@alignCast(raw));
++        if (stage == .before_background_supply) self.armed = true;
++        if (stage == .after_background_supply) self.armed = false;
++    }
++    fn supply(raw: *anyopaque, point: stream.TestSupplyPoint) void {
++        const self: *Probe = @ptrCast(@alignCast(raw));
++        if (!self.armed) return;
++        for (self.handles, 0..) |handle, i| if (std.meta.eql(handle, point.handle)) {
++            if (point.stage == .prefetch_begin) {
++                self.current = i;
++                self.visits[i] += 1;
++            }
++            if (point.stage == .request_queued) self.queued[i] += 1;
++            return;
++        };
++    }
++    fn availability(raw: *anyopaque, stage: stream.AvailabilityStage, _: u64) void {
++        const self: *Probe = @ptrCast(@alignCast(raw));
++        if (!self.armed or self.rendered or self.current != 0 or stage != .after_sequence) return;
++        self.rendered = true;
++        // Actual DSP publishes the new sequence; no engine counters are assigned.
++        var pcm: [128]f32 = undefined;
++        self.renderer.render(&pcm, 64, 2);
++    }
++};
++
++const Case = enum { chronology, legacy_background, request_scope, later_error };
++
++fn exercise(case: Case) !void {
++    const bytes = try bank();
++    defer a.free(bytes);
++    const rig = try Rig.create(bytes);
++    defer rig.finish(true) catch @panic("background test retained custody");
++    const owner = rig.engine.run.owner;
++    const service = owner.owned_streaming.?;
++    const ticket = try owner.start(rig.engine.run.bank.?, f.state);
++    var executed = false;
++    for (0..512) |_| {
++        _ = try owner.controlTickLiveChronologyV1(f.rt.max_control_drain, null);
++        try rig.engine.workers();
++        const pcm = try rig.engine.run.render(64);
++        a.free(pcm);
++        while (try owner.pollReceiptV1()) |receipt| {
++            try t.expectEqualDeep(ticket, receipt.ticket);
++            if (receipt.event == .terminal) {
++                try t.expect(receipt.event.terminal == .executed);
++                executed = true;
++            }
++        }
++        if (executed and owner.pending == null and owner.preparing == null) break;
++    }
++    try t.expect(executed);
++    try t.expectEqual(.playing, owner.state);
++    const group = owner.active_group orelse return error.MissingActiveGroup;
++    try t.expect(owner.device_stream_origin != null);
++    var handles: [4]stream.Handle = undefined;
++    var count: usize = 0;
++    for (owner.generation.?.windows) |item| if (item) |window| {
++        if (window.retiring or window.group == null or !window.group.?.eql(group)) continue;
++        if (count == handles.len) return error.TooManyActiveWindows;
++        handles[count] = window.binding.handle;
++        count += 1;
++    };
++    try t.expectEqual(@as(usize, 4), count);
++    // Settle actual queued work until each stem has lead and no outstanding job.
++    var settled = false;
++    for (0..128) |_| {
++        _ = try owner.controlTickLiveChronologyV1(f.rt.max_control_drain, null);
++        var ready = true;
++        for (handles) |handle| {
++            const ring = try service.ringFor(handle);
++            if (service.slots[handle.index].pending_job != null or ring.available() < 4096) ready = false;
++        }
++        if (ready) {
++            settled = true;
++            break;
++        }
++        try rig.engine.workers();
++        const pcm = try rig.engine.run.render(64);
++        a.free(pcm);
++    }
++    try t.expect(settled);
++    // Consume genuine samples, without refill, until all streams need supply.
++    for (0..128) |_| {
++        var below = true;
++        for (handles) |handle| if ((try service.ringFor(handle)).available() >= service.profile.low_frames) {
++            below = false;
++        };
++        if (below) break;
++        const pcm = try rig.engine.run.render(64);
++        a.free(pcm);
++    }
++    for (handles) |handle| {
++        const available = (try service.ringFor(handle)).available();
++        try t.expect(available >= 128 and available < service.profile.low_frames);
++        try t.expect(service.slots[handle.index].pending_job == null);
++    }
++    var probe: Probe = .{ .owner = owner, .renderer = rig.engine.run.renderer, .handles = handles };
++    owner.test_tick_hook = .{ .context = &probe, .call = Probe.tick };
++    service.test_supply_hook = .{ .context = &probe, .call = Probe.supply };
++    service.test_availability_hook = .{ .context = &probe, .call = Probe.availability };
++    defer {
++        owner.test_tick_hook = null;
++        service.test_supply_hook = null;
++        service.test_availability_hook = null;
++    }
++    if (case == .later_error) try service.cancel(handles[1]);
++    const observed = switch (case) {
++        .chronology => blk: {
++            const outcome = try owner.controlTickLiveChronologyV1(f.rt.max_control_drain, null);
++            const deferred = outcome.deferred orelse return error.MissingActualDefer;
++            try t.expectEqual(.background_supply, deferred.stage);
++            break :blk deferred.observation;
++        },
++        .legacy_background => blk: {
++            probe.armed = true;
++            break :blk (try owner.generation.?.prefetchStableActiveWindowsLiveV1(null, owner.control.scheduled.render_frame.load(.acquire), group)) orelse return error.MissingActualDefer;
++        },
++        .request_scope => blk: {
++            probe.armed = true;
++            break :blk (try owner.generation.?.prefetchRequestWindowsScopedLiveV1(.request, ticket.request_id, owner.control.scheduled.render_frame.load(.acquire))) orelse return error.MissingActualDefer;
++        },
++        .later_error => {
++            // Explicit cancellation input. A genuine later InvalidState must
++            // not be hidden by the first stream's typed sequence defer.
++            try t.expectError(error.InvalidState, owner.controlTickLiveChronologyV1(f.rt.max_control_drain, null));
++            try t.expect(probe.rendered);
++            try t.expectEqual([4]usize{ 1, 1, 0, 0 }, probe.visits);
++            try t.expectEqual([4]usize{ 0, 0, 0, 0 }, probe.queued);
++            return;
++        },
++    };
++    try t.expect(probe.rendered);
++    const expected_reason: @TypeOf(observed.reason) = if (case == .request_scope) .frame_mismatch else .sequence_changed;
++    try t.expectEqual(expected_reason, observed.reason);
++    try t.expectEqualDeep(handles[0], observed.handle);
++    std.debug.print("BACKGROUND_SWEEP actual_defer={s} visits={any} queued={any}\n", .{ @tagName(observed.reason), probe.visits, probe.queued });
++    try t.expectEqual(if (case == .chronology) [4]usize{ 1, 1, 1, 1 } else [4]usize{ 1, 0, 0, 0 }, probe.visits);
++    try t.expectEqual(if (case == .chronology) [4]usize{ 0, 1, 1, 1 } else [4]usize{ 0, 0, 0, 0 }, probe.queued);
++    try t.expectEqual(@as(u64, 0), (try owner.snapshotV1()).stream_fault_count);
++}
++
++test "chronology background visits later stems after first actual sequence defer" {
++    try exercise(.chronology);
++}
++test "legacy background retains first actual defer" {
++    try exercise(.legacy_background);
++}
++test "request scoped supply retains first actual defer" {
++    try exercise(.request_scope);
++}
++test "later real supply error overrides first chronology defer" {
++    try exercise(.later_error);
++}
+diff --git a/tools/sme_authoring/core/live_owner.zig b/tools/sme_authoring/core/live_owner.zig
+index 885f987..4954c6b 100644
+--- a/tools/sme_authoring/core/live_owner.zig
++++ b/tools/sme_authoring/core/live_owner.zig
+@@ -49,6 +49,8 @@ pub const Options = struct {
+     /// Controlled cross-frame workload only. Bound before publication; caller
+     /// owns bounded cancellation and context through real Host destruction.
+     test_after_live_acceptance: if (@import("builtin").is_test) ?audio.ControlRuntime.TestAfterLiveAcceptance else void = if (@import("builtin").is_test) null else {},
++    /// Test-only actual Worker polling delay; never changes Control or Audio.
++    test_worker_wait_ms: if (@import("builtin").is_test) u8 else void = if (@import("builtin").is_test) 1 else {},
+     test_capture: if (@import("builtin").is_test) ?*TestCapture.Session else void = if (@import("builtin").is_test) null else {},
+     test_fault: enum { none, open, start_after_callback, loss_after_start, reopen_after_callback } = .none,
+ };
+@@ -145,15 +147,16 @@ pub const Host = struct {
+     fn createInternal(allocator: std.mem.Allocator, launch: Launch, options: Options) !*Host {
+         if (options.device.sample_rate != 48_000 or options.device.channels != 2 or options.device.period_frames != 256 or options.device.output_layout_request != null) return error.UnsupportedDeviceConfiguration;
+         if (!@import("builtin").is_test and (options.test_fault != .none or (options.device.backend == .null_backend and options.semantic == null))) return error.TestOnly;
++        if (@import("builtin").is_test) if (options.test_worker_wait_ms != 1 and options.test_worker_wait_ms != 16) return error.InvalidState;
+         if (options.semantic) |session| {
+             if (session.mode == .replay and options.device.backend != .null_backend) return error.UnsupportedDeviceConfiguration;
+             if (!session.pristine() or options.recovery != .close or options.test_fault != .none or !std.meta.eql(options.source_fault, @as(source.Fault, .{}))) return error.InvalidState;
+-            if (@import("builtin").is_test) if (options.test_capture != null or options.test_before_worker != null or options.test_setup != null or options.test_tick_outcome != null or options.test_pcm != null) return error.InvalidState;
++            if (@import("builtin").is_test) if (options.test_capture != null or options.test_before_worker != null or options.test_setup != null or options.test_tick_outcome != null or options.test_pcm != null or options.test_worker_wait_ms != 1) return error.InvalidState;
+         }
+         if (@import("builtin").is_test) if (options.test_capture) |capture| {
+             if (capture.address != capture or capture.host != null or capture.committed or capture.control_calls != 0 or capture.owner != null or options.recovery != .close or
+                 options.test_before_worker != null or options.test_setup != null or options.test_tick_outcome != null or options.test_pcm != null or
+-                options.test_fault != .none) return error.InvalidState;
++                options.test_fault != .none or options.test_worker_wait_ms != 1) return error.InvalidState;
+         };
+         _ = try admission.validate(allocator, launch.compiled, launch.state, launch.config);
+         const bytes = try allocator.dupe(u8, launch.compiled);
+@@ -543,7 +546,7 @@ pub const Host = struct {
+                 if (self.options.semantic) |session| session.emitWorker(.startup_aborted);
+                 return;
+             }
+-            self.waitTurn();
++            self.waitWorkerTurn();
+         }
+         // This pointer is never loaded or dereferenced again after a park ACK
+         // until a matching resume. Terminal stop takes precedence over resume.
+@@ -618,7 +621,7 @@ pub const Host = struct {
+                     },
+                 }
+             }
+-            self.waitTurn();
++            self.waitWorkerTurn();
+         }
+     }
+     fn workerStep(self: *Host, owner: *music.MusicRuntime, deferred: *bool) !bool {
+@@ -646,6 +649,10 @@ pub const Host = struct {
+         }
+         return outcome.worked;
+     }
++    fn waitWorkerTurn(self: *Host) void {
++        const milliseconds = if (@import("builtin").is_test) self.options.test_worker_wait_ms else 1;
++        std.Io.sleep(self.options.io, .fromMilliseconds(milliseconds), .awake) catch {};
++    }
+     fn waitTurn(self: *Host) void {
+         std.Io.sleep(self.options.io, .fromMilliseconds(1), .awake) catch {};
+     }
