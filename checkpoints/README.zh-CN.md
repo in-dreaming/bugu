@@ -75,3 +75,7 @@ manifest 的 UNVERIFIED 是计划保存时的状态，保持不改写；后续�
 ## Windows 被动计时单次结果更新（2026-10-21）
 
 [9e0ccb49 / 088da407 的默认 Debug 摘要](passive-timing-20261021-088da40/results/windows-default-debug-01.json) 已报告 9/10：首次 Play 执行，但持续播放在 fault boundary 24192 再次失败。保留 16 条可用完整关联链与 41 条不完整链；jobs53–56 的 Worker begin/end 墙钟区间约 2.43–2.76 ms，不能当作 CPU 解码时间或旧故障的因果结论。候选仍未整体修复，原始日志留在 Windows，仅转述摘要入库；此前云端通过和旧失败记录均保留。
+
+## Host wait 边界诊断交付（e09b38df / 8ba69a82）
+
+[增量补丁、两份只读解析脚本与说明](../patches/sme-host-wait-e09b38df/README.zh-CN.md) 仅适用于精确 9e0ccb49 / 088da407 基底，原 sleep、循环、供给策略及 PCM 断言不变。[单次云端 Debug 12/12 与生产编译](https://github.com/in-dreaming/bugu/blob/15a465e3ad68a39f5cc18f8de8cd0f36bee81f7f/checkpoints/host-wait-20261021-8ba69a8/results/default-debug-01.json) 和 [独立 wait 解析结果](https://github.com/in-dreaming/bugu/blob/96235eac758d5af429d925cfec6cb82ed26d4adb/checkpoints/host-wait-20261021-8ba69a8/results/output-inspection-01.json) 已分别保存。新诊断固定增加 14656 B、每角色最多 64 对 wait，覆盖仍有限；观测重叠不是纯 sleep 或故障因果证明。未执行新 Windows 验收，旧持续播放及 fresh replay 失败保持有效。

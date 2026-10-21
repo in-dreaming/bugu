@@ -1,0 +1,53 @@
+{
+  "schema": "sme.patch.delivery.v1",
+  "base": {
+    "source_commit": "9e0ccb49f39ed5eeebe4b8d030880726e7810721",
+    "tree": "088da407ad1d556f4c831778fe16742ef1a182fd"
+  },
+  "target": {
+    "source_commit": "e09b38df925020f5877e0ed637d75fad5ea3e681",
+    "tree": "8ba69a82caabe29ed9a6a55566d90969497b110a"
+  },
+  "files": {
+    "source.patch": {
+      "bytes": 30177,
+      "sha256": "061f507d7333e6d8072459ff457865fea4bfa50cf857b6cb08b63cdbd29a6c8e"
+    },
+    "inspect_wait_output.py": {
+      "bytes": 14355,
+      "sha256": "b13518b376157962d0c87847a40247176a1134081ae27531f6e2ffc779a08648"
+    },
+    "inspect_timing_output.py": {
+      "bytes": 16764,
+      "sha256": "adde6e15ce383e5ba1ecda9339fb292c71ea57d4be1e7458cd0fed9878648c6f"
+    },
+    "README.zh-CN.md": {
+      "bytes": 3423,
+      "sha256": "0a9662076aeb991bd4ca63194a2c47e08ff8ad794c1add5554d9a79a73ae6c87"
+    }
+  },
+  "patch_reconstruction": "An independent temporary Git index seeded with the exact base tree and applying source.patch produced the exact target tree. The normal index and working tree were unchanged. This is content verification, not a test run.",
+  "result_references": [
+    {
+      "kind": "single_cloud_Debug_12_of_12_and_production_compile",
+      "commit": "15a465e3ad68a39f5cc18f8de8cd0f36bee81f7f",
+      "path": "checkpoints/host-wait-20261021-8ba69a8/results/default-debug-01.json",
+      "sha256": "7d33e0d1093b17f9ff090f6e6ab63209e111f08afa3390198a02371dc8ad5361"
+    },
+    {
+      "kind": "read_only_parser_8_synthetic_cases_and_actual_output",
+      "commit": "96235eac758d5af429d925cfec6cb82ed26d4adb",
+      "path": "checkpoints/host-wait-20261021-8ba69a8/results/output-inspection-01.json",
+      "sha256": "9328448b33002363c866a8a9e8ad6d5edc727f7ce5fb6cc19935f1f4fbbc16f0"
+    }
+  ],
+  "scope_limits": [
+    "Test-only Host wait-boundary observations. Original sleep arguments, four-call loop, catch behavior, park/stop, production supply policy and PCM assertions remain unchanged.",
+    "Apply only to the exact base content, not remote main. Do not apply twice after an equivalent incremental patch. Delivery commits are distinct from source commits.",
+    "Existing event capacities remain 256 Control and 128 Worker. Each new role-private wait tail is bounded to 64 pairs plus pending. Diagnostic storage increases by 14656 bytes in the verified cloud build.",
+    "Wait observation intervals include callback, clock and scheduling overhead. An after edge does not certify sleep success; observed overlap is not CPU time, pure kernel sleep or a causal explanation.",
+    "Cloud passing results do not fix or reproduce previous Windows sustained playback faults. Prior fresh replay failure remains valid.",
+    "No new Windows, ReleaseSafe, recording or fresh replay run is claimed. Any proposed Windows run still requires separate approval.",
+    "Raw logs and binary artifacts are not included. Hashes identify local artifacts, not external backups."
+  ]
+}
