@@ -1,0 +1,104 @@
+{
+  "classification": "READ_ONLY_NATIVE_TAPE_WITNESS_VERIFIED_FRESH_PENDING",
+  "source_commit": "5dc8a31344e391142c6a0403c3bd49e9aca88840",
+  "source_tree": "1dafd4a23dc8da1f1a400ddac020751a79e8552c",
+  "tape_sha256": "1091d2b55f62b7e9a4d7e9ba080d7216d57f6cac425f44c1e4585c357ff738a6",
+  "parser_self_test": {
+    "synthetic_parser_cases": 10,
+    "native_or_full_envelope_qualification": false
+  },
+  "execution": {
+    "runs": [
+      {
+        "argv_script": "inspect_initial_entry_sites.py",
+        "exit": 0,
+        "stdout_bytes": 85
+      },
+      {
+        "argv_script": "inspect_initial_entry_sites.py",
+        "exit": 0,
+        "stdout_bytes": 1094365
+      },
+      {
+        "argv_script": "inspect_retry_tape.py",
+        "exit": 0,
+        "stdout_bytes": 51579
+      }
+    ],
+    "tape_hash_unchanged": true
+  },
+  "new_site_pairs": {
+    "service_initial_entry_consumed": 360,
+    "service_initial_entry_cancel": 360
+  },
+  "point_counts": {
+    "input": 121504,
+    "reference": 121504
+  },
+  "canonical_reference_record_counts": {
+    "public_input_108": 378,
+    "schedule_109": 16
+  },
+  "per_handle_pairs": [
+    {
+      "site": "service_initial_entry_cancel",
+      "slot": 0,
+      "generation": 1,
+      "pairs": 90
+    },
+    {
+      "site": "service_initial_entry_cancel",
+      "slot": 1,
+      "generation": 2,
+      "pairs": 90
+    },
+    {
+      "site": "service_initial_entry_cancel",
+      "slot": 2,
+      "generation": 3,
+      "pairs": 90
+    },
+    {
+      "site": "service_initial_entry_cancel",
+      "slot": 3,
+      "generation": 4,
+      "pairs": 90
+    },
+    {
+      "site": "service_initial_entry_consumed",
+      "slot": 0,
+      "generation": 1,
+      "pairs": 90
+    },
+    {
+      "site": "service_initial_entry_consumed",
+      "slot": 1,
+      "generation": 2,
+      "pairs": 90
+    },
+    {
+      "site": "service_initial_entry_consumed",
+      "slot": 2,
+      "generation": 3,
+      "pairs": 90
+    },
+    {
+      "site": "service_initial_entry_consumed",
+      "slot": 3,
+      "generation": 4,
+      "pairs": 90
+    }
+  ],
+  "actual_consumed_values": [
+    0
+  ],
+  "actual_cancel_values": [
+    0
+  ],
+  "same_incoming_adjacent_retry_success_pairs": 5,
+  "limits": [
+    "Narrow read-only parser verifies independent stored Input/Reference coordinates; does not execute engine.",
+    "Canonical public Input/Schedule counts are not exact replay equality by themselves.",
+    "Fresh process strict replay remains pending."
+  ]
+}
