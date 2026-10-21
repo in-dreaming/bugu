@@ -1,0 +1,40 @@
+{
+  "stage": "UNVERIFIED one filtered legacy Debug compile and execution on explicit admission/startup source",
+  "command": [
+    "python",
+    "${RECOVERY_ROOT}/qualification/initial-entry-legacy-plan/run_filtered_compatibility.py",
+    "--repo",
+    "${RECOVERY_ROOT}/repo",
+    "--zig",
+    "${RECOVERY_ROOT}/toolchains/zig-x86_64-linux-0.16.0/zig",
+    "--output-dir",
+    "${RECOVERY_ROOT}/qualification/initial-entry-legacy-debug-01",
+    "--global-cache-dir",
+    "${RECOVERY_ROOT}/cache/global",
+    "--execute"
+  ],
+  "timeout_seconds": 600,
+  "python_policy": "Normal Python only; no -O and PYTHONOPTIMIZE unset, as safety checks use assertions.",
+  "source_commit": "f28bee4e4f6cbb0e0b8fdb8d1d4decad37e76fef",
+  "source_tree": "f8bbbebd01520966237fab954a868c4dd1dee85f",
+  "files": {
+    "run_filtered_compatibility.py": "5dc1730b5a0cf6898783a93f6360ac917dd334ed90c6fc27e1bcd1639ea931a7",
+    "argv-template.rsp": "8b1814d5b55b4951c02fa6d0f85b3b27532b800591a1c3bf065c3382081097eb",
+    "options.zig": "9eb9ef937b541840cc0509c9f5a53f023f19e117b064adebf6b59c74eff48fef",
+    "manifest.json": "dddd81b9a82d4883fa1d9f9b8964d8a70cc95398dc834079fd05130065bf0bf7"
+  },
+  "expected": "Only two named legacy tests in manifest, once. Preserve compile or runtime failure. No full legacy suite and no native replay claim.",
+  "stage_gate": "Execute only after earlier policy and ReleaseSafe results separately preserved, same clean source tree.",
+  "publication": {
+    "status": "UNVERIFIED",
+    "local_invocation_sha256": "d80eef1900f3bf57e3f115a509848cdf1abb2dfc3ad87a46761690b7cef203f8",
+    "path_binding": "Resolve ${RECOVERY_ROOT} to the recovered tree's parent directory. Place the five exact files at qualification/initial-entry-legacy-plan. Only the invocation paths are parameterized; runner, public rsp, options and current manifest remain byte-identical to reviewed inputs.",
+    "restored_tool_source_commit": "ce8a1b530f3c6cbc2ca45f45e18ead7b833ddfdf",
+    "execution_requirements": [
+      "Do not execute until both preceding policy and ReleaseSafe results are separately persisted.",
+      "Do not use -O/-OO or PYTHONOPTIMIZE.",
+      "If the source tree changes, this plan is not run and must be replaced with a new pinned plan.",
+      "Do not run the complete live_tick suite; no retry on failure. Missing terminal evidence is UNKNOWN."
+    ]
+  }
+}
