@@ -1,0 +1,45 @@
+{
+  "classification": "PASS_EXPLICIT_ADMISSION_AND_ORIGINAL_TAPE_PREOWNER_NEGATIVE_NOT_NATIVE_REPLAY",
+  "source_commit": "f28bee4e4f6cbb0e0b8fdb8d1d4decad37e76fef",
+  "source_tree": "f8bbbebd01520966237fab954a868c4dd1dee85f",
+  "guard": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 22.17642391499976,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 27617103872
+  },
+  "tests": {
+    "codec": {
+      "passed": 54,
+      "failed": 0,
+      "skipped": 0
+    },
+    "cli": {
+      "passed": 19,
+      "failed": 0
+    },
+    "total_passed": 73
+  },
+  "original_tape_negative": {
+    "explicit_original_four_field_identity": true,
+    "native_attempt_unresolved_scalar_overlaps": 1,
+    "ordered_policy_error": "CrossedScan",
+    "driver_address_null": true,
+    "session_uninitialized": true,
+    "running": false,
+    "owners_created": false,
+    "Driver_run_invoked": false
+  },
+  "preserved_original_artifact_sha256": {
+    "history.bin": "1091d2b55f62b7e9a4d7e9ba080d7216d57f6cac425f44c1e4585c357ff738a6",
+    "bank.bin": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224",
+    "semantic_live_process_test.elf": "cbb900b85608c471571169c50bd7ca20a724f41116915e19824313e2faa6eb35"
+  },
+  "matrix": "Two selector conflict kinds x two bracket start orders x overlap/different-slot/serial =12 full-schema cases; old default equals explicit native_attempt.",
+  "limits": [
+    "Original same-ELF fresh attempt remains a genuine failed comparison, not repaired/retried or relabeled.",
+    "This stricter admission subset is not a universal native replay guarantee.",
+    "No new recording or Windows test."
+  ]
+}
