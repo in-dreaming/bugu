@@ -1,0 +1,65 @@
+{
+  "stage": "UNVERIFIED baseline new reconstructed tests; production e15 unchanged",
+  "original_source": "e15de1243d23fa67449674ab75fcebe735e9840d",
+  "base_tree": "9c726fe11f07af1936f365a6b9b505153be93709",
+  "synthetic_base": "36d4e6c97cd9cc6a099ae273b7655a1fd3a335d1",
+  "source_commit": "1fef0f193702243151ae59485ea04ba9e122ecf8",
+  "source_tree": "632708665ccf17511865d44f696ce9df67bca415",
+  "timeout_seconds": 600,
+  "resource_bounds": {
+    "parallel_build_jobs": 1,
+    "start_disk_min_bytes": 3355443200,
+    "runtime_disk_floor_bytes": 2281701376,
+    "test_barrier_seconds": 5
+  },
+  "expected_baseline": "Original Runtime stops on its first typed defer. The release case is expected to retain a real missing-suffix fault and fail accepted-count assertions; the hold case expects two attempts while the original produces one; the empty case should pass. A compilation or fixture failure does not confirm this causal hypothesis. Earlier unavailable run results remain UNKNOWN.",
+  "files": {
+    "tests/sme/live_acceptance_retry_test.zig": "86635ac5858446389ed0d17c3e06c3a0e15f93376576a63f8191abf5191b6081",
+    "tests/sme/live_semantic_codec_test.zig": "fe6edf2e703f29c4061954e48a44aa9b143df4d8fe436335aa54e7f8ea7c821b",
+    "build_support/sme_tasks/task-017.zon": "acab18cc71ef8c7619295229a540775ca1425926049c277a2e53b91be27153a0"
+  },
+  "checkpoint_files": {
+    "run_guarded.py": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+    "source.patch": "b185a816e17d146409b3e5708fb21315f6d2a630fda5efd88abe488f8683edbb"
+  },
+  "status": "UNVERIFIED_PLANNED_NOT_RUN",
+  "command_template": [
+    "python",
+    "${CHECKPOINT_DIR}/run_guarded.py",
+    "--repo",
+    "${SOURCE_REPO}",
+    "--out",
+    "${OUTPUT_DIR}",
+    "--seconds",
+    "600",
+    "--",
+    "${ZIG_BIN}",
+    "build",
+    "sme-live-acceptance-retry-test",
+    "-j1",
+    "-Doptimize=Debug",
+    "--summary",
+    "all"
+  ],
+  "cwd_template": "${SOURCE_REPO}",
+  "path_parameters": {
+    "CHECKPOINT_DIR": "Directory containing this checkpoint runner.",
+    "SOURCE_REPO": "Restored and patched repository at the exact source_tree above.",
+    "OUTPUT_DIR": "New, nonexistent per-run output directory.",
+    "ZIG_BIN": "Verified Zig 0.16.0 Linux x86_64 binary pinned by the recovery manifest."
+  },
+  "provenance": {
+    "local_run_manifest_sha256": "f716edae7dc41a6d4dae1f199301fa994e61bf8ceb5d9c6159a0b163ba40faa1",
+    "public_manifest_transformation": "Only absolute execution locations are parameterized and explanatory metadata is added. No private paths are published. Zig command arguments and resource bounds are unchanged.",
+    "reconstructed_tests": "New implementation after recovery, not a claim to restore lost original source blobs."
+  },
+  "result_policy": {
+    "source_snapshot_is_not_validation": true,
+    "failed_baseline_assertions_remain_failed": "Confirming an expected baseline defect requires the specific retained runtime evidence, not merely a nonzero exit.",
+    "timeout_or_external_interruption": "unknown",
+    "missing_final_result": "unknown",
+    "source_changed_during_run": "invalid qualification",
+    "before_start": "not_run",
+    "raw_logs_and_private_environment_paths": "Do not publish; retain public technical summaries and evidence hashes only."
+  }
+}
