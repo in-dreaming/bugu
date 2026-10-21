@@ -1,0 +1,44 @@
+{
+  "classification": "PASS_TWO_FILTERED_LEGACY_DEBUG_TESTS_ONLY",
+  "source_commit": "f28bee4e4f6cbb0e0b8fdb8d1d4decad37e76fef",
+  "source_tree": "f8bbbebd01520966237fab954a868c4dd1dee85f",
+  "result": {
+    "schema": 1,
+    "compile": {
+      "exit": 0,
+      "timed_out": false,
+      "stop_reason": null,
+      "elapsed_seconds": 12.67393668099976
+    },
+    "tests": {
+      "exit": 0,
+      "timed_out": false,
+      "stop_reason": null,
+      "elapsed_seconds": 18.92478336000022
+    },
+    "passed": true,
+    "initial_free_bytes": 27458142208,
+    "elf_sha256": "86b697f1622f4e8676c7822898abca2b4fea32778ba3085a9f4698249229a3f8",
+    "both_named_tests_reported": true,
+    "exact_two_tests_passed_marker": true,
+    "elapsed_process_seconds": 31.771265864999805,
+    "minimum_free_bytes": 27283218432,
+    "source_after": {
+      "head": "f28bee4e4f6cbb0e0b8fdb8d1d4decad37e76fef",
+      "tree": "f8bbbebd01520966237fab954a868c4dd1dee85f",
+      "status": "",
+      "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "source_guard_equal": true
+  },
+  "tests": [
+    "legacy control tick still rejects the original ticket on a real supply frame mismatch",
+    "live Worker rejects legally begun serial recording on the same registered Worker before Service scan"
+  ],
+  "passed": 2,
+  "failed": 0,
+  "limits": [
+    "Derived same module/native graph with explicit filters, not original archived live_tick argv and not full legacy suite.",
+    "No new replay or Windows claim; original fresh mismatch preserved."
+  ]
+}
