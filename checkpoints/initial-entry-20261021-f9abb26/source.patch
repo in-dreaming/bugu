@@ -1,0 +1,859 @@
+diff --git a/src/music/planner.zig b/src/music/planner.zig
+index 95f1591..0aff564 100644
+--- a/src/music/planner.zig
++++ b/src/music/planner.zig
+@@ -142,6 +142,19 @@ pub const ReadinessSnapshot = struct {
+         };
+         return null;
+     }
++    pub fn collectTickInitialEntryV1(self: *ReadinessSnapshot, scope: anytype, request_id: u64, bindings: []const StreamBinding, context: u64, control_epoch: u64) Error!void {
++        self.complete = false;
++        self.count = 0;
++        const service = scope.readinessService() catch return error.InvalidState;
++        const Adapter = struct {
++            tick: @TypeOf(scope),
++            request: u64,
++            pub fn streamReadiness(adapter: @This(), handle: streaming.Handle, query_context: u64, epoch: u64) !trace.Input {
++                return adapter.tick.streamReadinessInitialEntryV1(adapter.request, handle, query_context, epoch);
++            }
++        };
++        return self.collectOwned(Adapter{ .tick = scope, .request = request_id }, service, bindings, context, control_epoch, false, null);
++    }
+     fn collectOwned(self: *ReadinessSnapshot, control: anytype, service: *streaming.Service, bindings: []const StreamBinding, context: u64, control_epoch: u64, comptime live: bool, deferred: ?*?streaming.stream.LiveObservationDeferV1) Error!void {
+         if (!service.runtime_attached or bindings.len > max_bindings) return error.InvalidState;
+         self.complete = false;
+diff --git a/src/music/resident_runtime.zig b/src/music/resident_runtime.zig
+index e487ce3..189ddb1 100644
+--- a/src/music/resident_runtime.zig
++++ b/src/music/resident_runtime.zig
+@@ -8073,6 +8073,69 @@ pub const MusicRuntime = struct {
+         };
+         return .{ .segment = phase.segment, .cue = phase.cue, .occurrence = occurrence };
+     }
++    /// Current Control custody, not a historical has_executed flag alone.
++    /// A retained candidate is still unpublished: submitSchedule success has
++    /// no fallible gap before pending is assigned and preparing is cleared.
++    fn initialEntryEligibleV1(self: *MusicRuntime, scope: rt.ControlRuntime.TickV1, request_id: u64) bool {
++        scope.requirePhase(.prepare) catch return false;
++        if (scope.runtime != self.control or !self.control.tick_v1.live_chronology or
++            !self.control_guard.load(.acquire) or self.tick_scope == null or
++            !std.meta.eql(self.tick_scope.?, scope) or self.tick_entry != .preparing or
++            self.mode != .versioned or self.has_executed or self.active_group != null or self.pending != null or
++            self.interruption != null or self.layer_in_flight != null or self.action != null or self.deviceRecoveryActive()) return false;
++        self.validateLiveTickModeProfileV1(true, true) catch return false;
++        const generation = self.generation orelse return false;
++        if (generation.transport.device_epoch != 1) return false;
++        const prepared = self.preparing orelse return false;
++        const primary = self.in_flight orelse return false;
++        const ticket = self.ticketForRequestV1(request_id) orelse return false;
++        if (!std.meta.eql(primary, ticket) or prepared.intent.request_id != request_id or
++            primary.context != self.config.context or !std.meta.eql(primary.bank, self.bankRef()) or prepared.intent.request_epoch != generation.director.?.request_epoch) return false;
++        if (prepared.cold_candidate) |candidate| {
++            if (candidate.generation != generation or candidate.runtime_generation != generation.runtime_generation or
++                candidate.transport_epoch != generation.transport.transport_epoch or candidate.request_id != request_id) return false;
++            generation.validateRetainedColdStartBindings(request_id, candidate.entry, candidate.group, &candidate.bindings) catch return false;
++        }
++        // Read-only validation: do not overwrite binding_scratch while Planner
++        // holds its slice. Reject extra/retiring/foreign bound request windows.
++        var selected: [4]planner.StreamBinding = undefined;
++        var count: usize = 0;
++        for (generation.windows) |entry| if (entry) |window| {
++            if (window.scope != .request or window.request_id != request_id) continue;
++            if (window.retiring or window.binding.cue == 0 or count == selected.len) return false;
++            if (prepared.cold_candidate) |candidate| {
++                if (window.group == null or !window.group.?.eql(candidate.group)) return false;
++            } else if (window.group != null) return false;
++            selected[count] = window.binding;
++            count += 1;
++        };
++        if (count != 4) return false;
++        const bindings = selected[0..count];
++        const service = generation.service orelse return false;
++        for (bindings, 0..) |binding, i| {
++            // Match entryBindings' failed-source exclusion. The old Planner
++            // route retains authority over its rejection/error classification.
++            if ((service.failure(binding.handle) catch return false) != .none) return false;
++            if (binding.cue == 0) return false;
++            for (bindings[0..i]) |prior| if (std.meta.eql(prior.handle, binding.handle)) return false;
++            const identity = (service.renderSource(binding.handle) catch return false).identity;
++            if (identity.asset != binding.sound or identity.asset_generation != generation.runtime_generation or
++                identity.transport_epoch != generation.transport.transport_epoch or identity.stream_generation != binding.handle.generation or
++                identity.start_cursor != binding.source_cursor or identity.start_loop_epoch != 0) return false;
++        }
++        return true;
++    }
++    /// Internal cross-layer authorization. A caller cannot select source-only
++    /// reads with an arbitrary identity or initial flag; the active Tick and
++    /// original primary request are rechecked for every real Service operation.
++    pub fn validateInitialEntryV1(self: *MusicRuntime, scope: rt.ControlRuntime.TickV1, request_id: u64, handle: rt.streaming.Handle) !void {
++        if (!self.initialEntryEligibleV1(scope, request_id)) return error.InvalidState;
++        const generation = self.generation.?;
++        for (generation.windows) |entry| if (entry) |window| {
++            if (window.scope == .request and window.request_id == request_id and !window.retiring and std.meta.eql(window.binding.handle, handle)) return;
++        };
++        return error.InvalidState;
++    }
+     /// Chronology-only first-entry lead. All reads below are immutable identity,
+     /// this tick's actual readiness, or Control-owned acknowledged receipts.
+     /// No new Render counter sampling, forecast, or manufactured ready value.
+@@ -8233,7 +8296,10 @@ pub const MusicRuntime = struct {
+                 try generation.validateRetainedColdStartBindings(candidate.request_id, candidate.entry, candidate.group, &candidate.bindings);
+             } else try self.generation.?.prepareEntryWindows(intent, if (self.active_group != null) self.rendering_segment else null, self.generation.?.transport.transport_epoch, try self.planningFrontier());
+             self.tickHook(.before_stream_supply);
+-            if (live) |attempt| {
++            const initial_entry = live != null and self.initialEntryEligibleV1(scope, intent.request_id);
++            if (initial_entry) {
++                try generation.prefetchInitialEntryV1(scope, intent.request_id, frame);
++            } else if (live) |attempt| {
+                 if (try (if (self.preparing.?.cold_candidate != null) generation.prefetchRequestWindowsScopedLiveV1(.request, intent.request_id, frame) else generation.prefetchEntryWindowsLiveV1(intent.request_id, frame))) |observation|
+                     return self.deferLiveTick(attempt, .entry_supply, observation);
+             } else try generation.prefetchEntryWindows(intent.request_id, frame);
+@@ -8244,7 +8310,12 @@ pub const MusicRuntime = struct {
+                 try generation.linearCrossfadeEntryBindings(intent.request_id, intent.rule_id, self.active_group.?, self.rendering_segment)
+             else
+                 try generation.entryBindings(intent.request_id);
+-            if (live) |attempt| {
++            if (initial_entry) {
++                ready.?.collectTickInitialEntryV1(scope, intent.request_id, bindings, self.config.context, intent.request_epoch) catch |err| {
++                    self.markAuthoritativeTraceIncompleteV1();
++                    return err;
++                };
++            } else if (live) |attempt| {
+                 const observation = ready.?.collectTickLiveV1(scope, bindings, self.config.context, intent.request_epoch) catch |err| {
+                     self.markAuthoritativeTraceIncompleteV1();
+                     return err;
+diff --git a/src/music/runtime_assets.zig b/src/music/runtime_assets.zig
+index d6fa996..6775959 100644
+--- a/src/music/runtime_assets.zig
++++ b/src/music/runtime_assets.zig
+@@ -1433,6 +1433,14 @@ pub const Generation = struct {
+     pub fn prefetchEntryWindows(self: *Generation, request_id: u64, frame: u64) !void {
+         _ = try self.prefetchSelectedWindows(.{ .scope = .request, .request_id = request_id }, null, true, frame, false, null);
+     }
++    /// Only the owner-validated first request may include its retained, bound
++    /// but never submitted candidate. Each call revalidates current Tick custody.
++    pub fn prefetchInitialEntryV1(self: *Generation, scope: anytype, request_id: u64, frame: u64) !void {
++        for (self.windows) |entry| if (entry) |window| {
++            if (window.retiring or !window.ownedBy(.request, request_id) or window.binding.cue == 0) continue;
++            _ = try scope.prefetchInitialEntryV1(request_id, window.binding.handle, frame);
++        };
++    }
+     pub fn prefetchEntryWindowsLiveV1(self: *Generation, request_id: u64, frame: u64) !?streaming.stream.LiveObservationDeferV1 {
+         return self.prefetchSelectedWindows(.{ .scope = .request, .request_id = request_id }, null, true, frame, true, null);
+     }
+diff --git a/src/runtime/capture_order.zig b/src/runtime/capture_order.zig
+index 38a8c17..05a4ac3 100644
+--- a/src/runtime/capture_order.zig
++++ b/src/runtime/capture_order.zig
+@@ -119,6 +119,8 @@ pub const Site = enum(u8) {
+     service_slot_guard_close = 0x77,
+     service_slot_guard_render_claim = 0x78,
+     service_slot_guard_render_release = 0x79,
++    service_initial_entry_consumed = 0x7A,
++    service_initial_entry_cancel = 0x7B,
+     scheduler_validate = 0x80,
+     scheduler_ack_terminal = 0x81,
+     scheduler_control_scan = 0x82,
+diff --git a/src/runtime/live_semantic_hooks.zig b/src/runtime/live_semantic_hooks.zig
+index c8044cd..7e0a334 100644
+--- a/src/runtime/live_semantic_hooks.zig
++++ b/src/runtime/live_semantic_hooks.zig
+@@ -78,6 +78,8 @@ pub const Binding = struct {
+ pub fn allowedSite(site: Site) bool {
+     return switch (site) {
+         .ring_consumed,
++        .service_initial_entry_consumed,
++        .service_initial_entry_cancel,
+         .ring_produced,
+         .produced_release,
+         .runtime_collection_frame,
+@@ -177,6 +179,8 @@ pub fn allowedPoint(point: Point) bool {
+     // Ring hooks are attached only to finite Control publication/read calls.
+     return switch (point.site) {
+         .ring_consumed,
++        .service_initial_entry_consumed,
++        .service_initial_entry_cancel,
+         .ring_produced,
+         .produced_release,
+         .runtime_worker_service_publish,
+diff --git a/src/runtime/runtime.zig b/src/runtime/runtime.zig
+index 10377b3..fce4df0 100644
+--- a/src/runtime/runtime.zig
++++ b/src/runtime/runtime.zig
+@@ -1874,8 +1874,16 @@ pub const ControlRuntime = struct {
+         if (self.voice_admission) |admission| if (service.profile.allocation_budget_bytes > admission.voice.stream_budget_bytes) return self.voiceBudgetFailure(.stream_budget, service.profile.allocation_budget_bytes, admission.voice.stream_budget_bytes, 0, 0) else if (service.profile.resident_limit_bytes != admission.voice.segment_resident_limit_bytes) return error.InvalidVoiceProfile;
+         service.attachRuntime() catch return error.InvalidState;
+         self.streaming_service = service;
++        service.initial_entry_owner = .{ .context = self, .validate = validateInitialEntryOwner };
+         self.streaming_inputs = inputs;
+     }
++    fn validateInitialEntryOwner(raw: *anyopaque, service: *streaming.Service, serial: u64, request_id: u64, handle: streaming.Handle) streaming.stream.Error!streaming.stream.InitialEntryContextV1 {
++        const control: *ControlRuntime = @ptrCast(@alignCast(raw));
++        const tick: TickV1 = .{ .runtime = control, .serial = serial };
++        tick.validateInitialEntryServiceV1(service, request_id, handle) catch return error.InvalidState;
++        const owner = control.music_runtime.?;
++        return .{ .position = .{ .accepted_control_frame = control.tick_v1.frame, .control_tick = control.stream_control_tick, .input_order = control.stream_input_order }, .context = owner.config.context, .control_epoch = owner.preparing.?.intent.request_epoch };
++    }
+     fn recordStreamingInputOwned(self: *ControlRuntime, input: music.trace.Input) void {
+         if (self.music_runtime) |owner| owner.captureStreamingInputV1(self, input);
+         if (self.streaming_inputs) |sink| if (!sink.push(input)) {
+@@ -4711,6 +4719,35 @@ pub const ControlRuntime = struct {
+             const service = try self.readinessService();
+             return self.runtime.streamReadinessAtOwnedWithLive(service, handle, context, control_epoch, self.runtime.tick_v1.frame, deferred);
+         }
++        pub fn validateInitialEntryV1(self: TickV1, request_id: u64, handle: streaming.Handle) RuntimeError!void {
++            try self.requirePhase(.prepare);
++            const owner = self.runtime.music_runtime orelse return error.InvalidState;
++            owner.validateInitialEntryV1(self, request_id, handle) catch return error.InvalidState;
++        }
++        pub fn validateInitialEntryServiceV1(self: TickV1, service: *streaming.Service, request_id: u64, handle: streaming.Handle) RuntimeError!void {
++            try self.validateInitialEntryV1(request_id, handle);
++            if (self.runtime.streaming_service != service) return error.InvalidState;
++        }
++        pub fn prefetchInitialEntryV1(self: TickV1, request_id: u64, handle: streaming.Handle, policy_frame: u64) !?u64 {
++            try self.validateInitialEntryV1(request_id, handle);
++            if (policy_frame != self.runtime.tick_v1.frame) return error.InvalidState;
++            const service = try self.readinessService();
++            return service.prefetchInitialEntryV1(self.serial, request_id, handle, policy_frame);
++        }
++        /// Source coordinates cannot advance before the first group submission.
++        /// Keep the genuine Control position; do not pretend Render was frozen.
++        pub fn streamReadinessInitialEntryV1(self: TickV1, request_id: u64, handle: streaming.Handle, context: u64, control_epoch: u64) RuntimeError!music.trace.Input {
++            try self.validateInitialEntryV1(request_id, handle);
++            const control = self.runtime;
++            const owner = control.music_runtime.?;
++            if (context != owner.config.context or control_epoch != owner.preparing.?.intent.request_epoch or control.stream_input_order == std.math.maxInt(u64)) return error.InvalidState;
++            const service = try self.readinessService();
++            const position_value: scheduler.trace.Position = .{ .accepted_control_frame = control.tick_v1.frame, .control_tick = control.stream_control_tick, .input_order = control.stream_input_order };
++            const input = service.readinessInitialEntryV1(self.serial, request_id, handle, position_value, context, control_epoch) catch return error.InvalidState;
++            control.stream_input_order += 1;
++            control.recordStreamingInputOwned(input);
++            return input;
++        }
+         /// Existing M2 controller adapter. All preparation stays in this live
+         /// owner's prepare phase; acquired observations/releases may be read in
+         /// either work phase. No public Control guard is suspended or reentered.
+diff --git a/src/streaming/music_stream.zig b/src/streaming/music_stream.zig
+index 4c6f0f9..5fd7f73 100644
+--- a/src/streaming/music_stream.zig
++++ b/src/streaming/music_stream.zig
+@@ -27,6 +27,12 @@ pub const LiveObservationDeferV1 = struct {
+     sequence_before: ?u64 = null,
+     sequence_after: ?u64 = null,
+ };
++/// Actual owner context returned by the installed Control validator.
++pub const InitialEntryContextV1 = struct {
++    position: trace.schema.Position,
++    context: u64,
++    control_epoch: u64,
++};
+ /// A successful completed-DSP acquire. Production uses a stack-local value,
+ /// never diagnostic storage, to choose the acceptance position and capacity.
+ pub const CompletedDspCutV1 = struct {
+@@ -457,6 +463,8 @@ pub const OfflineSite = enum {
+     slot_guard_close,
+     slot_guard_render_claim,
+     slot_guard_render_release,
++    initial_entry_consumed,
++    initial_entry_cancel,
+ };
+ pub const OfflineEdge = enum { before, after };
+ pub const OfflineCheckpoint = struct { site: OfflineSite, edge: OfflineEdge, index: u64 = 0, generation: u64 = 0, value: u64 = 0 };
+@@ -538,6 +546,12 @@ pub const Service = struct {
+     publication_read: std.atomic.Value(u64) = .init(0),
+     publication_tail: std.atomic.Value(u64) = .init(0),
+     runtime_attached: bool = false,
++    /// Installed only by the real Control attachment, never supplied by a
++    /// readiness/prefetch caller. Control-only, cleared on genuine detach.
++    initial_entry_owner: ?struct {
++        context: *anyopaque,
++        validate: *const fn (*anyopaque, *Service, u64, u64, Handle) Error!InitialEntryContextV1,
++    } = null,
+     visibility_backpressure: u64 = 0,
+     last_batch_id: u64 = 0,
+     visibility_discarded: bool = false,
+@@ -1070,13 +1084,13 @@ pub const Service = struct {
+     /// enter their explicit lead window; active/optional streams start below
+     /// low water and continue to high water. A missed deadline never blocks.
+     pub fn prefetch(self: *Service, handle: Handle, observed_control_frame: u64) Error!?u64 {
+-        return self.prefetchObserved(handle, observed_control_frame, null, false);
++        return self.prefetchObserved(handle, observed_control_frame, null, .exact);
+     }
+     /// Opt-in live supply. The stack witness is consumed immediately, before
+     /// any other operation can fail; unknown InvalidState remains an error.
+     pub fn prefetchLiveV1(self: *Service, handle: Handle, observed_control_frame: u64) Error!LivePrefetchOutcomeV1 {
+         var deferred: ?LiveObservationDeferV1 = null;
+-        const submitted = self.prefetchObserved(handle, observed_control_frame, &deferred, false) catch |err| {
++        const submitted = self.prefetchObserved(handle, observed_control_frame, &deferred, .exact) catch |err| {
+             if (err == error.InvalidState) if (deferred) |value| return .{ .deferred = value };
+             return err;
+         };
+@@ -1088,13 +1102,56 @@ pub const Service = struct {
+     /// asserted for this same-call coherent completed-DSP availability cut.
+     pub fn prefetchActiveLiveV1(self: *Service, handle: Handle, policy_frame: u64) Error!LivePrefetchOutcomeV1 {
+         var deferred: ?LiveObservationDeferV1 = null;
+-        const submitted = self.prefetchObserved(handle, policy_frame, &deferred, true) catch |err| {
++        const submitted = self.prefetchObserved(handle, policy_frame, &deferred, .latest_completed) catch |err| {
+             if (err == error.InvalidState) if (deferred) |value| return .{ .deferred = value };
+             return err;
+         };
+         return .{ .submitted = submitted };
+     }
+-    fn prefetchObserved(self: *Service, handle: Handle, observed_control_frame: u64, live: ?*?LiveObservationDeferV1, latest_completed: bool) Error!?u64 {
++    const SupplyDomain = enum { exact, latest_completed, initial_unconsumed };
++    /// Internal owner route: the live Tick revalidates request custody and the
++    /// exact handle on every call. No naked initial flag or source identity.
++    pub fn prefetchInitialEntryV1(self: *Service, tick_serial: u64, request_id: u64, handle: Handle, policy_frame: u64) Error!?u64 {
++        const owner = self.initial_entry_owner orelse return error.InvalidState;
++        const actual = try owner.validate(owner.context, self, tick_serial, request_id, handle);
++        if (policy_frame != actual.position.accepted_control_frame) return error.InvalidState;
++        return self.prefetchObserved(handle, policy_frame, null, .initial_unconsumed);
++    }
++    fn initialEntryConsumed(self: *Service, slot: *Slot) Error!u64 {
++        const index = (@intFromPtr(slot) - @intFromPtr(&self.slots[0])) / @sizeOf(Slot);
++        self.orderCheckpoint(.control, .initial_entry_cancel, .before, index, slot.generation, null);
++        const cancelled = slot.cancel.load(.acquire);
++        self.orderCheckpoint(.control, .initial_entry_cancel, .after, index, slot.generation, @intFromBool(cancelled));
++        if (cancelled or slot.failed != .none) return error.InvalidState;
++        self.orderCheckpoint(.control, .readiness_stopped_first, .before, index, slot.generation, null);
++        const stopped = slot.pcm_ring.stopped.load(.acquire);
++        self.orderCheckpoint(.control, .readiness_stopped_first, .after, index, slot.generation, @intFromBool(stopped));
++        if (stopped or !self.runtime_attached or self.replay_mode) return error.InvalidState;
++        self.orderCheckpoint(.control, .initial_entry_consumed, .before, index, slot.generation, null);
++        const consumed = slot.pcm_ring.consumed.load(.acquire);
++        self.orderCheckpoint(.control, .initial_entry_consumed, .after, index, slot.generation, consumed);
++        if (consumed != 0) return error.InvalidState;
++        return consumed;
++    }
++    fn initialEntryAvailable(self: *Service, slot: *Slot, observed: ?*observation.Availability) Error!u64 {
++        if (observed) |value| value.* = .{ .attached = self.runtime_attached };
++        errdefer |err| if (observed) |value| {
++            value.error_code = @intFromError(err);
++        };
++        const consumed = try self.initialEntryConsumed(slot);
++        const index = (@intFromPtr(slot) - @intFromPtr(&self.slots[0])) / @sizeOf(Slot);
++        self.orderCheckpoint(.control, .readiness_produced, .before, index, slot.generation, null);
++        const produced = slot.pcm_ring.produced.load(.acquire);
++        self.orderCheckpoint(.control, .readiness_produced, .after, index, slot.generation, produced);
++        if (observed) |value| {
++            value.consumed = consumed;
++            value.produced = produced;
++        }
++        if (produced < consumed or produced - consumed > slot.pcm_ring.capacity_frames) return error.InvalidState;
++        if (observed) |value| value.available = produced - consumed;
++        return produced - consumed;
++    }
++    fn prefetchObserved(self: *Service, handle: Handle, observed_control_frame: u64, live: ?*?LiveObservationDeferV1, domain: SupplyDomain) Error!?u64 {
+         var diagnostic: if (@import("builtin").is_test) TestSupplyReturn else void = if (@import("builtin").is_test) .{ .operation = .prefetch, .handle = handle } else {};
+         defer if (@import("builtin").is_test) if (self.test_supply_return_hook) |hook| hook.call(hook.context, diagnostic);
+         errdefer |err| if (@import("builtin").is_test) {
+@@ -1115,11 +1172,11 @@ pub const Service = struct {
+             return @as(Error!?u64, err);
+         };
+         if (@import("builtin").is_test) if (self.test_supply_hook) |hook| hook.call(hook.context, .{ .stage = .prefetch_begin, .handle = handle });
+-        const available = self.controlAvailableObserved(slot, if (latest_completed) null else observed_control_frame, if (observed) |value| &value.availability else null, .readiness, live) catch |err| {
++        const available = (if (domain == .initial_unconsumed) self.initialEntryAvailable(slot, if (observed) |value| &value.availability else null) else self.controlAvailableObserved(slot, if (domain == .latest_completed) null else observed_control_frame, if (observed) |value| &value.availability else null, .readiness, live)) catch |err| {
+             if (@import("builtin").is_test) diagnostic.reason = .availability_error;
+             // This failure belongs to prefetch's own read, not a later nested
+             // request read. Keep the actual absent exact-frame requirement.
+-            if (latest_completed) if (live) |witness| if (witness.*) |*value| {
++            if (domain == .latest_completed) if (live) |witness| if (witness.*) |*value| {
+                 value.operation = .prefetch;
+             };
+             return @as(Error!?u64, err);
+@@ -1153,16 +1210,16 @@ pub const Service = struct {
+             observation_open = false;
+         }
+         if (@import("builtin").is_test) diagnostic.reason = .nested_request;
+-        const result = try self.requestObserved(handle, parent, live, if (@import("builtin").is_test) true else {});
++        const result = try self.requestObserved(handle, parent, live, domain == .initial_unconsumed, if (@import("builtin").is_test) true else {});
+         if (@import("builtin").is_test) diagnostic.job = result;
+         return result;
+     }
+ 
+     /// Single Control owner, at most one outstanding job per stream.
+     pub fn request(self: *Service, handle: Handle) Error!?u64 {
+-        return self.requestObserved(handle, 0, null, if (@import("builtin").is_test) false else {});
++        return self.requestObserved(handle, 0, null, false, if (@import("builtin").is_test) false else {});
+     }
+-    fn requestObserved(self: *Service, handle: Handle, parent: u64, live: ?*?LiveObservationDeferV1, nested_prefetch: if (@import("builtin").is_test) bool else void) Error!?u64 {
++    fn requestObserved(self: *Service, handle: Handle, parent: u64, live: ?*?LiveObservationDeferV1, initial: bool, nested_prefetch: if (@import("builtin").is_test) bool else void) Error!?u64 {
+         var diagnostic: if (@import("builtin").is_test) TestSupplyReturn else void = if (@import("builtin").is_test) .{ .operation = .request, .handle = handle, .nested_prefetch = nested_prefetch } else {};
+         defer if (@import("builtin").is_test) if (self.test_supply_return_hook) |hook| hook.call(hook.context, diagnostic);
+         errdefer |err| if (@import("builtin").is_test) {
+@@ -1222,7 +1279,7 @@ pub const Service = struct {
+             if (@import("builtin").is_test) diagnostic.reason = .pending;
+             return null;
+         }
+-        const available = self.controlAvailableObserved(slot, null, if (observed) |value| &value.availability else null, .readiness, live) catch |err| {
++        const available = (if (initial) self.initialEntryAvailable(slot, if (observed) |value| &value.availability else null) else self.controlAvailableObserved(slot, null, if (observed) |value| &value.availability else null, .readiness, live)) catch |err| {
+             if (@import("builtin").is_test) diagnostic.reason = .availability_error;
+             return @as(Error!?u64, err);
+         };
+@@ -2013,7 +2070,7 @@ pub const Service = struct {
+     /// Internal observation entry. The measurement seam is erased in shipping
+     /// builds; ordinary readiness retains the same real local throughput.
+     pub fn readinessObserved(self: *Service, handle: Handle, position: trace.schema.Position, context: u64, control_epoch: u64, observed: ?*readiness_observation.QueryRead, key: readiness_observation.QueryKey, source: ?readiness_observation.MeasurementSource) Error!trace.Input {
+-        return self.readinessObservedWithLive(handle, position, context, control_epoch, observed, key, source, null);
++        return self.readinessObservedWithLive(handle, position, context, control_epoch, observed, key, source, null, false);
+     }
+     /// Checked live callers supply fresh stack storage for this exact query.
+     pub fn readinessLiveV1(self: *Service, handle: Handle, position: trace.schema.Position, context: u64, control_epoch: u64, live: *?LiveObservationDeferV1) Error!trace.Input {
+@@ -2024,9 +2081,15 @@ pub const Service = struct {
+     pub fn readinessLiveObservedV1(self: *Service, handle: Handle, position: trace.schema.Position, context: u64, control_epoch: u64, observed: ?*readiness_observation.QueryRead, key: readiness_observation.QueryKey, live: *?LiveObservationDeferV1) Error!trace.Input {
+         live.* = null;
+         if (self.replay_mode) return error.InvalidState;
+-        return self.readinessObservedWithLive(handle, position, context, control_epoch, observed, key, null, live);
++        return self.readinessObservedWithLive(handle, position, context, control_epoch, observed, key, null, live, false);
++    }
++    pub fn readinessInitialEntryV1(self: *Service, tick_serial: u64, request_id: u64, handle: Handle, position: trace.schema.Position, context: u64, control_epoch: u64) Error!trace.Input {
++        const owner = self.initial_entry_owner orelse return error.InvalidState;
++        const actual = try owner.validate(owner.context, self, tick_serial, request_id, handle);
++        if (!std.meta.eql(position, actual.position) or context != actual.context or control_epoch != actual.control_epoch) return error.InvalidState;
++        return self.readinessObservedWithLive(handle, position, context, control_epoch, null, .{}, null, null, true);
+     }
+-    fn readinessObservedWithLive(self: *Service, handle: Handle, position: trace.schema.Position, context: u64, control_epoch: u64, observed: ?*readiness_observation.QueryRead, key: readiness_observation.QueryKey, source: ?readiness_observation.MeasurementSource, live: ?*?LiveObservationDeferV1) Error!trace.Input {
++    fn readinessObservedWithLive(self: *Service, handle: Handle, position: trace.schema.Position, context: u64, control_epoch: u64, observed: ?*readiness_observation.QueryRead, key: readiness_observation.QueryKey, source: ?readiness_observation.MeasurementSource, live: ?*?LiveObservationDeferV1, initial: bool) Error!trace.Input {
+         errdefer |err| if (observed) |value| {
+             value.service_error = @intFromError(err);
+         };
+@@ -2054,7 +2117,7 @@ pub const Service = struct {
+             if (cached.position.accepted_control_frame != position.accepted_control_frame or cached.position.control_tick != position.control_tick or facts.context != context or facts.control_epoch != control_epoch) return error.IncompleteTrace;
+             return cached;
+         }
+-        return self.observeReadinessObserved(handle, position, context, control_epoch, observed, key, source, live);
++        return self.observeReadinessObserved(handle, position, context, control_epoch, observed, key, source, live, initial);
+     }
+     /// Recompute the requested stream's facts at its real query site. Only the
+     /// recorded external measurement is substituted; availability, queue and
+@@ -2073,9 +2136,9 @@ pub const Service = struct {
+         return actual;
+     }
+     fn observeReadiness(self: *Service, handle: Handle, position: trace.schema.Position, context: u64, control_epoch: u64) Error!trace.Input {
+-        return self.observeReadinessObserved(handle, position, context, control_epoch, null, .{}, null, null);
++        return self.observeReadinessObserved(handle, position, context, control_epoch, null, .{}, null, null, false);
+     }
+-    fn observeReadinessObserved(self: *Service, handle: Handle, position: trace.schema.Position, context: u64, control_epoch: u64, observed: ?*readiness_observation.QueryRead, key: readiness_observation.QueryKey, source: ?readiness_observation.MeasurementSource, live: ?*?LiveObservationDeferV1) Error!trace.Input {
++    fn observeReadinessObserved(self: *Service, handle: Handle, position: trace.schema.Position, context: u64, control_epoch: u64, observed: ?*readiness_observation.QueryRead, key: readiness_observation.QueryKey, source: ?readiness_observation.MeasurementSource, live: ?*?LiveObservationDeferV1, initial: bool) Error!trace.Input {
+         const slot = try self.get(handle);
+         self.offline(.readiness_stopped_second, .before, handle.index, handle.generation, 0);
+         self.orderCheckpoint(.control, .readiness_stopped_second, .before, handle.index, handle.generation, null);
+@@ -2088,18 +2151,21 @@ pub const Service = struct {
+             value.attached = self.runtime_attached;
+         }
+         if (stopped) return error.InvalidState;
+-        self.offline(.readiness_sequence, .before, 0, 0, 0);
+-        self.orderCheckpoint(.control, .readiness_sequence, .before, 0, 0, null);
+-        const sequence = self.observation_sequence.load(.acquire);
+-        self.orderCheckpoint(.control, .readiness_sequence, .after, 0, 0, sequence);
+-        self.offline(.readiness_sequence, .after, 0, 0, sequence);
+-        if (observed) |value| {
+-            value.saw(.sequence_before);
+-            value.sequence_before = sequence;
+-        }
+-        self.readinessHook(.after_sequence, sequence);
++        const sequence: u64 = if (initial) 0 else blk: {
++            self.offline(.readiness_sequence, .before, 0, 0, 0);
++            self.orderCheckpoint(.control, .readiness_sequence, .before, 0, 0, null);
++            const acquired_sequence = self.observation_sequence.load(.acquire);
++            self.orderCheckpoint(.control, .readiness_sequence, .after, 0, 0, acquired_sequence);
++            self.offline(.readiness_sequence, .after, 0, 0, acquired_sequence);
++            if (observed) |value| {
++                value.saw(.sequence_before);
++                value.sequence_before = acquired_sequence;
++            }
++            self.readinessHook(.after_sequence, acquired_sequence);
++            break :blk acquired_sequence;
++        };
+         var observed_frame: ?u64 = null;
+-        if (self.runtime_attached) {
++        if (self.runtime_attached and !initial) {
+             if (sequence & 1 != 0) {
+                 if (live) |value| value.* = .{ .reason = .odd_sequence, .operation = .readiness, .handle = handle, .requested_frame = position.accepted_control_frame, .sequence_before = sequence };
+                 return error.InvalidState;
+@@ -2120,11 +2186,14 @@ pub const Service = struct {
+                 return error.InvalidState;
+             }
+         }
+-        self.offline(.readiness_consumed, .before, handle.index, handle.generation, 0);
+-        self.orderCheckpoint(.control, .readiness_consumed, .before, handle.index, handle.generation, null);
+-        const ordinal = if (self.runtime_attached) slot.pcm_ring.control_consumed.load(.acquire) else slot.pcm_ring.consumed.load(.acquire);
+-        self.orderCheckpoint(.control, .readiness_consumed, .after, handle.index, handle.generation, ordinal);
+-        self.offline(.readiness_consumed, .after, handle.index, handle.generation, ordinal);
++        const ordinal = if (initial) try self.initialEntryConsumed(slot) else blk: {
++            self.offline(.readiness_consumed, .before, handle.index, handle.generation, 0);
++            self.orderCheckpoint(.control, .readiness_consumed, .before, handle.index, handle.generation, null);
++            const read_ordinal = if (self.runtime_attached) slot.pcm_ring.control_consumed.load(.acquire) else slot.pcm_ring.consumed.load(.acquire);
++            self.orderCheckpoint(.control, .readiness_consumed, .after, handle.index, handle.generation, read_ordinal);
++            self.offline(.readiness_consumed, .after, handle.index, handle.generation, read_ordinal);
++            break :blk read_ordinal;
++        };
+         if (observed) |value| {
+             value.saw(.consumed);
+             value.consumed = ordinal;
+@@ -2142,7 +2211,7 @@ pub const Service = struct {
+             value.produced = produced;
+         }
+         self.readinessHook(.after_produced, produced);
+-        if (live != null and (ordinal > produced or produced - ordinal > slot.pcm_ring.capacity_frames)) return error.InvalidState;
++        if ((live != null or initial) and (ordinal > produced or produced - ordinal > slot.pcm_ring.capacity_frames)) return error.InvalidState;
+         const available = @min(produced - ordinal, end - coordinate.cursor);
+         var backlog: u64 = 0;
+         var backlog_jobs: u32 = 0;
+@@ -2188,7 +2257,7 @@ pub const Service = struct {
+         const projection = self.projectedObserved(slot, position, facts, observed);
+         const input: trace.Input = .{ .position = position, .payload = .{ .readiness_snapshot = .{ .facts = facts, .expected = projection } } };
+         input.validate() catch return error.InvalidState;
+-        if (self.runtime_attached) {
++        if (self.runtime_attached and !initial) {
+             self.readinessHook(.before_final_sequence, 0);
+             self.offline(.readiness_final_sequence, .before, 0, 0, 0);
+             self.orderCheckpoint(.control, .readiness_final_sequence, .before, 0, 0, null);
+@@ -2481,6 +2550,7 @@ pub const Service = struct {
+         for (self.slots) |*slot| if (slot.occupied) {
+             slot.pcm_ring.gated = true;
+         };
++        self.initial_entry_owner = null;
+         self.runtime_attached = true;
+     }
+     pub fn detachRuntimeQuiescent(self: *Service) Error!void {
+@@ -2489,6 +2559,7 @@ pub const Service = struct {
+         for (self.slots) |*slot| if (slot.occupied) {
+             slot.pcm_ring.gated = false;
+         };
++        self.initial_entry_owner = null;
+         self.runtime_attached = false;
+     }
+     /// Renderer only, once before any group claim at this gate. Fixed one-shot
+@@ -2859,6 +2930,8 @@ fn orderSite(site: OfflineSite) order.Site {
+         .visibility_release => .service_visibility_release,
+         .visibility_poll => .service_visibility_poll,
+         .visibility_ack => .service_visibility_ack,
++        .initial_entry_consumed => .service_initial_entry_consumed,
++        .initial_entry_cancel => .service_initial_entry_cancel,
+         .readiness_stopped_first => .service_readiness_stopped_first,
+         .readiness_stopped_second => .service_readiness_stopped_second,
+         .readiness_sequence => .service_readiness_sequence,
+diff --git a/tests/sme/live_initial_entry_supply_test.zig b/tests/sme/live_initial_entry_supply_test.zig
+index 04b794a..99aad22 100644
+--- a/tests/sme/live_initial_entry_supply_test.zig
++++ b/tests/sme/live_initial_entry_supply_test.zig
+@@ -200,3 +200,179 @@ test "chronology cold entry makes progress with actual admitted high water despi
+     // deferrals. Do NOT turn the known starvation behavior into a passing test.
+     try t.expectEqual(@as(usize, 0), entry_defers);
+ }
++
++// Observes real lifecycle states through the existing valid prepare Tick.
++// Invalid arguments are detached query inputs, never engine-state mutations.
++const EligibilityProbe = struct {
++    owner: *f.music.MusicRuntime,
++    request_id: u64,
++    handle: ?stream.Handle = null,
++    eligible_seen: bool = false,
++    wrong_request_rejected: bool = false,
++    stale_tick_rejected: bool = false,
++    pending_seen: bool = false,
++    active_seen: bool = false,
++    executed_seen: bool = false,
++    failure: bool = false,
++    fn hook(raw: *anyopaque, stage: f.music.MusicRuntime.TickStage) void {
++        const self: *EligibilityProbe = @ptrCast(@alignCast(raw));
++        const scope = self.owner.tick_scope orelse return;
++        if (stage == .before_stream_supply and !self.eligible_seen) {
++            const generation = self.owner.generation orelse return;
++            for (generation.windows) |item| if (item) |window| {
++                if (window.retiring or window.scope != .request or window.request_id != self.request_id or window.binding.cue == 0) continue;
++                self.handle = window.binding.handle;
++                break;
++            };
++            const handle = self.handle orelse return;
++            scope.validateInitialEntryV1(self.request_id, handle) catch {
++                self.failure = true;
++                return;
++            };
++            self.eligible_seen = true;
++            if (scope.validateInitialEntryV1(self.request_id + 1, handle)) |_| {
++                self.failure = true;
++            } else |err| {
++                self.wrong_request_rejected = err == error.InvalidState;
++                if (!self.wrong_request_rejected) self.failure = true;
++            }
++            var stale = scope;
++            stale.serial = 0;
++            if (stale.validateInitialEntryV1(self.request_id, handle)) |_| {
++                self.failure = true;
++            } else |err| {
++                self.stale_tick_rejected = err == error.InvalidState;
++                if (!self.stale_tick_rejected) self.failure = true;
++            }
++        }
++        if (stage == .before_background_supply) {
++            const handle = self.handle orelse return;
++            const pending = self.owner.pending != null;
++            const active = self.owner.active_group != null;
++            const executed = self.owner.has_executed;
++            if (!pending and !active and !executed) return;
++            // Distinguish lifecycle rejection from an invalid Tick/phase:
++            // this exact native scope must still be a valid prepare capability.
++            scope.requirePhase(.prepare) catch {
++                self.failure = true;
++                return;
++            };
++            self.pending_seen = self.pending_seen or pending;
++            self.active_seen = self.active_seen or active;
++            self.executed_seen = self.executed_seen or executed;
++            if (scope.validateInitialEntryV1(self.request_id, handle)) |_| {
++                self.failure = true;
++            } else |err| {
++                if (err != error.InvalidState) self.failure = true;
++            }
++        }
++    }
++};
++
++// Withhold actual service opportunities, not counters or fabricated readiness.
++// Raw decoded PCM alone must not replace real Render visibility admission.
++test "initial entry still waits for actual Worker completion and Render acknowledged headroom" {
++    const bytes = try bank();
++    defer a.free(bytes);
++    var oracle = try f.Oracle.decode(bytes);
++    defer oracle.deinit();
++    const rig = try Rig.create(bytes);
++    var alive = true;
++    defer if (alive) rig.finish(&alive) catch @panic("headroom negative retained actual custody");
++    const owner = rig.engine.run.owner;
++    const service = owner.owned_streaming.?;
++    const renderer = rig.engine.run.renderer;
++    const ticket = try owner.start(rig.engine.run.bank.?, f.state);
++    var eligibility: EligibilityProbe = .{ .owner = owner, .request_id = ticket.request_id };
++    owner.test_tick_hook = .{ .context = &eligibility, .call = EligibilityProbe.hook };
++    defer if (alive) {
++        owner.test_tick_hook = null;
++    };
++    // Loading already joined each registered Worker call. Do not offer any
++    // further Worker step yet: actual newly queued decodes remain uncompleted.
++    for (0..3) |_| {
++        _ = try owner.controlTickLiveChronologyV1(f.rt.max_control_drain, null);
++        try t.expect(owner.active_group == null and owner.pending == null and !owner.has_executed);
++        while (try owner.pollReceiptV1()) |receipt| {
++            try t.expectEqualDeep(ticket, receipt.ticket);
++            try t.expect(receipt.event != .terminal);
++        }
++    }
++    var windows: usize = 0;
++    for (owner.generation.?.windows) |item| if (item) |window| {
++        if (window.scope != .request or window.request_id != ticket.request_id or window.retiring or window.binding.cue == 0) continue;
++        windows += 1;
++        try t.expectEqual(@as(u64, 0), try service.acknowledgedVisiblePrefix(window.binding.handle));
++    };
++    try t.expectEqual(@as(usize, 4), windows);
++    // Real decode and actual Control acceptance, but no Render admission yet.
++    try rig.engine.workers();
++    _ = try owner.controlTickLiveChronologyV1(f.rt.max_control_drain, null);
++    var published: usize = 0;
++    for (owner.generation.?.windows) |item| if (item) |window| {
++        if (window.scope != .request or window.request_id != ticket.request_id or window.retiring or window.binding.cue == 0) continue;
++        // Worker calls have returned and no Render is running; this is a
++        // local real publication check, not a concurrent/global snapshot.
++        const ring = try service.ringFor(window.binding.handle);
++        if (ring.produced.load(.acquire) > 0) published += 1;
++        try t.expectEqual(@as(u64, 0), try service.acknowledgedVisiblePrefix(window.binding.handle));
++    };
++    try t.expectEqual(@as(usize, 4), published);
++    try t.expect(owner.active_group == null and owner.pending == null and !owner.has_executed);
++    while (try owner.pollReceiptV1()) |receipt| {
++        try t.expectEqualDeep(ticket, receipt.ticket);
++        try t.expect(receipt.event != .terminal);
++    }
++    // Release only by offering real Render/Worker/Control work; the original
++    // ticket must eventually execute rather than requiring a replacement Play.
++    var executed = false;
++    var play_frame: u64 = 0;
++    for (0..512) |_| {
++        var pcm: [128]f32 = undefined;
++        renderer.render(&pcm, 64, 2);
++        try rig.engine.workers();
++        _ = try owner.controlTickLiveChronologyV1(f.rt.max_control_drain, null);
++        while (try owner.pollReceiptV1()) |receipt| {
++            try t.expectEqualDeep(ticket, receipt.ticket);
++            if (receipt.event == .terminal) {
++                try t.expect(receipt.event.terminal == .executed);
++                executed = true;
++                play_frame = receipt.event.terminal.executed.effective_frame;
++            }
++        }
++        if (executed) break;
++    }
++    var evidence: f.Oracle.Evidence = .{};
++    var pcm_failure: ?anyerror = null;
++    if (executed) for (0..16) |_| {
++        try rig.engine.workers();
++        _ = try owner.controlTickLiveChronologyV1(f.rt.max_control_drain, null);
++        const first = renderer.renderFrame();
++        var pcm: [128]f32 = undefined;
++        renderer.render(&pcm, 64, 2);
++        evidence.expectPcm(&oracle, first, play_frame, &pcm) catch |err| {
++            if (pcm_failure == null) pcm_failure = err;
++        };
++    };
++    const stop = try owner.submitV1(rig.engine.run.bank.?, .{ .stop = .emergency_ramp });
++    var stopped = false;
++    for (0..512) |_| {
++        try rig.engine.workers();
++        _ = try owner.controlTickLiveChronologyV1(f.rt.max_control_drain, null);
++        var pcm: [128]f32 = undefined;
++        renderer.render(&pcm, 64, 2);
++        while (try owner.pollReceiptV1()) |receipt| {
++            try t.expectEqualDeep(stop, receipt.ticket);
++            if (receipt.event == .terminal and receipt.event.terminal == .executed) stopped = true;
++        }
++        if (stopped) break;
++    }
++    owner.test_tick_hook = null;
++    try rig.finish(&alive);
++    std.debug.print("ENTRY_HEADROOM_WAIT executed={} stopped={} pcm_frames={d} nonzero={d} pcm_ok={} cleanup_complete=true\n", .{ executed, stopped, evidence.frames, evidence.nonzero, pcm_failure == null });
++    std.debug.print("ENTRY_ELIGIBILITY initial={} wrong_request_rejected={} stale_tick_rejected={} pending_seen={} active_seen={} executed_seen={} unexpected_result={}\n", .{ eligibility.eligible_seen, eligibility.wrong_request_rejected, eligibility.stale_tick_rejected, eligibility.pending_seen, eligibility.active_seen, eligibility.executed_seen, eligibility.failure });
++    try t.expect(!eligibility.failure and eligibility.eligible_seen and eligibility.wrong_request_rejected and eligibility.stale_tick_rejected);
++    try t.expect(eligibility.pending_seen and eligibility.active_seen and eligibility.executed_seen);
++    try t.expect(executed and stopped);
++    try t.expect(pcm_failure == null and evidence.frames == 1024 and evidence.nonzero > 0);
++}
+diff --git a/tests/sme/live_semantic_codec_test.zig b/tests/sme/live_semantic_codec_test.zig
+index 62e33ba..11f3144 100644
+--- a/tests/sme/live_semantic_codec_test.zig
++++ b/tests/sme/live_semantic_codec_test.zig
+@@ -1986,3 +1986,53 @@ test "Driver commit horizon calendar admits real duplicate zero stores across bo
+         try crossedRuntimeAtomicReplay(&.{ .runtime_control_horizon, .scheduler_prepare_horizon }, &.{ .runtime_render_commit_horizon, .scheduler_horizon }, 0, 0, packet);
+     }
+ }
++
++fn initialConsumedMap(inputs: []const codec.PacketInput) !usize {
++    var input_bytes: [4096]u8 = undefined;
++    var reference_bytes: [4096]u8 = undefined;
++    var corpus: [12288]u8 = undefined;
++    var references: [8]codec.PacketReference = undefined;
++    for (inputs, 0..) |input, i| references[i] = .{ .input = input, .value = if (input.edge == .after) input.publication_prefix else null };
++    const payload = try codec.encodePointInputs(.control, inputs, &input_bytes);
++    const reference = try codec.encodePointReferences(.control, references[0..inputs.len], &reference_bytes);
++    const reader = try f.Reader.preflight(try frameTape(&corpus, payload, reference, .control), identity(), codec.validate);
++    return live.semantic_replay.ConsumedPrefixRegression.validateMap(&reader);
++}
++
++test "initial entry raw consumed alias rejects wrong roles before prefixes and crossed sites" {
++    var bytes: [512]u8 = undefined;
++    var pair = [_]codec.PacketInput{
++        .{ .occurrence = 1, .site = .service_initial_entry_consumed, .edge = .before, .index = 3, .generation = 7 },
++        .{ .occurrence = 2, .site = .service_initial_entry_consumed, .edge = .after, .index = 3, .generation = 7 },
++    };
++    try t.expectEqual(@as(usize, 1), try initialConsumedMap(&pair));
++    inline for (.{ f.Role.worker, f.Role.render, f.Role.ui }) |role| {
++        try t.expectError(error.UnsupportedValue, codec.encodePointInputs(role, &pair, &bytes));
++    }
++    pair[0].publication_prefix = 1;
++    try t.expectError(error.Noncanonical, codec.encodePointInputs(.control, &pair, &bytes));
++    const native: codec.Native(codec.Cut) = .{ .occurrence = 1, .value = .{ .role = .control, .site = .service_initial_entry_consumed, .edge = .before, .index = 3, .generation = 7, .publication_prefix = 1 } };
++    const raw = try codec.encode(native, .input, &bytes);
++    try t.expectError(error.Noncanonical, codec.decodeInput(codec.Cut, .{ .role = .control, .ordinal = 1, .family = @intFromEnum(codec.Family.cut), .bytes = raw }, .cut));
++    pair[0].publication_prefix = 0;
++    pair[0].site = .ring_consumed;
++    try t.expectError(error.InvalidOrder, initialConsumedMap(&pair));
++}
++
++test "initial entry raw consumed calendar keeps monotonic generation scoped coordinates" {
++    var values = [_]codec.PacketInput{
++        .{ .occurrence = 1, .site = .ring_consumed, .edge = .before, .index = 3, .generation = 7 },
++        .{ .occurrence = 2, .site = .ring_consumed, .edge = .after, .index = 3, .generation = 7, .publication_prefix = 64 },
++        .{ .occurrence = 3, .site = .service_initial_entry_consumed, .edge = .before, .index = 3, .generation = 7 },
++        .{ .occurrence = 4, .site = .service_initial_entry_consumed, .edge = .after, .index = 3, .generation = 7, .publication_prefix = 64 },
++    };
++    try t.expectEqual(@as(usize, 2), try initialConsumedMap(&values));
++    values[3].publication_prefix = 0;
++    try t.expectError(error.InvalidOrder, initialConsumedMap(&values));
++    values[2].generation = 8;
++    values[3].generation = 8;
++    try t.expectEqual(@as(usize, 2), try initialConsumedMap(&values));
++    values[2].generation = 6;
++    values[3].generation = 6;
++    try t.expectError(error.InvalidOrder, initialConsumedMap(&values));
++}
+diff --git a/tools/sme_authoring/core/live_semantic_codec.zig b/tools/sme_authoring/core/live_semantic_codec.zig
+index 612635f..b0c84b1 100644
+--- a/tools/sme_authoring/core/live_semantic_codec.zig
++++ b/tools/sme_authoring/core/live_semantic_codec.zig
+@@ -126,13 +126,18 @@ pub fn runtimePublicationStore(site: cuts.Site) ?RuntimePublicationDomain {
+         else => null,
+     };
+ }
++/// Both sites acquire the same per-stream raw consumed atomic, never the
++/// completed-DSP control_consumed projection. Generation remains part of key.
++pub fn rawConsumedRead(site: cuts.Site) bool {
++    return site == .ring_consumed or site == .service_initial_entry_consumed;
++}
+ pub fn publicationPrefixPoint(role: format.Role, site: cuts.Site, edge: cuts.Edge) bool {
+     if (edge != .after) return false;
+-    return (role == .control and (site == .ring_consumed or serviceSequenceRead(site) or runtimePublicationRead(site) != null)) or
++    return (role == .control and (rawConsumedRead(site) or serviceSequenceRead(site) or runtimePublicationRead(site) != null)) or
+         (role == .render and (serviceSequencePublication(site) or runtimePublicationStore(site) != null));
+ }
+ pub fn validatePublicationPrefix(role: format.Role, site: cuts.Site, edge: cuts.Edge, prefix: u64) Error!void {
+-    if (((serviceSequenceRead(site) or runtimePublicationRead(site) != null) and role != .control) or
++    if (((rawConsumedRead(site) or serviceSequenceRead(site) or runtimePublicationRead(site) != null) and role != .control) or
+         ((serviceSequencePublication(site) or runtimePublicationStore(site) != null) and role != .render)) return error.UnsupportedValue;
+     if (!publicationPrefixPoint(role, site, edge) and prefix != 0) return error.Noncanonical;
+ }
+diff --git a/tools/sme_authoring/core/live_semantic_replay.zig b/tools/sme_authoring/core/live_semantic_replay.zig
+index 0b2017b..2aeb59d 100644
+--- a/tools/sme_authoring/core/live_semantic_replay.zig
++++ b/tools/sme_authoring/core/live_semantic_replay.zig
+@@ -664,7 +664,7 @@ pub const Driver = struct {
+         while (try cursor.next()) |record| {
+             if (record.family != @intFromEnum(codec.Family.cut)) continue;
+             const cut = try codec.decodeInput(codec.Cut, record, .cut);
+-            if (cut.value.site != .ring_consumed) continue;
++            if (!codec.rawConsumedRead(cut.value.site)) continue;
+             if (cut.value.index >= max_stream_slots or cut.value.generation == 0) return error.UnsupportedScope;
+             const index: usize = @intCast(cut.value.index);
+             if (cut.value.edge == .before) {
+@@ -672,7 +672,7 @@ pub const Driver = struct {
+                 pending = cut;
+             } else {
+                 const before = pending orelse return error.InvalidOrder;
+-                if (before.value.index != cut.value.index or before.value.generation != cut.value.generation or before.occurrence >= cut.occurrence) return error.InvalidOrder;
++                if (before.value.site != cut.value.site or before.value.index != cut.value.index or before.value.generation != cut.value.generation or before.occurrence >= cut.occurrence) return error.InvalidOrder;
+                 if (self.consumed_read_count == max_consumed_reads) return error.UnsupportedScope;
+                 if (cut.value.generation < last_generation[index] or
+                     (cut.value.generation == last_generation[index] and cut.value.publication_prefix < last_prefix[index])) return error.InvalidOrder;
+@@ -788,7 +788,7 @@ pub const Driver = struct {
+                 return;
+             };
+         }
+-        if (role == .control and value.site == .ring_consumed and value.edge == .after) self.releaseConsumedRead(value);
++        if (role == .control and codec.rawConsumedRead(value.site) and value.edge == .after) self.releaseConsumedRead(value);
+         // AFTER means the original atomic already completed. Retire the real
+         // acquired prefix or publish actual fetchAdd progress before waiting on
+         // the later marker, otherwise a crossed hook can deadlock both actors.
+@@ -837,7 +837,7 @@ pub const Driver = struct {
+         self.leave(occurrence);
+         // Advance the global marker before waiting, so the opposite native
+         // actor can reach the exact publication required by this actual load.
+-        if (role == .control and value.site == .ring_consumed and value.edge == .before) self.waitConsumedRead(value, occurrence);
++        if (role == .control and codec.rawConsumedRead(value.site) and value.edge == .before) self.waitConsumedRead(value, occurrence);
+         if (value.edge == .before and (busy_claim or busy_release)) {
+             while (!self.failed.load(.acquire)) {
+                 if (self.exclusion_calendar.ready(exclusionRole(role), occurrence) catch |err| {
+@@ -1308,6 +1308,15 @@ pub const Driver = struct {
+ // Proposed append to live_semantic_replay.zig after central build freeze.
+ // Private driver methods stay private; this test-only facade is absent in production.
+ pub const ConsumedPrefixRegression = if (@import("builtin").is_test) struct {
++    /// Pre-owner input-only map admission; no Host or native effects.
++    pub fn validateMap(reader: *const format.Reader) !usize {
++        const driver = try std.testing.allocator.create(Driver);
++        defer std.testing.allocator.destroy(driver);
++        driver.* = .{};
++        try driver.initConsumedReads(reader);
++        return driver.consumed_read_count;
++    }
++
+     pub fn repeatedPrefixAndInterveningMarker() !void {
+         const t = std.testing;
+         const driver = try t.allocator.create(Driver);
