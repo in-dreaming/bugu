@@ -1,0 +1,84 @@
+{
+  "stage": "UNVERIFIED single existing controlled-cross-frame native Host recording; no new workload seams",
+  "original_source": "e15de1243d23fa67449674ab75fcebe735e9840d",
+  "base_tree": "28163955b35b0fc304055574b2ea069c9615f378",
+  "synthetic_base": "36d4e6c97cd9cc6a099ae273b7655a1fd3a335d1",
+  "source_commit": "5b7ed9ad97dda2e6068c7ed38580d2acc5e228d2",
+  "source_tree": "28163955b35b0fc304055574b2ea069c9615f378",
+  "timeout_seconds": 900,
+  "resource_bounds": {
+    "parallel_build_jobs": 1,
+    "start_disk_min_bytes": 3355443200,
+    "runtime_disk_floor_bytes": 2281701376,
+    "test_barrier_seconds": 5
+  },
+  "expected_baseline": "One concurrent recording to persisted history. Then identify exact test ELF, preserve bank/tape/ELF hashes; separately checkpoint fresh-process replay plan. Missing retry witness is coverage gap, not permission to fabricate it.",
+  "files": {
+    "tests/sme/live_acceptance_retry_test.zig": "def14404d44dbf206183d276d1e8177431236c304d60821d10e44e3f4e39191d",
+    "tests/sme/live_semantic_codec_test.zig": "fe6edf2e703f29c4061954e48a44aa9b143df4d8fe436335aa54e7f8ea7c821b",
+    "build_support/sme_tasks/task-017.zon": "acab18cc71ef8c7619295229a540775ca1425926049c277a2e53b91be27153a0",
+    "src/runtime/runtime.zig": "92e9a575e5075a7db3c248aa9cf81fb8b92ee55b5b3ad037ea2ed69ae679462c"
+  },
+  "checkpoint_files": {
+    "run_guarded.py reused": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+  },
+  "base_commit": "5b7ed9ad97dda2e6068c7ed38580d2acc5e228d2",
+  "corrections": "No source changes. Existing explicit cross-frame workload only pauses Control after successful acceptance. It DOES NOT force odd retry. Retain one actual recording, inspect typed retry occurrence pairs; no timing retries if absent.",
+  "command_template": [
+    "python",
+    "${CHECKPOINT_DIR}/run_guarded.py",
+    "--repo",
+    "${SOURCE_REPO}",
+    "--out",
+    "${OUTPUT_DIR}",
+    "--seconds",
+    "900",
+    "--",
+    "env",
+    "SME_LIVE_SEMANTIC_MODE=record",
+    "SME_LIVE_SEMANTIC_DIR=${TAPE_DIR}",
+    "SME_LIVE_SEMANTIC_WRITER=stream",
+    "SME_LIVE_SEMANTIC_WORKLOAD=long",
+    "SME_LIVE_SEMANTIC_CONTROLLED_CROSS_FRAME=1",
+    "${ZIG_BIN}",
+    "build",
+    "sme-live-semantic-process-test",
+    "-j1",
+    "-Doptimize=Debug",
+    "--summary",
+    "all"
+  ],
+  "status": "UNVERIFIED_PLANNED_NOT_RUN",
+  "cwd_template": "${SOURCE_REPO}",
+  "result_policy": {
+    "source_snapshot_is_not_validation": true,
+    "failed_baseline_assertions_remain_failed": "Confirming an expected baseline defect requires the specific retained runtime evidence, not merely a nonzero exit.",
+    "timeout_or_external_interruption": "unknown",
+    "missing_final_result": "unknown",
+    "source_changed_during_run": "invalid qualification",
+    "before_start": "not_run",
+    "raw_logs_and_private_environment_paths": "Do not publish; retain public technical summaries and evidence hashes only."
+  },
+  "runner_source": {
+    "delivery_commit": "93813b70910692c105d1ebf3d4754e6626fdf8a3",
+    "path": "checkpoints/baseline-retry-20261021-6327086/run_guarded.py",
+    "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+  },
+  "path_parameters": {
+    "CHECKPOINT_DIR": "Directory containing the unchanged runner retrieved from runner_source. Not necessarily this increment's directory.",
+    "SOURCE_REPO": "Restored and patched repository at the exact source_tree above.",
+    "OUTPUT_DIR": "New, nonexistent per-run output directory.",
+    "ZIG_BIN": "Verified Zig 0.16.0 Linux x86_64 binary pinned by the recovery manifest.",
+    "TAPE_DIR": "New, dedicated native recording directory retained locally for separately planned fresh-process replay. Raw tape and bank bytes are not published here."
+  },
+  "provenance": {
+    "local_run_manifest_sha256": "590906cc240b8efcdf1dbaa552e3e633be53f78a5387573512e746a87c78989d",
+    "public_manifest_transformation": "Absolute execution locations are parameterized and explanatory metadata is added; public command is a template, not the byte-identical local argv. Zig arguments and resource bounds are unchanged."
+  },
+  "source_checkpoint": {
+    "delivery_commit": "4990e039d6364da023f14fa9971784e11787d9b7",
+    "path": "checkpoints/runtime-retry-20261021-2816395/manifest.json"
+  },
+  "single_attempt_only": true,
+  "retry_coverage_not_guaranteed": true
+}
