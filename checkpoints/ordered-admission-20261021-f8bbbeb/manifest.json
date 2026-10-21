@@ -1,0 +1,67 @@
+{
+  "stage": "UNVERIFIED explicit admission policy; original failed tape pre-owner negative only",
+  "base_commit": "5dc8a31344e391142c6a0403c3bd49e9aca88840",
+  "base_tree": "1dafd4a23dc8da1f1a400ddac020751a79e8552c",
+  "source_commit": "f28bee4e4f6cbb0e0b8fdb8d1d4decad37e76fef",
+  "source_tree": "f8bbbebd01520966237fab954a868c4dd1dee85f",
+  "command": [
+    "python",
+    "${RECOVERY_ROOT}/qualification/run_guarded.py",
+    "--repo",
+    "${RECOVERY_ROOT}/repo",
+    "--out",
+    "${RECOVERY_ROOT}/qualification/ordered-admission-debug-01",
+    "--seconds",
+    "900",
+    "--",
+    "env",
+    "SME_LIVE_ADMISSION_TAPE=${RECOVERY_ROOT}/qualification/initial-entry-native-tape/history.bin",
+    "SME_LIVE_ADMISSION_IDENTITY_JSON=${RECOVERY_ROOT}/qualification/ordered-admission-checkpoint/original-identity.json",
+    "${RECOVERY_ROOT}/toolchains/zig-x86_64-linux-0.16.0/zig",
+    "build",
+    "sme-live-semantic-codec-check",
+    "sme-live-history-cli-check",
+    "-j1",
+    "-Doptimize=Debug",
+    "--summary",
+    "all"
+  ],
+  "timeout_seconds": 900,
+  "resource_bounds": {
+    "parallel_build_jobs": 1,
+    "start_disk_min_bytes": 3355443200,
+    "runtime_disk_floor_bytes": 2281701376
+  },
+  "files": {
+    "source.patch": "3c9e561d28e38eb60e9e0b2507ab40b4b3a4a456fc4948b908a1cec7e8156171",
+    "original-identity.json": "3afc3df4134732a4ea9cd7f9e93fa7f5c27e8e1e4aaa96a0a1c38e42e13c4236"
+  },
+  "runner_sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+  "original_tape": {
+    "sha256": "1091d2b55f62b7e9a4d7e9ba080d7216d57f6cac425f44c1e4585c357ff738a6",
+    "bytes": 7679698
+  },
+  "expected": "Codec full schema 12-case predicate matrix and old defaults; CLI explicit/default/invalid/duplicate policy tests. Original tape with explicit original identity remains admitted native_attempt with unresolved=1, but ordered policy rejects CrossedScan before Driver address/Session/Host creation. No Driver.run or native replay of original tape.",
+  "pre_run_review": "Independent six-file review approved; production runtime, recorder framing, wire, identity, comparison and native_attempt defaults unchanged.",
+  "limits": [
+    "Original fresh replay remains failed. This is not a successful replay claim.",
+    "No new recording, retry, capacity increase, Windows or native Host execution in external tape test.",
+    "All original ELF/tape/bank must retain exact hashes before and after."
+  ],
+  "publication": {
+    "status": "UNVERIFIED",
+    "local_manifest_sha256": "8272393b49e4629660494a6fbbcbaa52d10f1375f2ef96a73c5fdce62a8d710a",
+    "path_binding": "Resolve ${RECOVERY_ROOT} to the recovered tree's parent directory; place original-identity.json at qualification/ordered-admission-checkpoint. Public argv is not byte-identical to the local absolute argv.",
+    "runner": {
+      "commit": "93813b70910692c105d1ebf3d4754e6626fdf8a3",
+      "path": "checkpoints/baseline-retry-20261021-6327086/run_guarded.py",
+      "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+    },
+    "execution_requirements": [
+      "Use ordinary Python without -O/PYTHONOPTIMIZE.",
+      "Terminal evidence missing after external interruption is UNKNOWN, not pass.",
+      "This run is only codec/CLI/pre-owner policy validation. A rejection under ordered_job_scans does not turn the preserved failed fresh replay into success.",
+      "Do not execute Host, replay the original tape, recapture, or change raw artifact bytes in this plan."
+    ]
+  }
+}

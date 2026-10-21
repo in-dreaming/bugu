@@ -1,0 +1,340 @@
+diff --git a/docs/sme/live-history-cli.md b/docs/sme/live-history-cli.md
+index 02a2c8c..da44fda 100644
+--- a/docs/sme/live-history-cli.md
++++ b/docs/sme/live-history-cli.md
+@@ -56,6 +56,31 @@ Host, physical devices, other callback configurations, and arbitrary concurrent
+ UI callers are outside this scope. Native Stop is not a restart facility: a later
+ Play can be rejected, and that genuine result belongs in the transcript.
+ 
++## Explicit admission policy
++
++Both commands accept `--admission native_attempt|ordered_job_scans`; omission
++preserves the existing `native_attempt` behavior. The selected policy is logged
++before file/owner work and included in successful JSON reports.
++
++- `native_attempt` admits fully represented job-scan/publication overlaps for one
++  real strict comparison attempt. It does not recover their atomic order, and
++  the attempt may fail with a genuine mismatch.
++- `ordered_job_scans` rejects the two known same-slot selector-predicate overlaps
++  with `CrossedScan`: Worker scan versus Control queued publication, and Control
++  acceptance scan versus Worker completed publication. It retains every other
++  preflight check and actual comparison. It is a restricted admission subset,
++  not a universal replay guarantee or a scheduler that chooses expected results.
++
++For example, add `--admission ordered_job_scans` to both invocations above.
++Record uses the policy in full readback validation after genuine teardown and
++framing seal, before publication/rename. On rejection, the `.incomplete` file is
++not published, even if its framing is sealed. Replay applies the policy before
++Session/Host creation. There is no automatic fallback, recapture, or retry to
++find a passing interleaving. A negative pre-owner rejection is not native replay
++success. The policy is not embedded in the tape and changes neither profile 9 /
++wire 2 nor executable/bank/config/source identity checks; select it explicitly
++again on replay. Legacy API wrappers and default CLI operation remain unchanged.
++
+ ## Script semantics
+ 
+ A script is an object with `auto_events` (default true) and an ordered `actions`
+diff --git a/docs/sme/live-semantic-profile.md b/docs/sme/live-semantic-profile.md
+index cab0c0b..770ec86 100644
+--- a/docs/sme/live-semantic-profile.md
++++ b/docs/sme/live-semantic-profile.md
+@@ -72,6 +72,27 @@ ambiguities remain unsupported. Replay never searches alternative event orders,
+ retries to fit expected outcomes, or supplies an expected result. Only explicit
+ offline execution may wait at a semantic cut.
+ 
++The explicit admission policies are `native_attempt` (the compatible default)
++and `ordered_job_scans`. `validateInputsWithPolicy` and `Driver.initWithPolicy`
++select the policy; their existing wrappers retain `native_attempt`.
++`ordered_job_scans` runs the same complete preflight, but rejects same-slot
++Worker-read/Control-queued and Control-read/Worker-completed bracket overlaps
++with `CrossedScan`, before Session or Host creation. These are the two cross-role
++stores that change the respective `state == queued` / `state == completed`
++selector predicates. Running and free transitions do not change the opposing
++selector predicate, including failed/cancelled jobs that still pass through
++completed before free.
++
++This is a narrower admitted subset, not a new atomic scheduler or a promise
++that all native comparisons will succeed. A preserved attempt-mode mismatch
++remains a failed attempt; rejecting that same tape under the ordered policy is
++only pre-owner rejection evidence, not successful replay. Policy is an explicit
++caller option, not a wire field: profile 9 / wire 2 and all same-build identity
++checks remain unchanged. A tape does not attest which policy published it;
++replay must select and revalidate the desired policy. Recorder sealing remains
++framing-only. File publication follows separate full readback admission; ordered
++rejection leaves the recording unpublished rather than relabeling its bytes.
++
+ Poisoning suppresses later playback invocations but does not authorize freeing.
+ Real callback stop/join, Worker park/ack/stop/join, native destruction and source
+ release still run. If native cleanup cannot complete, retained resources remain
+diff --git a/tests/sme/live_semantic_codec_test.zig b/tests/sme/live_semantic_codec_test.zig
+index 11f3144..ae1c466 100644
+--- a/tests/sme/live_semantic_codec_test.zig
++++ b/tests/sme/live_semantic_codec_test.zig
+@@ -2036,3 +2036,116 @@ test "initial entry raw consumed calendar keeps monotonic generation scoped coor
+     values[3].generation = 6;
+     try t.expectError(error.InvalidOrder, initialConsumedMap(&values));
+ }
++
++fn admissionPoint(tape: *UiSchemaTape, value: codec.Cut) !void {
++    try tape.event(value.role, .cut_fact, @as(codec.cuts.Point, .{ .role = try codec.nativeRole(value.role), .site = value.site, .edge = value.edge, .index = value.index, .generation = value.generation, .value = if (value.edge == .after) 0 else null }));
++    try tape.append(value.role, .cut, .input, @as(codec.Native(codec.Cut), .{ .occurrence = tape.occurrence, .value = value }));
++}
++fn admissionScan(tape: *UiSchemaTape, role: f.Role, site: codec.cuts.Boundary, edge: codec.cuts.Edge, jobs: u64) !void {
++    try tape.event(role, .boundary_fact, @as(codec.cuts.BoundaryPoint, .{ .role = try codec.nativeRole(role), .site = site, .edge = edge, .index = jobs }));
++    try tape.append(role, .boundary, .input, @as(codec.Native(codec.Boundary), .{ .occurrence = tape.occurrence, .value = .{ .role = role, .site = site, .edge = edge, .index = jobs, .generation = 0 } }));
++}
++
++test "ordered job scans reject both predicate crossings while native attempt remains the default" {
++    inline for (.{
++        .{ codec.cuts.Site.service_worker_scan, f.Role.worker, codec.cuts.Site.service_job_queued, f.Role.control, codec.cuts.Boundary.service_worker_scan },
++        .{ codec.cuts.Site.service_acceptance_scan, f.Role.control, codec.cuts.Site.service_worker_completed, f.Role.worker, codec.cuts.Boundary.service_acceptance_scan },
++    }) |case| {
++        for ([_]bool{ false, true }) |publication_first| {
++            const Shape = enum { overlap, different_slot, serial };
++            for (std.enums.values(Shape)) |shape| {
++                var output: [131072]u8 = undefined;
++                const contract = try uiSchemaIdentity();
++                var tape: UiSchemaTape = .{ .writer = try f.Writer.init(&output, contract, codec.validate) };
++                try tape.start();
++                const jobs = (codec.ServiceScanGrammar{}).jobs;
++                try admissionScan(&tape, case[1], case[4], .before, jobs);
++                for (0..jobs) |slot| {
++                    const read = point(case[0], case[1], .before, slot, 0);
++                    if (slot != 0) {
++                        try admissionPoint(&tape, read);
++                        try admissionPoint(&tape, end(read));
++                        continue;
++                    }
++                    const publication = point(case[2], case[3], .before, if (shape == .different_slot) 1 else 0, 94);
++                    if (publication_first) {
++                        try admissionPoint(&tape, publication);
++                        if (shape == .serial) try admissionPoint(&tape, end(publication));
++                        try admissionPoint(&tape, read);
++                        try admissionPoint(&tape, end(read));
++                        if (shape != .serial) try admissionPoint(&tape, end(publication));
++                    } else {
++                        try admissionPoint(&tape, read);
++                        if (shape == .serial) try admissionPoint(&tape, end(read));
++                        try admissionPoint(&tape, publication);
++                        try admissionPoint(&tape, end(publication));
++                        if (shape != .serial) try admissionPoint(&tape, end(read));
++                    }
++                }
++                try admissionScan(&tape, case[1], case[4], .after, jobs);
++                try tape.pair(1, .{ .request_close = uiIdentity().epoch }, .{ .request_close = {} });
++                try tape.closeControl();
++                const reader = try f.Reader.preflight(try tape.finish(), contract, codec.validate);
++                const compatibility = try codec.validateInputs(&reader, contract);
++                const explicit_attempt = try codec.validateInputsWithPolicy(&reader, contract, .native_attempt);
++                try t.expectEqualDeep(compatibility, explicit_attempt);
++                try t.expectEqual(@as(u64, if (shape == .overlap) 1 else 0), compatibility.unresolved_scalar_overlaps);
++                if (shape == .overlap) {
++                    try t.expectError(error.CrossedScan, codec.validateInputsWithPolicy(&reader, contract, .ordered_job_scans));
++                } else {
++                    const ordered = try codec.validateInputsWithPolicy(&reader, contract, .ordered_job_scans);
++                    try t.expectEqualDeep(compatibility, ordered);
++                }
++            }
++        }
++    }
++}
++
++fn admissionEnvironment(name: []const u8) !?[]u8 {
++    return std.process.Environ.getAlloc(t.environ, t.allocator, name) catch |err| switch (err) {
++        error.EnvironmentVariableMissing => null,
++        else => return err,
++    };
++}
++fn admissionHash(hex: []const u8) ![32]u8 {
++    if (hex.len != 64) return error.InvalidAdmissionIdentity;
++    var hash: [32]u8 = undefined;
++    _ = try std.fmt.hexToBytes(&hash, hex);
++    return hash;
++}
++
++test "external original identity tape is rejected by ordered admission before Driver owners" {
++    const tape_path = try admissionEnvironment("SME_LIVE_ADMISSION_TAPE");
++    defer if (tape_path) |value| t.allocator.free(value);
++    const identity_path = try admissionEnvironment("SME_LIVE_ADMISSION_IDENTITY_JSON");
++    defer if (identity_path) |value| t.allocator.free(value);
++    if (tape_path == null and identity_path == null) return error.SkipZigTest;
++    if (tape_path == null or identity_path == null) return error.MissingAdmissionEnvironment;
++    // Original capture identity supplied explicitly. Never substitute this
++    // test executable's build hash or edit/reseal the original tape.
++    const identity_bytes = try std.Io.Dir.cwd().readFileAlloc(t.io, identity_path.?, t.allocator, .limited(4096));
++    defer t.allocator.free(identity_bytes);
++    const JsonIdentity = struct { build: []const u8, bank: []const u8, config: []const u8, source: []const u8 };
++    const parsed = try std.json.parseFromSlice(JsonIdentity, t.allocator, identity_bytes, .{});
++    defer parsed.deinit();
++    const contract: f.Identity = .{ .build = try admissionHash(parsed.value.build), .bank = try admissionHash(parsed.value.bank), .config = try admissionHash(parsed.value.config), .source = try admissionHash(parsed.value.source) };
++    const bytes = try std.Io.Dir.cwd().readFileAlloc(t.io, tape_path.?, t.allocator, .limited(f.max_file_bytes + 1));
++    defer t.allocator.free(bytes);
++    if (bytes.len > f.max_file_bytes) return error.AdmissionTapeTooLarge;
++    const reader = try f.Reader.preflight(bytes, contract, codec.validate);
++    const native = try codec.validateInputsWithPolicy(&reader, contract, .native_attempt);
++    try t.expectEqual(@as(u64, 1), native.unresolved_scalar_overlaps);
++    try t.expectEqualDeep(native, try codec.validateInputs(&reader, contract));
++    try t.expectError(error.CrossedScan, codec.validateInputsWithPolicy(&reader, contract, .ordered_job_scans));
++    const driver = try t.allocator.create(live.semantic_replay.Driver);
++    defer t.allocator.destroy(driver);
++    // initWithPolicy checks address, then complete policy preflight before
++    // touching any execution state. Initialize precisely that pre-owner state;
++    // avoid a multi-megabyte default aggregate temporary on the test stack.
++    driver.address = null;
++    driver.session = .{};
++    driver.running = false;
++    try t.expectError(error.CrossedScan, driver.initWithPolicy(&reader, contract, t.io, .ordered_job_scans));
++    try t.expect(driver.address == null and driver.session.address == null and driver.session.host == null and !driver.session.used and !driver.running);
++    std.debug.print("ADMISSION_ORIGINAL_TAPE native_unresolved={d} ordered=CrossedScan driver_address_null=true session_uninitialized=true running=false owners_created=false\n", .{native.unresolved_scalar_overlaps});
++}
+diff --git a/tools/sme_authoring/core/live_history_cli.zig b/tools/sme_authoring/core/live_history_cli.zig
+index 23e763f..090bee2 100644
+--- a/tools/sme_authoring/core/live_history_cli.zig
++++ b/tools/sme_authoring/core/live_history_cli.zig
+@@ -13,6 +13,7 @@ const max_actions = 256;
+ const Mode = enum { record, replay };
+ const Options = struct {
+     mode: Mode,
++    admission: codec.AdmissionPolicy = .native_attempt,
+     bank: []const u8,
+     state: u64,
+     script: ?[]const u8 = null,
+@@ -43,7 +44,7 @@ fn options(args: []const []const u8) !Options {
+     var result: Options = .{ .mode = mode, .bank = "", .state = 0 };
+     var seen: u32 = 0;
+     var i: usize = 1;
+-    const names = [_][]const u8{ "--bank", "--state", "--script", "--out", "--tape", "--action-cap", "--file-cap", "--capture-cap", "--deadline-ms", "--frame-limit", "--sample-rate", "--channels", "--period-frames" };
++    const names = [_][]const u8{ "--bank", "--state", "--script", "--out", "--tape", "--action-cap", "--file-cap", "--capture-cap", "--deadline-ms", "--frame-limit", "--sample-rate", "--channels", "--period-frames", "--admission" };
+     while (i < args.len) : (i += 2) {
+         if (i + 1 >= args.len) return error.MissingArgument;
+         var key: ?usize = null;
+@@ -70,6 +71,7 @@ fn options(args: []const []const u8) !Options {
+             10 => if (try number(u32, value) != 48_000) return error.UnsupportedDeviceConfiguration,
+             11 => if (try number(u16, value) != 2) return error.UnsupportedDeviceConfiguration,
+             12 => if (try number(u32, value) != 256) return error.UnsupportedDeviceConfiguration,
++            13 => result.admission = std.meta.stringToEnum(codec.AdmissionPolicy, value) orelse return error.InvalidAdmissionPolicy,
+             else => unreachable,
+         }
+     }
+@@ -365,17 +367,20 @@ fn record(allocator: std.mem.Allocator, io: std.Io, opt: Options, launch: live.L
+     defer allocator.free(bytes);
+     if (bytes.len > opt.file_cap) return error.FileBudgetExceeded;
+     const reader = try format.Reader.preflight(bytes, identity, codec.validate);
+-    _ = try codec.validateInputs(&reader, identity);
++    _ = try codec.validateInputsWithPolicy(&reader, identity, opt.admission);
+     if (bytes.len != seal.bytes) return error.InvalidLength;
+     try std.Io.Dir.cwd().renamePreserve(temp, .cwd(), opt.out.?, io);
+-    try output.print("{{\"recording_complete\":true,\"replay_verified\":false,\"wire_version\":{d},\"bytes\":{d},\"capture_bytes\":{d},\"actions_executed\":{d},\"host_joined_destroyed\":true}}\n", .{ format.wire_version, seal.bytes, stats.allocation_bytes, next });
++    try output.print("{{\"recording_complete\":true,\"admission\":\"{s}\",\"replay_verified\":false,\"wire_version\":{d},\"bytes\":{d},\"capture_bytes\":{d},\"actions_executed\":{d},\"host_joined_destroyed\":true}}\n", .{ @tagName(opt.admission), format.wire_version, seal.bytes, stats.allocation_bytes, next });
+ }
+ pub fn run(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, output: *std.Io.Writer) !void {
+     if (args.len == 0 or (args.len == 1 and std.mem.eql(u8, args[0], "--help"))) {
+-        try output.writeAll("sme-live-history record --bank FILE --state U64 --script JSON --out FILE [--action-cap 256 --file-cap BYTES --capture-cap BYTES --deadline-ms 60000 --frame-limit FRAMES]\nsme-live-history replay --bank FILE --state U64 --tape FILE [--file-cap BYTES]\nFixed supported null-device configuration:48000Hz, stereo,256 frames. One Host per process; replay requires the identical executable.\n");
++        try output.writeAll("sme-live-history record --bank FILE --state U64 --script JSON --out FILE [--action-cap 256 --file-cap BYTES --capture-cap BYTES --deadline-ms 60000 --frame-limit FRAMES --admission native_attempt|ordered_job_scans]\nsme-live-history replay --bank FILE --state U64 --tape FILE [--file-cap BYTES --admission native_attempt|ordered_job_scans]\nFixed supported null-device configuration:48000Hz, stereo,256 frames. One Host per process; replay requires the identical executable.\n");
+         return;
+     }
+     const opt = try options(args);
++    var admission_log = std.Io.File.stderr().writerStreaming(io, &.{});
++    admission_log.interface.print("live.admission mode={s} policy={s}\n", .{ @tagName(opt.mode), @tagName(opt.admission) }) catch {};
++    admission_log.interface.flush() catch {};
+     var retained = false;
+     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, opt.bank, allocator, .limited(live.admission.default_config.capacity.max_bank_bytes + 1));
+     defer if (!retained) allocator.free(bytes);
+@@ -394,14 +399,14 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, o
+     const driver = try allocator.create(replay.Driver);
+     driver.* = .{};
+     defer if (!retained) allocator.destroy(driver);
+-    try driver.init(reader, identity, io);
++    try driver.initWithPolicy(reader, identity, io, opt.admission);
+     const report = driver.run(launch, .{ .backend = .null_backend }) catch |err| {
+         retained = driver.running and !driver.completed;
+         reportReplayFailure(io, driver, err);
+         return err;
+     };
+     if (!report.eof or !report.host_joined or !report.host_destroyed) return error.ReplayIncomplete;
+-    try output.print("{{\"replay_verified\":true,\"wire_version\":{d},\"eof\":true,\"host_joined_destroyed\":true}}\n", .{format.wire_version});
++    try output.print("{{\"replay_verified\":true,\"admission\":\"{s}\",\"wire_version\":{d},\"eof\":true,\"host_joined_destroyed\":true}}\n", .{ @tagName(opt.admission), format.wire_version });
+ }
+ 
+ const cli_test_record = [_][]const u8{ "record", "--bank", "unopened-bank", "--state", "7", "--script", "unopened-script", "--out", "uncreated-output" };
+@@ -451,6 +456,7 @@ test "live history options reject unknown flags and every duplicate option" {
+         .{ .flag = "--sample-rate", .value = "48000" },
+         .{ .flag = "--channels", .value = "2" },
+         .{ .flag = "--period-frames", .value = "256" },
++        .{ .flag = "--admission", .value = "native_attempt" },
+     };
+     for (entries) |entry| try t.expectError(error.DuplicateArgument, options(&.{ "record", entry.flag, entry.value, entry.flag, entry.value }));
+ }
+@@ -732,3 +738,15 @@ test "live history capture failure reports actual cleanup separately without rep
+     writer = std.Io.Writer.fixed(&no_space);
+     try t.expectError(error.CaptureFailed, OriginalFailure.run(&writer));
+ }
++
++test "live history admission policy is explicit with compatible defaults" {
++    const t = std.testing;
++    inline for (.{ &cli_test_record, &cli_test_replay }) |base| {
++        try t.expectEqual(codec.AdmissionPolicy.native_attempt, (try options(base)).admission);
++        inline for (.{ "native_attempt", "ordered_job_scans" }) |name| {
++            try t.expectEqual(std.meta.stringToEnum(codec.AdmissionPolicy, name).?, (try cliTestOptions(base, &.{ "--admission", name })).admission);
++        }
++        try t.expectError(error.InvalidAdmissionPolicy, cliTestOptions(base, &.{ "--admission", "strict" }));
++        try t.expectError(error.InvalidAdmissionPolicy, cliTestOptions(base, &.{ "--admission", "" }));
++    }
++}
+diff --git a/tools/sme_authoring/core/live_semantic_codec.zig b/tools/sme_authoring/core/live_semantic_codec.zig
+index b0c84b1..963c88c 100644
+--- a/tools/sme_authoring/core/live_semantic_codec.zig
++++ b/tools/sme_authoring/core/live_semantic_codec.zig
+@@ -1634,7 +1634,18 @@ fn expectedInput(marker: EventCut, role: format.Role, reference: ?format.Referen
+ /// Complete finite payload/role/local-order/global-occurrence admission before
+ /// any fresh owner effects. References are parsed only for canonical shape and
+ /// comparison pairing; their decisions are never returned in this result.
++pub const AdmissionPolicy = enum {
++    /// Compatibility contract: one strict native attempt, not recovered atomic order.
++    native_attempt,
++    /// Reject the two unsequenced job-selector predicate conflicts before owners.
++    ordered_job_scans,
++};
++
+ pub fn validateInputs(reader: *const format.Reader, identity: format.Identity) Error!InputPreflight {
++    return validateInputsWithPolicy(reader, identity, .native_attempt);
++}
++
++pub fn validateInputsWithPolicy(reader: *const format.Reader, identity: format.Identity, policy: AdmissionPolicy) Error!InputPreflight {
+     var summary: InputPreflight = .{};
+     var config_seen = false;
+     var provider_seen = false;
+@@ -1905,11 +1916,12 @@ pub fn validateInputs(reader: *const format.Reader, identity: format.Identity) E
+     var heads: [format.role_count]?OrderedEvent = @splat(null);
+     for (&cursors, 0..) |*cursor, i| heads[i] = try nextOrderedEvent(cursor);
+     var occurrence: u64 = 0;
+-    // One strict native attempt is allowed for fully represented job reads.
++    // The compatibility policy allows one strict native attempt for fully represented job reads.
++    // ordered_job_scans instead rejects these known predicate overlaps before owners.
+     // This does not resolve their atomic order: the real after-read predicate
+     // comparison is mandatory, and any mismatch terminates the attempt. Guard
+     // custody and omitted Scheduler scans remain pre-owner rejection cases.
+-    var intervals: ScanIntervals = .{ .allow_unresolved_job_reads = true };
++    var intervals: ScanIntervals = .{ .allow_unresolved_job_reads = policy == .native_attempt };
+     var grammar: ServiceScanGrammar = .{};
+     var payload_intervals: payload_overlap.Validator = .{};
+     var ui_invocation_active = false;
+diff --git a/tools/sme_authoring/core/live_semantic_replay.zig b/tools/sme_authoring/core/live_semantic_replay.zig
+index 2aeb59d..eb543cc 100644
+--- a/tools/sme_authoring/core/live_semantic_replay.zig
++++ b/tools/sme_authoring/core/live_semantic_replay.zig
+@@ -134,8 +134,13 @@ pub const Driver = struct {
+     /// Caller supplies an immutable, same-build/source-verified format Reader.
+     /// Its bytes and this pinned final storage outlive the genuine Host joins.
+     pub fn init(self: *Driver, reader: *const format.Reader, identity: format.Identity, io: std.Io) !void {
++        return self.initWithPolicy(reader, identity, io, .native_attempt);
++    }
++    /// Policy is caller-selected admission, not a tape field or permission to
++    /// change execution. Complete preflight precedes Session/native owner setup.
++    pub fn initWithPolicy(self: *Driver, reader: *const format.Reader, identity: format.Identity, io: std.Io, policy: codec.AdmissionPolicy) !void {
+         if (self.address != null) return error.InvalidState;
+-        _ = try codec.validateInputs(reader, identity);
++        _ = try codec.validateInputsWithPolicy(reader, identity, policy);
+         self.io = io;
+         self.identity = identity;
+         self.launch_descriptor = try codec.readLaunchDescriptor(reader);
