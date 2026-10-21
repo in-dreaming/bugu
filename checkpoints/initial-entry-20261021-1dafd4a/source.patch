@@ -1,0 +1,78 @@
+diff --git a/tests/sme/live_initial_entry_supply_test.zig b/tests/sme/live_initial_entry_supply_test.zig
+index 99aad22..595848a 100644
+--- a/tests/sme/live_initial_entry_supply_test.zig
++++ b/tests/sme/live_initial_entry_supply_test.zig
+@@ -115,6 +115,9 @@ test "chronology cold entry makes progress with actual admitted high water despi
+     var terminal_count: usize = 0;
+     var rejected = false;
+     var shape_ok = true;
++    var background_progress_ok = true;
++    var background_defers: usize = 0;
++    var loop_end: enum { exhausted, probe_failure, intervention_limit, terminal } = .exhausted;
+     // Natural Play/Control/Worker/Render supply until real receipt prefixes arm
+     // the one existing hook. No direct Service requests or invented readiness.
+     for (0..512) |_| {
+@@ -125,7 +128,24 @@ test "chronology cold entry makes progress with actual admitted high water despi
+             if (outcome.deferred) |deferred| {
+                 if (deferred.stage == .entry_supply) entry_defers += 1;
+                 std.debug.print("ENTRY_SUPPLY_BASELINE attempt={d} stage={s} reason={s} requested={?d} observed={?d} hook_requested={d} actual_rendered={d} active={}\n", .{ before, @tagName(deferred.stage), @tagName(deferred.observation.reason), deferred.observation.requested_frame, deferred.observation.observed_frame, record.requested, record.rendered, owner.active_group != null });
+-                shape_ok = shape_ok and deferred.stage == .entry_supply and deferred.observation.reason == .frame_mismatch and deferred.observation.requested_frame == record.requested and deferred.observation.observed_frame == record.rendered;
++                const matching_cut = deferred.observation.reason == .frame_mismatch and deferred.observation.requested_frame == record.requested and deferred.observation.observed_frame == record.rendered;
++                switch (deferred.stage) {
++                    .entry_supply => shape_ok = shape_ok and matching_cut,
++                    .background_supply => {
++                        background_defers += 1;
++                        // A later label alone is not progress: StreamNotReady
++                        // can also fall through to background. Require the
++                        // actual original request's published pending block.
++                        const pending = owner.pending;
++                        const original_pending = if (pending) |value| if (value.request_ticket) |actual| std.meta.eql(ticket, actual) else false else false;
++                        const block_present = if (pending) |value| value.block.generation != 0 else false;
++                        const preparation_finished = owner.preparing == null;
++                        background_progress_ok = background_progress_ok and original_pending and block_present and preparation_finished;
++                        shape_ok = shape_ok and matching_cut;
++                        std.debug.print("ENTRY_SUPPLY_PUBLISHED_PENDING attempt={d} pending={} original_ticket={} block_present={} block_index={?d} block_generation={?d} preparing_null={}\n", .{ before, pending != null, original_pending, block_present, if (pending) |value| @as(?u16, value.block.index) else null, if (pending) |value| @as(?u64, value.block.generation) else null, preparation_finished });
++                    },
++                    else => shape_ok = false,
++                }
+             } else std.debug.print("ENTRY_SUPPLY_BASELINE attempt={d} defer=false requested={d} actual_rendered={d}\n", .{ before, record.requested, record.rendered });
+             for (record.handles, record.acknowledged, 0..) |handle, prefix, i| std.debug.print("ENTRY_SUPPLY_PREFIX attempt={d} layer_index={d} slot={d} generation={d} acknowledged={d}\n", .{ before, i, handle.index, handle.generation, prefix });
+         }
+@@ -137,11 +157,26 @@ test "chronology cold entry makes progress with actual admitted high water despi
+             }
+         }
+         if (probe.count != before) std.debug.print("ENTRY_SUPPLY_TERMINAL attempt={d} count={d} executed={} rejected={}\n", .{ before, terminal_count, play_frame != null, rejected });
+-        if (probe.failure != null or probe.count == 4 or terminal_count != 0) break;
++        if (probe.failure != null) {
++            loop_end = .probe_failure;
++            break;
++        }
++        if (terminal_count != 0) {
++            loop_end = .terminal;
++            break;
++        }
++        if (probe.count == 4) {
++            loop_end = .intervention_limit;
++            break;
++        }
+         try rig.engine.workers();
+         var pcm: [128]f32 = undefined;
+         renderer.render(&pcm, 64, 2);
+     }
++    // Record the decisive result BEFORE removing interference. Recovery after
++    // disabling the hook remains useful cleanup evidence, not a repair oracle.
++    const executed_while_enabled = probe.enabled and play_frame != null and !rejected;
++    std.debug.print("ENTRY_SUPPLY_ENABLED_END reason={s} enabled={} interventions={d} terminal_count={d} executed={} rejected={} probe_failed={} background_defers={d} background_progress_ok={}\n", .{ @tagName(loop_end), probe.enabled, probe.count, terminal_count, executed_while_enabled, rejected, probe.failure != null, background_defers, background_progress_ok });
+     // Always remove interference before proving recovery and real cleanup.
+     probe.enabled = false;
+     owner.test_tick_hook = null;
+@@ -192,7 +227,8 @@ test "chronology cold entry makes progress with actual admitted high water despi
+     std.debug.print("ENTRY_SUPPLY_RESULT interventions={d} entry_defers={d} terminals={d} recovered={} stopped={} pcm_frames={d} nonzero={d} pcm_ok={} cleanup_complete=true\n", .{ probe.count, entry_defers, terminal_count, play_frame != null, stopped, pcm_evidence.frames, pcm_evidence.nonzero, pcm_failure == null });
+     try t.expect(probe.failure == null);
+     try t.expect(probe.count > 0);
+-    try t.expect(shape_ok);
++    try t.expect(shape_ok and background_progress_ok);
++    try t.expect(loop_end == .terminal and executed_while_enabled);
+     try t.expectEqual(@as(usize, 1), terminal_count);
+     try t.expect(play_frame != null and !rejected and stopped);
+     try t.expect(pcm_failure == null and pcm_evidence.frames == 1024 and pcm_evidence.nonzero > 0);
