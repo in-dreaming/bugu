@@ -1,0 +1,29 @@
+{
+  "exit": 0,
+  "stop_reason": null,
+  "elapsed_seconds": 77.48051569699965,
+  "source_guard_equal": true,
+  "minimum_free_bytes": 28863746048,
+  "classification": "DEFAULT_DEBUG_AND_ACTUAL_SCAN_TEXT_PROJECTION_PASS",
+  "source_commit": "2f766bb8db0addb92c23d7a72e228b9b7ea9fd18",
+  "source_tree": "63994cdb520eb3ece4ac137a46a830bf96101340",
+  "tests_passed": 9,
+  "actual_text_validation": {
+    "acceptance_records": 32,
+    "outcome_counts": {
+      "no_completion": 20,
+      "accepted": 12
+    },
+    "all_fixed_256_bytes_parsed": true,
+    "unscanned_all_255": true,
+    "valid_len_matches_bounds": true,
+    "storage_bytes": 299160,
+    "incomplete": "true"
+  },
+  "log_sha256": "df2017633ec222e445dc1f14629fac0da26ace9ded79015abc88ed3438b7604a",
+  "limits": [
+    "Default cloud cadence passed once; not Windows reproduction or fix.",
+    "Fixed-tail per-role evidence remains incomplete/non-global.",
+    "No production behavior change."
+  ]
+}
