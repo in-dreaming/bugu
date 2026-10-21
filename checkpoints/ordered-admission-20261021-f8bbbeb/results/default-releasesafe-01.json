@@ -1,0 +1,60 @@
+{
+  "classification": "PASS_SINGLE_CLOUD_RELEASESAFE_DEFAULT_NO_RECORDER_REGRESSION",
+  "source_commit": "f28bee4e4f6cbb0e0b8fdb8d1d4decad37e76fef",
+  "source_tree": "f8bbbebd01520966237fab954a868c4dd1dee85f",
+  "guard": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 273.37115743399954,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 27458555904
+  },
+  "tests": {
+    "chronology": {
+      "passed": 9,
+      "failed": 0
+    },
+    "mode": {
+      "passed": 3,
+      "failed": 0
+    },
+    "total_passed": 12
+  },
+  "seed": "0x331da266",
+  "workload": "ordinary default null-backend Host, recorder unavailable; both delays unset; no semantic workload",
+  "actual_log": {
+    "chronology_tick": 28,
+    "first_frame": 2048,
+    "later_frame": 2560,
+    "callbacks_before": 8,
+    "callbacks_after": 10,
+    "inputs": 704,
+    "schedule": 16,
+    "request_matches": 2,
+    "executed": 2,
+    "pcm_frames": 35072,
+    "audible_frames": 33024,
+    "nonzero_frames": 33010,
+    "ramp_frames": 32,
+    "silence_after_frames": 352,
+    "all_four_stems": true
+  },
+  "cleanup_assertions_passed": {
+    "phase": "closed",
+    "first_error": null,
+    "cleanup_error": null,
+    "worker_joined": true,
+    "play_executed": true,
+    "stop_executed": true,
+    "sources_opened": 16,
+    "sources_closed": 16,
+    "sources_live": 0,
+    "sample_leases": 0,
+    "live_instances": 0
+  },
+  "limits": [
+    "Single cloud execution, not Windows acceptance or resolution of prior sustained-supply faults.",
+    "No replay claim. Original same-ELF fresh attempt failure remains preserved.",
+    "No capacity increase, knob/timing retries, or new recording."
+  ]
+}
