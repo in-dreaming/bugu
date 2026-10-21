@@ -1,0 +1,27 @@
+{
+  "exit": 0,
+  "stop_reason": null,
+  "elapsed_seconds": 45.173306009000044,
+  "source_guard_equal": true,
+  "minimum_free_bytes": 28542959616,
+  "stage": "runtime-retry-20261021-2816395",
+  "classification": "DEBUG_CONTROLLED_CAUSAL_AND_CODEC_PASS",
+  "tests": {
+    "total": 53,
+    "passed": 53,
+    "controlled_real_render": 3,
+    "codec": 50
+  },
+  "evidence": {
+    "release_case": "6 actual attempts: odd failure,4 real accepts,empty; accepted32->36; actual next Render visible prefixes all6272->7296; exact four-stem PCM, no pending fault.",
+    "hold_case": "Real Render kept odd; exactly2 attempts within original budget, no accepted/produced advance.",
+    "empty_case": "Actual no_completion exactly1 attempt.",
+    "codec": "Same incoming distinctoccurrences validated, marker decode/reference exact bytes/EOF, duplicateoccurrence rejected. Not native strict replay proof."
+  },
+  "limitations": [
+    "Controlled direct-Render causal regression, not natural Windows timing.",
+    "Native file-to-fresh-process replay, ReleaseSafe, and Windows on candidate not yet run."
+  ],
+  "log_sha256": "e5cf0775ac73377b9dc56537ea7f6a6336a367446bece5f18d94c4b185ff996a",
+  "next_action": "Persist result, then explicit test-only semantic workload and focused strict recording/fresh replay qualification."
+}
