@@ -1,0 +1,40 @@
+{
+  "exit": 0,
+  "stop_reason": null,
+  "elapsed_seconds": 12.173530070999732,
+  "source_guard_equal": true,
+  "minimum_free_bytes": 28862820352,
+  "classification": "CONTROLLED_WORKER16_CONTROL0_PASS_NOT_REPRODUCED",
+  "source_commit": "2f766bb8db0addb92c23d7a72e228b9b7ea9fd18",
+  "source_tree": "63994cdb520eb3ece4ac137a46a830bf96101340",
+  "tests_passed": 9,
+  "configuration": {
+    "worker_wait_ms": 16,
+    "extra_control_delay_ms": 0,
+    "existing_cross_frame_pause": true,
+    "production_policy_changed": false
+  },
+  "actual_text_validation": {
+    "acceptance_records": 30,
+    "outcome_counts": {
+      "no_completion": 26,
+      "accepted": 4
+    },
+    "all_fixed_256_bytes_parsed": true,
+    "unscanned_all_255": true,
+    "valid_len_matches_bounds": true
+  },
+  "pcm": {
+    "frames": 40448,
+    "audible": 33280,
+    "nonzero": 33266,
+    "all_four_stems": true
+  },
+  "log_sha256": "e369c99113a771e347c2671371e398b06803ac5cae34bea6ef92cfc31a98ab58",
+  "limits": [
+    "One predeclared experiment passed; does not reproduce Windows fault.",
+    "Cannot attribute Windows failure solely to Worker16ms wait; no additional knob or timing retry based on result.",
+    "Fixed-tail per-role evidence remains incomplete/non-global.",
+    "Existing stderr label controlled_dual_cadence is generic; actual printed control_delay_ms=0 worker_wait_ms=16 is authoritative."
+  ]
+}
