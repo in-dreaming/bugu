@@ -1,0 +1,129 @@
+{
+  "exit": 0,
+  "stop_reason": null,
+  "elapsed_seconds": 18.16627985299965,
+  "source_guard_equal": true,
+  "minimum_free_bytes": 27680083968,
+  "stage": "native-retry-20261021-78d48ee",
+  "classification": "CONTROLLED_NATIVE_RECORDING_PASSED_FRESH_PENDING",
+  "tests": {
+    "passed": 10,
+    "failed": 0,
+    "production_compile": "passed cached; production sources unchanged from verified v2"
+  },
+  "record": {
+    "profile": 9,
+    "framing_complete": true,
+    "semantic_admitted": true,
+    "fresh_replay_verified": false,
+    "controlled_cross_frame": false,
+    "submitted_frames": 14336,
+    "generated_frames": 14592,
+    "multi_frame_ticks": 1,
+    "corpus_bytes": 8605012,
+    "capture_allocation_bytes": 19326912,
+    "occurrences": 160559,
+    "control_joined": true,
+    "worker_joined": true,
+    "control_thread": 50,
+    "worker_thread": 51,
+    "callback_thread": 53,
+    "peak_records": [
+      5649,
+      4650,
+      206,
+      44
+    ],
+    "peak_bytes": [
+      1724184,
+      1368044,
+      140528,
+      5056
+    ],
+    "source_opened": 16,
+    "source_closed": 16
+  },
+  "coordinator": {
+    "classification": "controlled_retry",
+    "target_job": 29,
+    "selected_job": 29,
+    "worker_ready": true,
+    "first_seen": true,
+    "second_seen": true,
+    "same_incoming": true,
+    "odd_sequence": 153,
+    "even_sequence": 154,
+    "succeeded": true,
+    "admitted": true,
+    "admission_frame": 4928,
+    "prefix_start": 6528,
+    "prefix_end": 7040,
+    "nonzero_submitted_samples_after_admission": 16704,
+    "failed": false,
+    "failure_reason": "none",
+    "second_attempt_returned": true
+  },
+  "inspection": {
+    "acceptance_count": 319,
+    "typed_defer_count": 3,
+    "pair_count": 3,
+    "pairs": [
+      {
+        "first_occurrence": 51542,
+        "second_occurrence": 52291,
+        "job": 29,
+        "same_selected": true,
+        "pcm_and_publication": true
+      },
+      {
+        "first_occurrence": 99028,
+        "second_occurrence": 99238,
+        "job": 76,
+        "same_selected": true,
+        "pcm_and_publication": true
+      },
+      {
+        "first_occurrence": 112615,
+        "second_occurrence": 112772,
+        "job": 88,
+        "same_selected": true,
+        "pcm_and_publication": true
+      }
+    ]
+  },
+  "artifacts": {
+    "retry-inspection.json": {
+      "bytes": 31420,
+      "sha256": "3f9e55baa53a04d8f2f7150b4f29749834dfbf91bb90cd0ccf384ba9c4edfd92"
+    },
+    "record-result.json": {
+      "bytes": 494,
+      "sha256": "fc44966872b55ac5da3cc29aefa7fb865682cf96d3aac5bfde826176a34839dc"
+    },
+    "exact-process-elf": {
+      "bytes": 206810497,
+      "sha256": "a9f32cc5a392bf2618700e71ab3467b0fc62f69a17099559233fff50a56e2db5"
+    },
+    "history.bin": {
+      "bytes": 8605012,
+      "sha256": "3bee2242a969397bdea02e21b38f76f9cf538387471ccfb15102a908582cc6eb"
+    },
+    "controlled-retry.json": {
+      "bytes": 403,
+      "sha256": "1e4f14a28cbb42160b3b19711bbee3807d417c4047db26781270f5b617cde51f"
+    },
+    "controlled-retry-attempts.txt": {
+      "bytes": 2847,
+      "sha256": "239cf1a423a9336201595afdc3d58fea4a8c9e0af9abfb26e60af325b8de9794"
+    },
+    "bank.bin": {
+      "bytes": 1283976,
+      "sha256": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+    }
+  },
+  "log_sha256": "d3ed5236a2c708553160afdeb9ab325a909749a0040226f3dda31ef2d674f327",
+  "limitations": [
+    "Controlled short test workload, not sustained throughput or Windows proof.",
+    "Fresh process replay pending. Original long capture overflow preserved."
+  ]
+}
