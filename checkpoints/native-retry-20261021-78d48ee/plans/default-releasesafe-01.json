@@ -1,0 +1,72 @@
+{
+  "stage": "UNVERIFIED single ReleaseSafe default chronology and mode validation without new retry workload",
+  "source_commit": "94d77ca413ef1e99207aed79ec57948bf06df610",
+  "source_tree": "78d48eed7e7fabf242a7a0572a944e2c13f2a656",
+  "timeout_seconds": 1800,
+  "resource_bounds": {
+    "parallel_build_jobs": 1,
+    "start_disk_min_bytes": 3355443200,
+    "runtime_disk_floor_bytes": 2281701376
+  },
+  "expected": "Actual default recorder-independent Host playback, existing controlled cross-frame pause, real Stop/Close and diagnostic oracle unchanged; no new retry workload or extra control delay, no timing retries. Mode compatibility tests included. Existing passive diagnostic instrumentation remains test-only. Not Windows or sustained throughput qualification.",
+  "command_template": [
+    "python",
+    "${RUNNER_DIR}/run_guarded.py",
+    "--repo",
+    "${SOURCE_REPO}",
+    "--out",
+    "${OUTPUT_DIR}",
+    "--seconds",
+    "1800",
+    "--",
+    "env",
+    "-u",
+    "SME_DEFAULT_CONTROL_DELAY_MS",
+    "-u",
+    "SME_DEFAULT_WORKER_DELAY_MS",
+    "-u",
+    "SME_LIVE_SEMANTIC_MODE",
+    "-u",
+    "SME_LIVE_SEMANTIC_DIR",
+    "-u",
+    "SME_LIVE_SEMANTIC_WORKLOAD",
+    "${ZIG_BIN}",
+    "build",
+    "sme-author-live-default-chronology-test",
+    "sme-author-live-default-mode-test",
+    "-j1",
+    "-Doptimize=ReleaseSafe",
+    "--summary",
+    "all"
+  ],
+  "status": "UNVERIFIED_PLANNED_NOT_RUN",
+  "path_parameters": {
+    "RUNNER_DIR": "Directory containing the unchanged runner pinned by runner_source.",
+    "SOURCE_REPO": "Exact source_tree repository; no source changes in this stage.",
+    "OUTPUT_DIR": "New, nonexistent run-output directory.",
+    "ZIG_BIN": "Verified Zig 0.16.0 Linux x86_64 binary pinned by the recovery recipe."
+  },
+  "runner_source": {
+    "delivery_commit": "93813b70910692c105d1ebf3d4754e6626fdf8a3",
+    "path": "checkpoints/baseline-retry-20261021-6327086/run_guarded.py",
+    "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+  },
+  "result_policy": {
+    "source_snapshot_is_not_validation": true,
+    "failed_baseline_assertions_remain_failed": "Confirming an expected baseline defect requires the specific retained runtime evidence, not merely a nonzero exit.",
+    "timeout_or_external_interruption": "unknown",
+    "missing_final_result": "unknown",
+    "source_changed_during_run": "invalid qualification",
+    "before_start": "not_run",
+    "raw_logs_and_private_environment_paths": "Do not publish; retain public technical summaries and evidence hashes only."
+  },
+  "provenance": {
+    "local_run_manifest_sha256": "d5ad1b707a56888b7c98bb8511333fe35fc57f6487cb7dfbf5bc48dabb98501a",
+    "public_manifest_transformation": "Absolute execution locations are parameterized and explanatory metadata added. The public template is not the byte-identical local argv. All unset environment variables, targets, optimization and resource bounds are unchanged."
+  },
+  "single_attempt_only": true,
+  "source_checkpoint": {
+    "delivery_commit": "8708bfa48d6f12b4e9160cace6913a3d9b340c23",
+    "path": "checkpoints/native-retry-20261021-78d48ee/manifest.json"
+  }
+}
