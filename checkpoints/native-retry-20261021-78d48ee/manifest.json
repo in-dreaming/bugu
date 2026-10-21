@@ -82,7 +82,7 @@
   "inspection_tools": {
     "delivery_commit": "97f7564c83d190cd04920cdcca867dccfe167f4a",
     "path": "checkpoints/native-retry-20261021-7331b0b",
-    "note": "Only the callback parameter name changed; canonical Acceptance schema unchanged. Inspector source/schema hashes are pinned by the parent checkpoint."
+    "note": "Inspector source/schema hashes remain pinned by the original workload checkpoint. The intervening callback-parameter rename and current test-only even handshake/diagnostics do not alter the canonical Acceptance wire schema; source_schema_sha256 documents the original inspector-review snapshot."
   },
   "provenance": {
     "local_run_manifest_sha256": "ea74bfb9b1d689999f772dd1beae82965805d423327603be141c590d91afb406",
