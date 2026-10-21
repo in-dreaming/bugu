@@ -1,0 +1,75 @@
+{
+  "stage": "UNVERIFIED one default production non-workload ReleaseSafe regression after startup fix and explicit admission policy",
+  "source_commit": "f28bee4e4f6cbb0e0b8fdb8d1d4decad37e76fef",
+  "source_tree": "f8bbbebd01520966237fab954a868c4dd1dee85f",
+  "command": [
+    "python",
+    "${RECOVERY_ROOT}/qualification/run_guarded.py",
+    "--repo",
+    "${RECOVERY_ROOT}/repo",
+    "--out",
+    "${RECOVERY_ROOT}/qualification/initial-entry-default-rs-01",
+    "--seconds",
+    "1800",
+    "--",
+    "env",
+    "-u",
+    "SME_LIVE_ADMISSION_TAPE",
+    "-u",
+    "SME_LIVE_ADMISSION_IDENTITY_JSON",
+    "-u",
+    "SME_LIVE_SEMANTIC_MODE",
+    "-u",
+    "SME_LIVE_SEMANTIC_DIR",
+    "-u",
+    "SME_LIVE_SEMANTIC_WORKLOAD",
+    "-u",
+    "SME_LIVE_SEMANTIC_WRITER",
+    "-u",
+    "SME_LIVE_SEMANTIC_FAIL_AFTER",
+    "-u",
+    "SME_LIVE_SEMANTIC_REQUIRE_CROSS_FRAME",
+    "-u",
+    "SME_DEFAULT_CONTROL_DELAY_MS",
+    "-u",
+    "SME_DEFAULT_WORKER_DELAY_MS",
+    "${RECOVERY_ROOT}/toolchains/zig-x86_64-linux-0.16.0/zig",
+    "build",
+    "sme-author-live-default-chronology-test",
+    "sme-author-live-default-mode-test",
+    "-j1",
+    "-Doptimize=ReleaseSafe",
+    "--summary",
+    "all"
+  ],
+  "timeout_seconds": 1800,
+  "resource_bounds": {
+    "parallel_build_jobs": 1,
+    "start_disk_min_bytes": 3355443200,
+    "runtime_disk_floor_bytes": 2281701376
+  },
+  "runner_sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+  "expected": "One actual recorder-independent default Host chronology lifecycle and mode regression, no retry workload, no extra delay knobs, existing exact PCM/diagnostic/capacity assertions retained. Preserve any failure.",
+  "limitations": [
+    "Cloud single execution is not Windows acceptance or resolution of prior Windows sustained supply failures.",
+    "Not replay verification, and no new recording.",
+    "Only run after prior ordered-admission result is separately preserved."
+  ],
+  "environment_policy": "Explicitly unset recorded semantic/admission environment names and both default delays. The prior runner subprocess environment does not mutate the parent. Before execution verify no extra SME_LIVE_SEMANTIC_* or SME_LIVE_ADMISSION_* names in parent; if present update and refreeze plan, do not silently run.",
+  "publication": {
+    "status": "UNVERIFIED",
+    "local_manifest_sha256": "cd7095a8041e441293f3d4aa3a48ff58f6fd9b113a2999a40cd0a86b1de897b2",
+    "path_binding": "Resolve ${RECOVERY_ROOT} to the recovered tree's parent directory. Public argv is parameterized and not byte-identical to local absolute argv.",
+    "runner": {
+      "commit": "93813b70910692c105d1ebf3d4754e6626fdf8a3",
+      "path": "checkpoints/baseline-retry-20261021-6327086/run_guarded.py",
+      "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+    },
+    "execution_requirements": [
+      "Wait for the separate ordered-admission terminal result to be persisted.",
+      "Use ordinary Python without -O/PYTHONOPTIMIZE.",
+      "Missing terminal evidence after interruption is UNKNOWN, not pass.",
+      "This plan applies only to the pinned source tree. If the preceding stage requires a source correction, preserve this plan as not run and freeze a new plan."
+    ]
+  }
+}
