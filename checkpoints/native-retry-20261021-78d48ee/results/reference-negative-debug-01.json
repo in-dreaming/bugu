@@ -1,0 +1,51 @@
+{
+  "exit": 1,
+  "stop_reason": null,
+  "elapsed_seconds": 7.163294630000564,
+  "source_guard_equal": true,
+  "minimum_free_bytes": 27292299264,
+  "classification": "EXPECTED_EXACT_REFERENCE_MISMATCH_WITH_REAL_CLEANUP",
+  "tests_passed": 9,
+  "tests_expected_failed": 1,
+  "source_commit": "94d77ca413ef1e99207aed79ec57948bf06df610",
+  "source_tree": "78d48eed7e7fabf242a7a0572a944e2c13f2a656",
+  "preflight_admitted": true,
+  "failure": {
+    "reason": "ReplayMismatch",
+    "role": "control",
+    "occurrence": 52291,
+    "family": "acceptance",
+    "payload_byte_offset": 223
+  },
+  "cleanup": {
+    "host_joined": true,
+    "host_destroyed": true,
+    "worker_joined": true,
+    "source_opened": 16,
+    "source_closed": 16,
+    "source_live": 0,
+    "sample_leases": 0,
+    "live_instances": 0,
+    "cleanup_error": null,
+    "retained": false
+  },
+  "identity": {
+    "native_exit": 1,
+    "before": {
+      "exact-process-elf": "a9f32cc5a392bf2618700e71ab3467b0fc62f69a17099559233fff50a56e2db5",
+      "history.bin": "76a54ecb32e340f922c2e03f34562e1dfc51296355df1ce7c762a3133db805f6",
+      "bank.bin": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+    },
+    "after": {
+      "exact-process-elf": "a9f32cc5a392bf2618700e71ab3467b0fc62f69a17099559233fff50a56e2db5",
+      "history.bin": "76a54ecb32e340f922c2e03f34562e1dfc51296355df1ce7c762a3133db805f6",
+      "bank.bin": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+    },
+    "identity_unchanged": true
+  },
+  "log_sha256": "2dbfe43c985efe3e99f68dfd581e442b645b40412ef0b02814fcdeb81ace658a",
+  "limits": [
+    "Expected nonzero is preserved, not relabeled all-tests-pass.",
+    "Input/Schedule and original sealed tape unchanged; only comparison hash and framing digests mutated."
+  ]
+}
