@@ -1,0 +1,31 @@
+diff --git a/src/music/resident_runtime.zig b/src/music/resident_runtime.zig
+index 189ddb1..9312828 100644
+--- a/src/music/resident_runtime.zig
++++ b/src/music/resident_runtime.zig
+@@ -6675,10 +6675,16 @@ pub const MusicRuntime = struct {
+         return self.validateLiveTickModeProfileV1(joined, false);
+     }
+     fn validateLiveTickModeProfileV1(self: *const MusicRuntime, comptime joined: bool, comptime host: bool) !void {
+-        if (@import("builtin").is_test) if (!host and (self.renderer.test_render_admission_hook != null or self.renderer.test_owned_render_facts != null or self.control.test_owned_control_facts != null)) return error.InvalidMode;
+         if (self.live_tick_control_stamp) |stamp| {
+             if (stamp != self.control.stream_control_tick) return error.InvalidMode;
+         } else if (!self.liveInitialEntryV1()) return error.InvalidMode;
++        return self.validateLiveTickProfileStateV1(joined, host);
++    }
++    /// Entry stamps describe the last returned tick, not an in-progress tick.
++    /// Reuse every profile/state restriction inside an already-validated Tick
++    /// without pretending its new stream_control_tick has returned yet.
++    fn validateLiveTickProfileStateV1(self: *const MusicRuntime, comptime joined: bool, comptime host: bool) !void {
++        if (@import("builtin").is_test) if (!host and (self.renderer.test_render_admission_hook != null or self.renderer.test_owned_render_facts != null or self.control.test_owned_control_facts != null)) return error.InvalidMode;
+         if (!self.usesIntegratedTickV1() or self.config_v1.kind != .authoring or
+             self.public_recording.phase != .disabled or self.causal_sink != null or self.causal_driver_pin != null or
+             self.control.control_frontier_binding != null or self.control.stream_acceptance_binding != null or
+@@ -8083,7 +8089,7 @@ pub const MusicRuntime = struct {
+             !std.meta.eql(self.tick_scope.?, scope) or self.tick_entry != .preparing or
+             self.mode != .versioned or self.has_executed or self.active_group != null or self.pending != null or
+             self.interruption != null or self.layer_in_flight != null or self.action != null or self.deviceRecoveryActive()) return false;
+-        self.validateLiveTickModeProfileV1(true, true) catch return false;
++        self.validateLiveTickProfileStateV1(true, true) catch return false;
+         const generation = self.generation orelse return false;
+         if (generation.transport.device_epoch != 1) return false;
+         const prepared = self.preparing orelse return false;
