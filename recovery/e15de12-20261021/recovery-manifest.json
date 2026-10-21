@@ -1,0 +1,155 @@
+{
+  "schema": 1,
+  "purpose": "Reconstruct the exact e15de12 source tree, without inventing original commit history.",
+  "original_source_commit": "e15de1243d23fa67449674ab75fcebe735e9840d",
+  "final_tree": "9c726fe11f07af1936f365a6b9b505153be93709",
+  "delivery_repository": "https://github.com/in-dreaming/bugu",
+  "delivery_commit": "7e8cb2168d1769ee687480df37431a10d8fbdaee",
+  "inputs": [
+    {
+      "name": "sme-live-profile-source-checkpoint.tar.gz",
+      "bytes": 39405520,
+      "sha256": "af1f5a985c891a8f56a821aba647e169d2afe24cb95ac933aba66d5fd555d0ad",
+      "role": "source_archive"
+    },
+    {
+      "name": "sme-live-checkpoint-patch-4cdbbf5-cb2c224.zip",
+      "bytes": 554307,
+      "sha256": "4c7994ea595ac85547f24d676e0ebeff2c7859ccb76d917c8e65fb96e02b7b47",
+      "role": "reverse_patch_archive"
+    },
+    {
+      "name": "sme-live-default-patch-4cdbbf5-6f3fb3a.zip",
+      "bytes": 569978,
+      "sha256": "a871b851fe7e208d32101950b8df304f9008d7b5ee345e33a8e1baf2271c6df9",
+      "role": "forward_patch_archive"
+    }
+  ],
+  "archive": {
+    "name": "source-cb2c224.tar",
+    "bytes": 135331840,
+    "sha256": "fbea9d25f4afd780a468250522443d6460d4f0523529f5f4f1a661e29e898133",
+    "commit": "cb2c224d5d36519c534ce14d5d6d2730693b1834",
+    "tree": "85b35b269e470ffb253b127d6b1ae9a7e7c3ecc0"
+  },
+  "stages": [
+    {
+      "label": "4cdbbf5",
+      "patch": "checkpoint-4cdbbf5-to-cb2c224.patch",
+      "source": "reverse_patch_archive",
+      "sha256": "89f4f796d5dd8c1afa6223d529ff414bbcf80a325ce0cb8a9d9d94ff60121092",
+      "reverse": true,
+      "tree": "b0e1334ea1030f9920ef1f84671b6736aa78d916"
+    },
+    {
+      "label": "6f3fb3a",
+      "patch": "checkpoint-4cdbbf5-to-6f3fb3a.patch",
+      "source": "forward_patch_archive",
+      "sha256": "e5e5a2d01bb5c6bd53529cd39026491a3faa115c5e0e2c5350ae690e3197a4d2",
+      "reverse": false,
+      "tree": "49098fa120fe090e3c81c320bca9161d16d749d1"
+    },
+    {
+      "label": "6c154b8",
+      "patch": "checkpoint-6f3fb3a-to-6c154b8.patch",
+      "source": "inputs",
+      "repository_path": "patches/sme-live-headroom-6c154b8/checkpoint-6f3fb3a-to-6c154b8.patch",
+      "bytes": 45820,
+      "sha256": "de6d2296c77392ff5ad9dd38db5602d82c35286f537079a3672b3863506fb857",
+      "reverse": false,
+      "tree": "6e2ad9f1b59a78257c06a5d7710d4ab2e24af58b"
+    },
+    {
+      "label": "94f5907",
+      "patch": "6c154b8-to-94f5907.patch",
+      "source": "inputs",
+      "repository_path": "patches/sme-sustained-supply-94f5907/6c154b8-to-94f5907.patch",
+      "bytes": 50408,
+      "sha256": "20479cf65fbf4bc873f8f02d2e864227ebe2c6028529550998e2934038f3c7d6",
+      "reverse": false,
+      "tree": "7544c203628534da89cd65084e65163d272a6e8a"
+    },
+    {
+      "label": "e15de12",
+      "patch": "94f5907-to-e15de12.patch",
+      "source": "inputs",
+      "repository_path": "patches/sme-diagnostic-flat-e15de12/94f5907-to-e15de12.patch",
+      "bytes": 57408,
+      "sha256": "f6880415eaf68c5778fc45879e84533753b32322d8b9728b4aeb568b009bbb9c",
+      "reverse": false,
+      "tree": "9c726fe11f07af1936f365a6b9b505153be93709"
+    }
+  ],
+  "gitlinks": [
+    {
+      "path": "third_party/freetype",
+      "pin": "526ec5c47b9ebccc4754c85ac0c0cdf7c85a5e9b",
+      "url": "https://github.com/freetype/freetype.git",
+      "minimal": true
+    },
+    {
+      "path": "third_party/in_dreaming_gpu",
+      "pin": "8b0f2bc657775d899dc4d724918a1e6be9ffa450",
+      "url": "https://github.com/in-dreaming/gpu.git",
+      "minimal": false
+    },
+    {
+      "path": "third_party/miniaudio",
+      "pin": "9634bedb5b5a2ca38c1ee7108a9358a4e233f14d",
+      "url": "https://github.com/mackron/miniaudio.git",
+      "minimal": true
+    },
+    {
+      "path": "third_party/noto_cjk",
+      "pin": "523d033d6cb47f4a80c58a35753646f5c3608a78",
+      "url": "https://github.com/notofonts/noto-cjk.git",
+      "minimal": false
+    },
+    {
+      "path": "third_party/ogg",
+      "pin": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+      "url": "https://github.com/xiph/ogg.git",
+      "minimal": true
+    },
+    {
+      "path": "third_party/opus",
+      "pin": "22244de5a79bd1d6d623c32e72bf1954b56235be",
+      "url": "https://github.com/xiph/opus.git",
+      "minimal": true
+    },
+    {
+      "path": "third_party/unicodetools",
+      "pin": "ecd26be2e82be37609090942c14e518e57e905d8",
+      "url": "https://github.com/unicode-org/unicodetools.git",
+      "minimal": true
+    }
+  ],
+  "unicode_sparse_files": [
+    "LICENSE",
+    "unicodetools/data/ucd/dev/auxiliary/GraphemeBreakProperty.txt",
+    "unicodetools/data/ucd/dev/DerivedCoreProperties.txt",
+    "unicodetools/data/ucd/dev/emoji/emoji-data.txt",
+    "unicodetools/data/ucd/dev/auxiliary/GraphemeBreakTest.txt"
+  ],
+  "zig": {
+    "version": "0.16.0",
+    "platform": "x86_64-linux",
+    "url": "https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz",
+    "bytes": 55478392,
+    "sha256": "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00",
+    "binary_sha256": "2317bbb91798556d9d0f38aabdac23db83f0979b25f767259ae474546724087c"
+  },
+  "minimal_steps": [
+    "sme-author-live-default-chronology-test",
+    "sme-author-live-default-mode-test",
+    "sme-live-initial-headroom-test",
+    "sme-live-background-supply-test"
+  ],
+  "limits": [
+    "No original commit objects or commit history reconstructed.",
+    "No build or test success is implied by tree recovery.",
+    "GPU and Noto dependencies are deliberately excluded from minimal environment setup.",
+    "Fresh public source dependencies must match the exact gitlink pins.",
+    "No private download URLs, account identifiers, credentials, or automatic publication."
+  ]
+}
