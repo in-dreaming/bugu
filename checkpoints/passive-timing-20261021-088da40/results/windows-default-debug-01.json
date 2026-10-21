@@ -1,0 +1,162 @@
+{
+  "schema": "sme.windows.passive_timing.summary.v1",
+  "recorded_date_utc": "2026-10-21",
+  "completed_reported_utc": "2026-10-21T09:51Z",
+  "status": "FAILED_SUSTAINED_HOST_PLAYBACK_STARTUP_SUCCEEDED",
+  "source": {
+    "commit": "9e0ccb49f39ed5eeebe4b8d030880726e7810721",
+    "tree": "088da407ad1d556f4c831778fe16742ef1a182fd",
+    "delivery_commit": "c547b268e2889975d3fecee03e0fd268a6dc5274",
+    "protected_files_unchanged": 6854
+  },
+  "provenance": {
+    "kind": "Windows execution child-reported summary",
+    "raw_artifacts_uploaded_to_git": false,
+    "raw_artifacts_externally_backed_up_by_this_summary": false,
+    "raw_artifact_scope": "Raw logs remain on Windows.",
+    "verification_limit": "This file preserves the reported result and selected diagnostic values, not independently retrieved raw Windows artifacts."
+  },
+  "run": {
+    "platform": "Windows",
+    "configuration": "Debug",
+    "scope": "One default chronology test run with passive timing diagnostics",
+    "passed": 9,
+    "total": 10,
+    "failed": 1,
+    "crashes": 0,
+    "duration_seconds": 114.874,
+    "seed": "0xa54220d6",
+    "first_play_executed": true,
+    "sustained_host_playback": "FAILED",
+    "pcm_guard_reported": "not triggered"
+  },
+  "failure": {
+    "stream_fault_boundary": 24192,
+    "cursor": 13312,
+    "layer": 0,
+    "detected_at": {
+      "tick": 34,
+      "frame": 25152
+    }
+  },
+  "timing_associations": {
+    "complete_usable_chains": 16,
+    "incomplete_chains": 41,
+    "pair_errors": 0,
+    "nonmonotonic_pairs": 0,
+    "identity_errors": 0,
+    "units": "milliseconds",
+    "interval_definitions": {
+      "begin_minus_post_queue_observation": "The existing Worker begin sample minus the Control callback's observation after the actual queued store. This is not an exact publication-to-begin interval.",
+      "worker_end_minus_begin_wall": "Existing Worker end minus begin wall-clock samples, including scheduling and observation overhead. Not CPU decoding time or necessarily the entire Worker job.",
+      "acceptance_observation_minus_worker_end": "Control acceptance observation minus the existing Worker end sample. Not exact acceptance publication time."
+    },
+    "selected_jobs": [
+      {
+        "job": 53,
+        "begin_minus_post_queue_observation": 15.2167,
+        "worker_end_minus_begin_wall": 2.7597,
+        "acceptance_observation_minus_worker_end": 12.6961
+      },
+      {
+        "job": 54,
+        "begin_minus_post_queue_observation": 17.9869,
+        "worker_end_minus_begin_wall": 2.4306,
+        "acceptance_observation_minus_worker_end": 10.2973
+      },
+      {
+        "job": 55,
+        "begin_minus_post_queue_observation": 20.422,
+        "worker_end_minus_begin_wall": 2.4757,
+        "acceptance_observation_minus_worker_end": 22.933
+      },
+      {
+        "job": 56,
+        "begin_minus_post_queue_observation": 22.9022,
+        "worker_end_minus_begin_wall": 2.4557,
+        "acceptance_observation_minus_worker_end": 20.544
+      }
+    ],
+    "reported_adjacent_worker_gaps": [
+      {
+        "from_job": 52,
+        "to_job": 53,
+        "milliseconds": 20.8351
+      },
+      {
+        "from_job": 53,
+        "to_job": 54,
+        "milliseconds": 0.0129
+      },
+      {
+        "from_job": 54,
+        "to_job": 55,
+        "milliseconds": 0.0065
+      },
+      {
+        "from_job": 55,
+        "to_job": 56,
+        "milliseconds": 0.0062
+      },
+      {
+        "from_job": 56,
+        "to_job": 57,
+        "milliseconds": 20.3378
+      }
+    ],
+    "adjacent_gap_provenance": "Values are preserved as the child-reported adjacent Worker gaps. The published inspector exposes per-job begin/end samples but does not itself calculate adjacent-job gaps. This archive does not claim independently retrieved endpoint timestamps."
+  },
+  "selected_acceptance_evidence": [
+    {
+      "job": 53,
+      "tick": 33,
+      "outcome": "accepted"
+    },
+    {
+      "job": 54,
+      "tick": 33,
+      "outcome": "typed odd followed by retry accepted"
+    },
+    {
+      "job": 55,
+      "tick": 33,
+      "outcome": "typed odd defer"
+    },
+    {
+      "jobs": [
+        55,
+        56
+      ],
+      "tick": 34,
+      "outcome": "accepted"
+    }
+  ],
+  "bounded_diagnostic_tail": {
+    "control_overwritten": 659,
+    "control_after_failure_omitted": 3,
+    "worker_overwritten": 0,
+    "complete_execution_history": false
+  },
+  "cleanup": {
+    "closed": 16,
+    "expected_closed": 16,
+    "live": 0,
+    "leases": 0,
+    "instances": 0,
+    "joined": true,
+    "residual_process": false
+  },
+  "stderr_identity": {
+    "bytes": 450460,
+    "sha256": "b4bb942088d6f30203584932988ec4ecf9c388fe83e8c15fc4700ece69644476",
+    "raw_file_in_this_git_commit": false
+  },
+  "limits": [
+    "The first Play executed in this single run; sustained playback still failed. The candidate is not an overall fix.",
+    "The reported PCM guard was not triggered. No additional PCM correctness conclusion is inferred from that fact.",
+    "Timing intervals include scheduling and observer overhead, are not CPU time or exact publication times, and do not prove the cause of earlier runs.",
+    "Incomplete and overwritten diagnostic coverage is retained explicitly; no global cross-role order or timing completeness is asserted.",
+    "The source patch only added passive test diagnostics; this result does not establish an OS scheduling or decode-time root cause.",
+    "This summary neither changes main nor starts a new test, production edit, recording or replay. Previous failures remain valid."
+  ]
+}

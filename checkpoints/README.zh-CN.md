@@ -71,3 +71,7 @@ manifest 的 UNVERIFIED 是计划保存时的状态，保持不改写；后续�
 ## 被动供给计时诊断交付（9e0ccb49 / 088da407）
 
 [小补丁、只读解析器与说明](../patches/sme-passive-timing-9e0ccb49/README.zh-CN.md) 只适用于精确 f28bee4 / f8bbbeb 基底，生产供给策略不变。[单次云端 Debug 10/10 与生产编译](https://github.com/in-dreaming/bugu/blob/ec0cc238d75f2b73c9abf07eba1ae9e6465bb607/checkpoints/passive-timing-20261021-088da40/results/default-debug-01.json)、[独立解析结果](https://github.com/in-dreaming/bugu/blob/42f6928eb027697d7b27b9f5370f665dbdabf9fc/checkpoints/passive-timing-20261021-088da40/results/output-inspection-01.json) 已保存，真实尾部找到 10 条可用关联链，但覆盖仍不完整；诊断固定增加 16480 B，容量不变。该补丁不是持续播放修复，不能倒推此前 Windows 的耗时原因；未运行新 Windows 或 fresh replay，旧失败保留。
+
+## Windows 被动计时单次结果更新（2026-10-21）
+
+[9e0ccb49 / 088da407 的默认 Debug 摘要](passive-timing-20261021-088da40/results/windows-default-debug-01.json) 已报告 9/10：首次 Play 执行，但持续播放在 fault boundary 24192 再次失败。保留 16 条可用完整关联链与 41 条不完整链；jobs53–56 的 Worker begin/end 墙钟区间约 2.43–2.76 ms，不能当作 CPU 解码时间或旧故障的因果结论。候选仍未整体修复，原始日志留在 Windows，仅转述摘要入库；此前云端通过和旧失败记录均保留。
