@@ -63,3 +63,7 @@ manifest 的 UNVERIFIED 是计划保存时的状态，保持不改写；后续�
 [合并补丁与验证范围](../patches/sme-initial-entry-f28bee4/README.zh-CN.md) 从精确 2f766bb / 63994cd 更新至 f28bee4 / f8bbbeb，不能与分阶段增量重复应用，也不能直接套用远端 main。最终树 [codec/CLI 73/73](https://github.com/in-dreaming/bugu/blob/fe24282cdac16fc3e882144b338fec053ea79e17/checkpoints/ordered-admission-20261021-f8bbbeb/results/codec-cli-debug-01.json)、[默认 RS 12/12](https://github.com/in-dreaming/bugu/blob/85763958ff36c501ea5581d203f77ae390904a0c/checkpoints/ordered-admission-20261021-f8bbbeb/results/default-releasesafe-01.json) 与 [两条旧断言 2/2](https://github.com/in-dreaming/bugu/blob/ab411ba22fff559b6c7a9462a067cad33ad2e150/checkpoints/ordered-admission-20261021-f8bbbeb/results/legacy-filter-debug-01.json) 各自独立保存。
 
 此前同 ELF 的 [fresh replay 失败](https://github.com/in-dreaming/bugu/blob/41e73c51baf885dceb34deadaac60912a8bf55b1/checkpoints/initial-entry-20261021-1dafd4a/results/fresh-replay-debug-01.json) 仍然有效；新 ordered_job_scans 的 owner 前拒绝不是重放成功。最终候选 Windows 尚未验收，不代表整体 SME 或持续播放问题已经解决。
+
+## Windows 首次 Play 与持续播放结果更新（2026-10-21）
+
+上述“Windows 尚未验收”为交付时状态。[f28bee4 / f8bbbeb 单次默认 Debug 摘要](ordered-admission-20261021-f8bbbeb/results/windows-default-debug-01.json) 现已报告 8/9：首次 Play accepted/executed 通过，随后持续播放仍出现 stream fault 23168，候选未整体修复。tick31 的非 coherent 扫描观察到 1 running + 3 queued、无 completion，不能据此证明 OS 调度或解码耗时是根因。仅存执行结果及只读补证的转述摘要，原始日志仍在 Windows，本分支未备份原件；没有重跑，也未覆盖此前 fresh replay 失败。

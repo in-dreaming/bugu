@@ -1,0 +1,200 @@
+{
+  "schema": "sme.windows.acceptance.summary.v1",
+  "recorded_date_utc": "2026-10-21",
+  "status": "FAILED_SUSTAINED_HOST_PLAYBACK_STARTUP_SUCCEEDED",
+  "source": {
+    "commit": "f28bee4e4f6cbb0e0b8fdb8d1d4decad37e76fef",
+    "tree": "f8bbbebd01520966237fab954a868c4dd1dee85f",
+    "delivered_patch_commit": "93cee9da1c551badabaf25acd55237b70bec4130",
+    "protected_files_unchanged": 6808
+  },
+  "provenance": {
+    "kind": "Windows execution child-reported summary with a read-only evidence follow-up",
+    "raw_artifacts_uploaded_to_git": false,
+    "raw_artifacts_externally_backed_up_by_this_summary": false,
+    "raw_artifact_scope": "Raw logs remain on Windows in the acceptance run directory.",
+    "verification_limit": "This file preserves the reported result and selected evidence, not independently retrieved raw Windows artifacts."
+  },
+  "run": {
+    "platform": "Windows",
+    "configuration": "Debug",
+    "scope": "One default chronology test run",
+    "passed": 8,
+    "total": 9,
+    "failed": 1,
+    "crashes": 0,
+    "duration_seconds": 77.232,
+    "seed": "0x74df8269",
+    "first_play": {
+      "accepted": true,
+      "executed": true
+    },
+    "sustained_host_playback": "FAILED",
+    "rerun_performed": false
+  },
+  "failure": {
+    "stream_fault_frame": 23168,
+    "cursor": 13056,
+    "layer": 0,
+    "detected_at": {
+      "tick": 32,
+      "frame": 24064,
+      "order": 4
+    }
+  },
+  "selected_evidence": {
+    "preceding_completion": {
+      "job": 49,
+      "acceptance_frame": 21824,
+      "available": 320,
+      "prefix_begin": 12032,
+      "prefix_end": 13056,
+      "admission_frame": 21888,
+      "gate": 343
+    },
+    "queued_work": {
+      "jobs": [
+        53,
+        54,
+        55,
+        56
+      ],
+      "tick": 30,
+      "frame": 21888,
+      "order": 4,
+      "target": 13056,
+      "count": 1024,
+      "available": 1088,
+      "handle_slots": [
+        {
+          "handle": "0:1",
+          "slot": 3
+        },
+        {
+          "handle": "1:2",
+          "slot": 2
+        },
+        {
+          "handle": "2:3",
+          "slot": 1
+        },
+        {
+          "handle": "3:4",
+          "slot": 0
+        }
+      ]
+    },
+    "no_completion_scan": {
+      "tick": 31,
+      "frame": 22528,
+      "result": "no_completion",
+      "slots_scanned": 48,
+      "valid_length": 48,
+      "representation_complete": true,
+      "coherent": false,
+      "state_encoding": {
+        "byte_width": 1,
+        "total_bytes": 256,
+        "values": {
+          "free": 0,
+          "queued": 1,
+          "running": 2,
+          "unobserved": 255
+        }
+      },
+      "state_bytes_run_length": [
+        {
+          "hex": "01",
+          "count": 3
+        },
+        {
+          "hex": "02",
+          "count": 1
+        },
+        {
+          "hex": "00",
+          "count": 44
+        },
+        {
+          "hex": "ff",
+          "count": 208
+        }
+      ],
+      "projected_handle_states": [
+        {
+          "handle": "0:1",
+          "slot": 3,
+          "state": "running"
+        },
+        {
+          "handle": "1:2",
+          "slot": 2,
+          "state": "queued"
+        },
+        {
+          "handle": "2:3",
+          "slot": 1,
+          "state": "queued"
+        },
+        {
+          "handle": "3:4",
+          "slot": 0,
+          "state": "queued"
+        }
+      ],
+      "prefetch": {
+        "handle": "0:1",
+        "available": 384,
+        "pending": 3
+      }
+    },
+    "following_acceptance": {
+      "tick": 32,
+      "job": 53,
+      "incoming_frame": 23424,
+      "effective_frame": 23552,
+      "available": 0,
+      "batch": 54,
+      "prefix_begin": 13056,
+      "prefix_end": 14080
+    }
+  },
+  "bounded_diagnostic_tail": {
+    "control": {
+      "first_sequence": 635,
+      "last_sequence": 890,
+      "overwritten": 635,
+      "omitted": 7
+    },
+    "worker": {
+      "first_sequence": 0,
+      "last_sequence": 119,
+      "overwritten": 0
+    },
+    "complete_execution_history": false
+  },
+  "cleanup": {
+    "closed": 16,
+    "expected_closed": 16,
+    "live": 0,
+    "leases": 0,
+    "instances": 0,
+    "joined": true,
+    "residual_process": false
+  },
+  "stderr_identity": {
+    "bytes": 395680,
+    "sha256": "b5e9d21bb443068c56a45bc95f7c1559efd5f3b0584ba58618704ede0f20b219",
+    "raw_file_in_this_git_commit": false
+  },
+  "interpretation": {
+    "candidate_overall_fixed": false,
+    "startup_scope": "The first Play was accepted and executed in this single run; this is not proof of all startup cases.",
+    "sustained_failure": "The subsequent sustained Host playback failure remains unresolved.",
+    "worker_evidence": "The reported non-coherent scan observed one running and three queued slots followed by no completion. This is backlog evidence, not a coherent global snapshot or a measurement of OS scheduling or decoding duration.",
+    "causal_limit": "These selected observations do not establish OS scheduling or decoding time as the root cause.",
+    "previous_fresh_replay_failure": "Still valid; this Windows startup result does not supersede it.",
+    "no_new_capacity_change": true,
+    "next_test_status": "No new test has been run as part of this summary publication."
+  }
+}
