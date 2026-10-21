@@ -1,0 +1,46 @@
+{
+  "source_commit": "9e0ccb49f39ed5eeebe4b8d030880726e7810721",
+  "source_tree": "088da407ad1d556f4c831778fe16742ef1a182fd",
+  "classification": "PASS_SINGLE_CLOUD_PASSIVE_TIMING_DIAGNOSTIC_NOT_WINDOWS_REPRODUCTION",
+  "guard": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 16.155458776998785,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 27165757440
+  },
+  "tests": {
+    "passed": 10,
+    "failed": 0,
+    "production_compile": "pass"
+  },
+  "seed": "0xb4a519ad",
+  "workload": "ordinary default null-backend Host; semantic/admission variables and both delays explicitly unset",
+  "actual_output": {
+    "pcm_frames": 35840,
+    "audible_frames": 33280,
+    "all_four_stems": true,
+    "original_command_request_matches": 2,
+    "commands_executed": 2,
+    "cross_frame_first": 2560,
+    "cross_frame_later": 3072,
+    "callbacks_before": 10,
+    "callbacks_after": 12
+  },
+  "cleanup_assertions_passed": {
+    "sources_opened": 16,
+    "sources_closed": 16,
+    "live_sources": 0,
+    "sample_leases": 0,
+    "live_instances": 0,
+    "worker_joined": true,
+    "first_error": null,
+    "cleanup_error": null
+  },
+  "raw_log_sha256": "890f31680c616a156a513c205df983c933fdb0db92cd3b3074e1326a3d277de4",
+  "limits": [
+    "Timing observer can perturb scheduling; this result cannot establish the cause of the earlier Windows run.",
+    "Production supply policy unchanged; no Windows, new recording, fresh replay, buffer increase or timing retry.",
+    "Test-only memory changes and copied Worker samples are erased in production compile."
+  ]
+}
