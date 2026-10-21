@@ -49,3 +49,7 @@ manifest 的 UNVERIFIED 是计划保存时的状态，保持不改写；后续�
 ## Windows 验收更新（2026-10-21）
 
 上述“Windows 未运行”为先前交付时状态。现已收到同一 94d77ca / 78d48ee 内容树的 [Windows 独立验收摘要](native-retry-20261021-78d48ee/results/windows-acceptance-01.json)：panel 8/9、chronology Debug 7/8、ReleaseSafe 7/8，三项均失败，候选仍未修复完成。该文件是 Windows 执行结果的转述摘要；原始日志仍仅在 Windows，本分支未备份原件。此前云端通过记录不覆盖这些失败。
+
+## 诊断补缺交付（2f766bb / 63994cd）
+
+[独立诊断补丁与短说明](../patches/sme-scan-state-2f766bb/README-zh.txt) 只从精确 94d77ca / 78d48ee 基底补齐测试日志的扫描槽状态，生产代码不变。[默认 Debug 9/9](https://github.com/in-dreaming/bugu/blob/d36175ddc62cca3f4a822abdb32c88864fcf555e/checkpoints/scan-state-20261021-63994cd/results/default-debug-01.json) 和 [预声明 Worker16/Control0 单次 9/9](https://github.com/in-dreaming/bugu/blob/cb1a35184b458b76a7bbedbab8ac8093e25b546f/checkpoints/scan-state-20261021-63994cd/results/worker16-control0-debug-01.json) 均为云端结果，未复现 Windows 故障，也不证明已修复。Windows 最小下一步只是一份待授权建议，本轮没有执行。

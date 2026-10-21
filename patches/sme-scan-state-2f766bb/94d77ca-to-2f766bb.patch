@@ -1,0 +1,109 @@
+diff --git a/tests/sme/author_live_default_chronology_test.zig b/tests/sme/author_live_default_chronology_test.zig
+index 3db5138..7f23046 100644
+--- a/tests/sme/author_live_default_chronology_test.zig
++++ b/tests/sme/author_live_default_chronology_test.zig
+@@ -265,6 +265,17 @@ const NativeDiagnostics = struct {
+         effective_frame: u64,
+         runtime_finished: bool,
+         batch_id: u64,
++        job_slots: usize,
++        scanned: usize,
++        representation_complete: bool,
++        states_valid_len: usize,
++        states_truncated: bool,
++        states_inconsistent: bool,
++        states_projection_complete: bool,
++        // Sequential acquired slot observations, NOT a coherent snapshot.
++        // 0 free, 1 queued, 2 running, 3 completed; 255 means unobserved.
++        // Fixed storage adds at most roughly 64 KiB across the Control tail.
++        states: [256]u8,
+         outcome: stream.observation.Outcome,
+         error_code: u32,
+         returned_error: ?stream.Error,
+@@ -400,11 +411,28 @@ const NativeDiagnostics = struct {
+     }
+     fn attemptSummary(attempt: *const stream.LiveAcceptanceAttemptV1, frame: u64, finished: bool) Acceptance {
+         const evidence = &attempt.evidence;
++        var states: [256]u8 = @splat(255);
++        const valid_len = @min(evidence.scanned, evidence.job_slots, states.len);
++        // Copy only already observed evidence; never reload Service job state.
++        for (evidence.states[0..valid_len], 0..) |state, i| states[i] = switch (state) {
++            .free => 0,
++            .queued => 1,
++            .running => 2,
++            .completed => 3,
++        };
+         return .{
+             .incoming = attempt.incoming,
+             .effective_frame = frame,
+             .runtime_finished = finished,
+             .batch_id = evidence.batch_id,
++            .job_slots = evidence.job_slots,
++            .scanned = evidence.scanned,
++            .representation_complete = evidence.representation_complete,
++            .states_valid_len = valid_len,
++            .states_truncated = evidence.scanned > states.len,
++            .states_inconsistent = evidence.scanned > evidence.job_slots,
++            .states_projection_complete = evidence.representation_complete and evidence.scanned <= states.len and evidence.scanned <= evidence.job_slots,
++            .states = states,
+             .outcome = evidence.outcome,
+             .error_code = evidence.error_code,
+             .returned_error = attempt.returned_error,
+@@ -443,7 +471,7 @@ const NativeDiagnostics = struct {
+     }
+     fn writeAfterJoin(self: *const NativeDiagnostics, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+         const incomplete = !self.installed or self.setup_failed or self.worker_identity_missing != 0 or self.control.overwritten != 0 or self.worker.overwritten != 0 or self.control.counter_exhausted or self.worker.counter_exhausted or self.control_after_failure_omitted != 0;
+-        try writer.print("DEFAULT_HOST_EVENT_TAIL schema=1 selected_hooks_only=true global_order=false replay_certificate=false supply_return_observer=true reached_locals_only=true null_availability_not_zero=true worker_lookup_max_slots=256 timing_perturbation=true incomplete={} storage_bytes={d} installed={} setup_failed={} worker_identity_missing={d} control_capacity={d} control_retained={d} control_next={d} control_overwritten={d} control_counter_exhausted={} control_after_failure_omitted={d} worker_capacity={d} worker_retained={d} worker_next={d} worker_overwritten={d} worker_counter_exhausted={}\n", .{ incomplete, @sizeOf(NativeDiagnostics), self.installed, self.setup_failed, self.worker_identity_missing, control_capacity, self.control.len, self.control.next, self.control.overwritten, self.control.counter_exhausted, self.control_after_failure_omitted, worker_capacity, self.worker.len, self.worker.next, self.worker.overwritten, self.worker.counter_exhausted });
++        try writer.print("DEFAULT_HOST_EVENT_TAIL schema=1 selected_hooks_only=true global_order=false replay_certificate=false supply_return_observer=true reached_locals_only=true null_availability_not_zero=true worker_lookup_max_slots=256 acceptance_states_coherent=false acceptance_states_encoding=hex_u8_0free_1queued_2running_3completed_255unobserved acceptance_states_capacity=256 timing_perturbation=true incomplete={} storage_bytes={d} installed={} setup_failed={} worker_identity_missing={d} control_capacity={d} control_retained={d} control_next={d} control_overwritten={d} control_counter_exhausted={} control_after_failure_omitted={d} worker_capacity={d} worker_retained={d} worker_next={d} worker_overwritten={d} worker_counter_exhausted={}\n", .{ incomplete, @sizeOf(NativeDiagnostics), self.installed, self.setup_failed, self.worker_identity_missing, control_capacity, self.control.len, self.control.next, self.control.overwritten, self.control.counter_exhausted, self.control_after_failure_omitted, worker_capacity, self.worker.len, self.worker.next, self.worker.overwritten, self.worker.counter_exhausted });
+         try FlatDiagnostic.line(writer, "DEFAULT_HOST_EVENT_FAILURE", "failure", self.first_control_failure);
+         for (0..self.control.len) |i| try writeControlEvent(writer, self.control.at(i));
+         for (0..self.worker.len) |i| try writeWorkerEvent(writer, self.worker.at(i));
+@@ -1157,3 +1185,48 @@ test "flat tail report emits retained ordinal order pinned failure and bounded t
+     try FlatDiagnostic.line(&hashes, "TEST_HASH", "bytes", [_]u8{ 0, 1, 15, 16, 127, 128, 255 });
+     try t.expectEqualStrings("TEST_HASH schema=1 bytes=00010f107f80ff\n", hashes.buffered());
+ }
++
++// Detached projection/output tests, not fabricated native execution evidence.
++test "acceptance scan projection and flat bytes distinguish unobserved partial and truncated states" {
++    const Case = struct { scanned: usize, slots: usize };
++    for ([_]Case{ .{ .scanned = 0, .slots = 257 }, .{ .scanned = 4, .slots = 257 }, .{ .scanned = 256, .slots = 257 }, .{ .scanned = 257, .slots = 257 }, .{ .scanned = 4, .slots = 2 } }) |case| {
++        const scanned = case.scanned;
++        var attempt: stream.LiveAcceptanceAttemptV1 = .{ .incoming = FlatFixture.position };
++        attempt.evidence.job_slots = case.slots;
++        attempt.evidence.scanned = scanned;
++        attempt.evidence.representation_complete = scanned <= 256;
++        // Non-free unused tail proves that projection ignores unobserved data.
++        attempt.evidence.states = @splat(.completed);
++        attempt.evidence.states[0] = .free;
++        attempt.evidence.states[1] = .queued;
++        attempt.evidence.states[2] = .running;
++        const projected = NativeDiagnostics.attemptSummary(&attempt, 0, false);
++        const valid_len = @min(scanned, case.slots, 256);
++        try t.expectEqual(case.slots, projected.job_slots);
++        try t.expectEqual(scanned, projected.scanned);
++        try t.expectEqual(scanned <= 256, projected.representation_complete);
++        try t.expectEqual(valid_len, projected.states_valid_len);
++        try t.expectEqual(scanned > 256, projected.states_truncated);
++        try t.expectEqual(scanned > case.slots, projected.states_inconsistent);
++        try t.expectEqual(scanned <= 256 and scanned <= case.slots, projected.states_projection_complete);
++        // Projection owns the copy, not a borrowed reference to the attempt.
++        attempt.evidence.states = @splat(.free);
++        var buffer: [8192]u8 = undefined;
++        var writer: std.Io.Writer = .fixed(&buffer);
++        try NativeDiagnostics.writeControlEvent(&writer, .{ .ordinal = 0, .value = .{ .position = FlatFixture.position, .value = .{ .acceptance = projected } } });
++        const output = writer.buffered();
++        const key = " event.acceptance.states=";
++        const start = (std.mem.indexOf(u8, output, key) orelse return error.MissingFlatStates) + key.len;
++        const end = start + 512;
++        try t.expect(output.len > end and output[end] == ' ');
++        for (0..256) |i| {
++            const actual = try std.fmt.parseInt(u8, output[start + i * 2 ..][0..2], 16);
++            const expected: u8 = if (i >= valid_len) 255 else if (i < 3) @intCast(i) else 3;
++            try t.expectEqual(expected, projected.states[i]);
++            try t.expectEqual(expected, actual);
++        }
++        var metadata: [512]u8 = undefined;
++        const expected_metadata = try std.fmt.bufPrint(&metadata, "event.acceptance.job_slots={d} event.acceptance.scanned={d} event.acceptance.representation_complete={} event.acceptance.states_valid_len={d} event.acceptance.states_truncated={} event.acceptance.states_inconsistent={} event.acceptance.states_projection_complete={}", .{ case.slots, scanned, scanned <= 256, valid_len, scanned > 256, scanned > case.slots, scanned <= 256 and scanned <= case.slots });
++        try FlatFixture.tokens(output, &.{expected_metadata});
++    }
++}

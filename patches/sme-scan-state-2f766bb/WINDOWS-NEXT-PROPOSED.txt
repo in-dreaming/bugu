@@ -1,0 +1,10 @@
+建议下一轮最小 Windows 验收范围（尚未授权，禁止据此自动执行）
+
+1. 用户另行授权后，仅应用诊断补丁，验证目标内容树63994cdb520eb3ece4ac137a46a830bf96101340，并按既有保护文件清单核验；不改生产源码或断言。
+2. 仅一次 Debug 目标：zig build sme-author-live-default-chronology-test -j1 -Doptimize=Debug --summary all。
+3. 保持已有 null backend，无 GUI/物理音频。移除 SME_DEFAULT_CONTROL_DELAY_MS、SME_DEFAULT_WORKER_DELAY_MS 的实验覆盖，使用默认值；不运行 panel、ReleaseSafe 或额外cadence，不为获取失败而重复。
+4. 完整保留原stderr、退出码、seed、命令环境及保护文件结果。解析所有 flat记录，验证 states有256字节、有效长度=min(scanned,job_slots,256)、有效码0..3、其余255；保留截断/不一致/覆盖/遗漏元数据。
+5. 若故障，围绕故障handle的待处理job，提取queued记录/slot、最后3个Control tick的no_completion states及pending slot映射、真实acceptance/prefix/admission、对应Worker记录。只能用稳定的pending/slot身份关联，不能把不同角色ordinal当全局时间。
+6. 记录真实Close的sources opened/closed/live、leases、instances、workerjoined与cleanup错误。若未打印，不推断零泄漏。所有相关进程结束后完成原保护核验。
+
+目的仅补齐 no_completion 时槽状态，区分扫描观察到 queued/running/其他状态；仍不能仅凭局部序号精确测量OS调度和解码各自耗时。若本次通过，也如实报告未复现，不追加运行。
