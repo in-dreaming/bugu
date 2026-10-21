@@ -1,0 +1,110 @@
+{
+  "source_commit": "e09b38df925020f5877e0ed637d75fad5ea3e681",
+  "source_tree": "8ba69a82caabe29ed9a6a55566d90969497b110a",
+  "classification": "PASS_ACTUAL_STDERR_WAIT_PAIRS_AND_OBSERVATION_OVERLAP_INSPECTION",
+  "execution": [
+    {
+      "exit": 0,
+      "elapsed_seconds": 0.039440423002815805,
+      "stderr": ""
+    },
+    {
+      "exit": 0,
+      "elapsed_seconds": 0.09532440299881273,
+      "stderr": ""
+    }
+  ],
+  "self_test": {
+    "synthetic_cases": 8,
+    "native_execution": false,
+    "full_log_qualification": false
+  },
+  "raw_log_sha256": "4fac4e6ccf2b1238cb37f5ee65ac71fc363dc8a215055973a0b4fed99a0a839a",
+  "full_local_report_sha256": "534997eed84ee3158ad0347b9da2be7b4f1170febf5ad176d7c20bab77c34c66",
+  "storage": {
+    "before_bytes": 315640,
+    "after_bytes": 330296,
+    "added_bytes": 14656,
+    "pair_tails_bytes": 14656,
+    "control_capacity": 256,
+    "worker_capacity": 128,
+    "wait_capacity_per_role": 64
+  },
+  "coverage": {
+    "control": {
+      "capacity": 64,
+      "retained": 64,
+      "overwritten": 606,
+      "tail_counter_exhausted": false,
+      "id_exhausted": false,
+      "pending": false,
+      "counts": {
+        "missing_before": 0,
+        "missing_after": 0,
+        "metadata_mismatch": 0,
+        "pair_invalid": 0,
+        "nonmonotonic": 0,
+        "valid": 64,
+        "usable": 128
+      }
+    },
+    "worker": {
+      "capacity": 64,
+      "retained": 64,
+      "overwritten": 501,
+      "tail_counter_exhausted": false,
+      "id_exhausted": false,
+      "pending": false,
+      "counts": {
+        "missing_before": 0,
+        "missing_after": 0,
+        "metadata_mismatch": 0,
+        "pair_invalid": 0,
+        "nonmonotonic": 0,
+        "valid": 64,
+        "usable": 128
+      }
+    }
+  },
+  "wait_summary": {
+    "control": {
+      "observed_ns": {
+        "count": 64,
+        "minimum": 1049356,
+        "maximum": 1138696,
+        "total": 68984425
+      },
+      "reasons": {
+        "control_turn": 64
+      }
+    },
+    "worker": {
+      "observed_ns": {
+        "count": 64,
+        "minimum": 1068540,
+        "maximum": 1139487,
+        "total": 68923874
+      },
+      "reasons": {
+        "burst_budget": 54,
+        "claim_deferred": 1,
+        "park": 9
+      }
+    }
+  },
+  "worker_gap_count": 63,
+  "negative_worker_gaps": 0,
+  "complete_job_chains": 8,
+  "usable_job_chains": 8,
+  "control_acceptance_interval_count": 8,
+  "negative_control_intervals": 0,
+  "control_intervals_with_retained_wait_overlap": 8,
+  "limitations": [
+    "Intervals include callback/clock sampling overhead, blocking and rescheduling; after does not prove successful sleep.",
+    "Retained tails only. Missing, erroneous, early and overwritten samples do not become zero.",
+    "Worker gaps are between adjacent retained completed-job observations, not a complete global schedule.",
+    "Control acceptance associations require the earlier inspector full immutable identity chain.",
+    "Overlap is observed clock-domain interval association, not a causal explanation, CPU time or pure kernel sleep.",
+    "No engine execution, replay, OS-timer attribution, throughput guarantee or underrun fix is established."
+  ]
+}
