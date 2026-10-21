@@ -1,0 +1,20 @@
+{
+  "source_commit": "5dc8a31344e391142c6a0403c3bd49e9aca88840",
+  "source_tree": "1dafd4a23dc8da1f1a400ddac020751a79e8552c",
+  "files": {
+    "semantic_live_process_test.elf": {
+      "bytes": 206489670,
+      "sha256": "cbb900b85608c471571169c50bd7ca20a724f41116915e19824313e2faa6eb35"
+    },
+    "history.bin": {
+      "bytes": 7679698,
+      "sha256": "1091d2b55f62b7e9a4d7e9ba080d7216d57f6cac425f44c1e4585c357ff738a6"
+    },
+    "bank.bin": {
+      "bytes": 1283976,
+      "sha256": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+    }
+  },
+  "tape_build_hash_matches_exact_elf": true,
+  "new_same_build_regeneration": true
+}

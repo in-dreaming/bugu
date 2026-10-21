@@ -1,0 +1,83 @@
+{
+  "stage": "UNVERIFIED same-exact-ELF separate native process strict replay",
+  "source_commit": "5dc8a31344e391142c6a0403c3bd49e9aca88840",
+  "source_tree": "1dafd4a23dc8da1f1a400ddac020751a79e8552c",
+  "input_directory": "${RECOVERY_ROOT}/qualification/initial-entry-native-tape",
+  "input_identity": {
+    "semantic_live_process_test.elf": {
+      "bytes": 206489670,
+      "sha256": "cbb900b85608c471571169c50bd7ca20a724f41116915e19824313e2faa6eb35"
+    },
+    "history.bin": {
+      "bytes": 7679698,
+      "sha256": "1091d2b55f62b7e9a4d7e9ba080d7216d57f6cac425f44c1e4585c357ff738a6"
+    },
+    "bank.bin": {
+      "bytes": 1283976,
+      "sha256": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+    }
+  },
+  "preconditions": [
+    "Earlier native record10/10 sealed and actual new-site witness inspection passed.",
+    "All three input file hashes/lengths match identity, ELF hash equals tape header build hash; replay-result.json absent.",
+    "Source clean/frozen, no capture workload hook injected in replay."
+  ],
+  "command": [
+    "python",
+    "${RECOVERY_ROOT}/qualification/run_guarded.py",
+    "--repo",
+    "${RECOVERY_ROOT}/repo",
+    "--out",
+    "${RECOVERY_ROOT}/qualification/initial-entry-fresh-debug-01",
+    "--seconds",
+    "180",
+    "--",
+    "/usr/bin/env",
+    "-u",
+    "SME_LIVE_SEMANTIC_WRITER",
+    "-u",
+    "SME_LIVE_SEMANTIC_STREAM_FAIL_AFTER",
+    "-u",
+    "SME_LIVE_SEMANTIC_CONTROLLED_CROSS_FRAME",
+    "-u",
+    "SME_DEFAULT_CONTROL_DELAY_MS",
+    "-u",
+    "SME_DEFAULT_WORKER_DELAY_MS",
+    "SME_LIVE_SEMANTIC_MODE=replay",
+    "SME_LIVE_SEMANTIC_WORKLOAD=retry",
+    "SME_LIVE_SEMANTIC_DIR=${RECOVERY_ROOT}/qualification/initial-entry-native-tape",
+    "${RECOVERY_ROOT}/qualification/initial-entry-native-tape/semantic_live_process_test.elf",
+    "--seed=0xb360b770"
+  ],
+  "timeout_seconds": 180,
+  "resource_bounds": {
+    "start_disk_min_bytes": 3355443200,
+    "runtime_disk_floor_bytes": 2281701376,
+    "native_process": "one exact existing ELF, no rebuild"
+  },
+  "expected": "Actual fresh Host computes source reads, clocks, schedule, canonical Input/Schedule, PCM and command outcomes under strict Driver comparison and reaches EOF with complete native cleanup. Require all10 tests pass and report host_joined/host_destroyed/eof; all original input hashes unchanged. Preserve any mismatch, do not retry timing or inject output.",
+  "limits": [
+    "Same-build replay only; this freshly generated tape is not a portable or historical executable artifact.",
+    "No Windows or sustained-throughput qualification."
+  ],
+  "files": {
+    "run_guarded.py": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+    "identity.json": "63c24bf773170ca5a2593bee203fdbb4a2b2b6e796f80586c9a0c251cb41113a"
+  },
+  "publication": {
+    "status": "UNVERIFIED",
+    "local_manifest_sha256": "89f6dde61c8711c6f479b4183215b715fd0986a64da28f5be91d01a823e4fa57",
+    "path_binding": "Resolve ${RECOVERY_ROOT} to the recovered tree's parent directory. Public argv is parameterized and is not byte-identical to local absolute argv.",
+    "runner": {
+      "commit": "93813b70910692c105d1ebf3d4754e6626fdf8a3",
+      "path": "checkpoints/baseline-retry-20261021-6327086/run_guarded.py",
+      "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+    },
+    "execution_requirements": [
+      "Wait for separately persisted successful new-site inspection before running.",
+      "Use ordinary Python without -O/PYTHONOPTIMIZE.",
+      "External interruption without terminal evidence is UNKNOWN, not pass.",
+      "Hashes identify local artifacts; this Git publication does not back up raw ELF/tape/bank bytes."
+    ]
+  }
+}
