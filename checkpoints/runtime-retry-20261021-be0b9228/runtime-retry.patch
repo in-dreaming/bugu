@@ -1,0 +1,32 @@
+--- a/src/runtime/runtime.zig
++++ b/src/runtime/runtime.zig
+@@ -1963,6 +1963,10 @@
+         if (service.replay_mode) return error.InvalidState;
+         // Polls preceding acceptance keep their actual earlier position.
+         self.acceptStreamVisibilityAt(self.tick_v1.frame);
++        // One transient completed-DSP publication collision may be revisited
++        // in this turn. Both calls consume the existing attempt budget; never
++        // spin until success or reset this allowance after another acceptance.
++        var retried_frontier = false;
+         for (0..service.profile.completion_capacity) |_| {
+             const position: scheduler.trace.Position = .{ .accepted_control_frame = self.tick_v1.frame, .control_tick = self.stream_control_tick, .input_order = self.stream_input_order };
+             if (self.scheduled.next_batch_id == std.math.maxInt(u64)) {
+@@ -1990,7 +1994,17 @@
+                 self.stream_input_overflow +|= 1;
+                 self.stream_input_evidence_failures +|= 1;
+                 break;
+-            } orelse break;
++            } orelse {
++                if (!retried_frontier) if (attempt.deferred) |deferred| switch (deferred.reason) {
++                    .odd_sequence, .sequence_changed => {
++                        retried_frontier = true;
++                        // The iteration defer emits this failed real attempt
++                        // before the next full Service call obtains a new cut.
++                        continue;
++                    },
++                };
++                break;
++            };
+             const actual = accepted.input.position;
+             if (actual.control_tick != position.control_tick or actual.input_order != position.input_order or actual.accepted_control_frame < position.accepted_control_frame) {
+                 self.stream_input_overflow +|= 1;

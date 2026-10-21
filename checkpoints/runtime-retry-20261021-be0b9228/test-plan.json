@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "checkpoint_id": "runtime-retry-20261021-be0b9228",
+  "status": "PLANNED_NOT_RUN",
+  "execute": false,
+  "commands": null,
+  "timeout_seconds": null,
+  "toolchain_identity": null,
+  "required_before_execution": [
+    "Restore and verify exact baseline tree.",
+    "Verify patch hash and isolated application; establish candidate tree.",
+    "Persist the exact candidate source and a concrete bounded test plan; read back before long-running work."
+  ],
+  "planned_checks": [
+    "Syntax and production compile checks.",
+    "Focused real odd_sequence and sequence_changed retry behavior, with both calls charged to the original attempt budget.",
+    "Verify no retry for unrelated outcomes, no repeated reset after another acceptance, and genuine attempt diagnostics.",
+    "Run only explicitly scoped compatibility and native checks with recorded exit and source guards."
+  ],
+  "outcome_rules": {
+    "passed": "Only when the exact planned check completes with sufficient retained evidence.",
+    "failed": "A check completed and demonstrably failed.",
+    "unknown": "An attempted check was interrupted or its outcome is not established.",
+    "not_run": "The check was not started."
+  },
+  "excluded_claims": [
+    "Windows underrun fixed",
+    "Full compatibility suite passed",
+    "New-build strict replay passed without running it"
+  ]
+}

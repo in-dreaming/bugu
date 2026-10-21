@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "checkpoint_id": "runtime-retry-20261021-be0b9228",
+  "status": "UNVERIFIED",
+  "purpose": "Persist an unverified bounded Runtime retry candidate before applying or testing it.",
+  "base": {
+    "source_commit": "e15de1243d23fa67449674ab75fcebe735e9840d",
+    "expected_tree": "9c726fe11f07af1936f365a6b9b505153be93709",
+    "current_environment_materialization": "pending"
+  },
+  "patch": {
+    "path": "runtime-retry.patch",
+    "bytes": 1861,
+    "sha256": "be0b9228f4b31b92dc413971f1898b628d6a86621897c2bb6b6f71016271fffc",
+    "encoding": "utf-8",
+    "changed_paths": [
+      "src/runtime/runtime.zig"
+    ],
+    "added_lines": 15,
+    "removed_lines": 1,
+    "binary_segments": false
+  },
+  "candidate": {
+    "source_commit": null,
+    "source_tree": null,
+    "application_status": "not_attempted",
+    "compile_status": "not_run",
+    "runtime_tests_status": "not_run",
+    "windows_validation_status": "not_run"
+  },
+  "verification": {
+    "patch_bytes_and_sha256_checked": true,
+    "remote_persistence_does_not_mean_validated": true,
+    "behavior_correctness": "unverified",
+    "full_new_build_strict_replay": "not_run"
+  },
+  "restoration": {
+    "required_baseline_tree": "9c726fe11f07af1936f365a6b9b505153be93709",
+    "main_is_not_the_candidate_baseline": true,
+    "reentrant_restore_script": "pending",
+    "do_not_force_patch_application": true
+  },
+  "results_policy": {
+    "append_only": true,
+    "environment_interruption_outcome": "unknown",
+    "unstarted_outcome": "not_run",
+    "previous_results_do_not_validate_new_build": true
+  }
+}
