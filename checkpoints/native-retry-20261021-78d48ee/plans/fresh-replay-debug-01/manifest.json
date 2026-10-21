@@ -1,0 +1,66 @@
+{
+  "stage": "UNVERIFIED fresh-process strict replay of actual sealed controlled retry history",
+  "source_commit": "94d77ca413ef1e99207aed79ec57948bf06df610",
+  "source_tree": "78d48eed7e7fabf242a7a0572a944e2c13f2a656",
+  "timeout_seconds": 180,
+  "resource_bounds": {
+    "runtime_disk_floor_bytes": 2281701376,
+    "start_disk_min_bytes": 3355443200
+  },
+  "artifact_identity": {
+    "exact-process-elf": "a9f32cc5a392bf2618700e71ab3467b0fc62f69a17099559233fff50a56e2db5",
+    "history.bin": "3bee2242a969397bdea02e21b38f76f9cf538387471ccfb15102a908582cc6eb",
+    "bank.bin": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+  },
+  "files": {
+    "fresh_replay.py": "fe478b17f55d64d874404e002e6b5e0c92e8a4ce6f73f9e09bd9b7cea86422bd",
+    "identity.json": "2e5a431cec7e4c996f51e8f00fa173c14f9e0855cd16cd6e5dd6a057e618d46c"
+  },
+  "expected": "Fresh OS process with same exact ELF/bank/tape; all actual PCM/Input/Schedule/command output references and EOF matched, real Host joined/destroyed. Test workload hooks absent during replay. Native rejection/cleanup preserved; no expected output injected. Existing tests also run in the exact ELF.",
+  "command_template": [
+    "python",
+    "${RUNNER_DIR}/run_guarded.py",
+    "--repo",
+    "${SOURCE_REPO}",
+    "--out",
+    "${OUTPUT_DIR}",
+    "--seconds",
+    "180",
+    "--",
+    "python",
+    "${PLAN_DIR}/fresh_replay.py",
+    "${TAPE_DIR}",
+    "${PLAN_DIR}/identity.json"
+  ],
+  "status": "UNVERIFIED_PLANNED_NOT_RUN",
+  "path_parameters": {
+    "RUNNER_DIR": "Directory containing the unchanged runner pinned by runner_source.",
+    "SOURCE_REPO": "Repository with the exact source_tree, used by the runner for source guards.",
+    "OUTPUT_DIR": "New, nonexistent run-output directory.",
+    "PLAN_DIR": "Directory containing these exact fresh_replay.py and identity.json files.",
+    "TAPE_DIR": "Preserved native capture directory containing exact-process-elf, history.bin and bank.bin matching identity.json. These binary artifacts are not published here."
+  },
+  "runner_source": {
+    "delivery_commit": "93813b70910692c105d1ebf3d4754e6626fdf8a3",
+    "path": "checkpoints/baseline-retry-20261021-6327086/run_guarded.py",
+    "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+  },
+  "result_policy": {
+    "source_snapshot_is_not_validation": true,
+    "failed_baseline_assertions_remain_failed": "Confirming an expected baseline defect requires the specific retained runtime evidence, not merely a nonzero exit.",
+    "timeout_or_external_interruption": "unknown",
+    "missing_final_result": "unknown",
+    "source_changed_during_run": "invalid qualification",
+    "before_start": "not_run",
+    "raw_logs_and_private_environment_paths": "Do not publish; retain public technical summaries and evidence hashes only."
+  },
+  "provenance": {
+    "local_run_manifest_sha256": "725b2e26ee2cf9276bad854f0b68576c20a9c9b0b5e8855e65d6ad6e13af4873",
+    "public_manifest_transformation": "Only absolute locations are parameterized and explanatory metadata added. The public command is not the byte-identical local argv; executable, arguments, artifact identities and resource bounds are unchanged."
+  },
+  "recording_result": {
+    "delivery_commit": "53987eeaa6b14be02872d6464695a5ca2c4bec73",
+    "path": "checkpoints/native-retry-20261021-78d48ee/results/record-debug-01.json"
+  },
+  "single_attempt_only": true
+}
