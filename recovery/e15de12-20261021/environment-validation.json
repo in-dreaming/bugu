@@ -1,0 +1,94 @@
+{
+  "schema": 1,
+  "scope": "Minimal local Linux dependency/toolchain restoration and integrity verification only; not build/test qualification",
+  "verified_at_utc": "2026-10-21T02:52:56.416862Z",
+  "script": "restore_environment.py",
+  "script_sha256": "1a50347e4826e43f772abb2655165c4d79b644781785444f9db530976c83b441",
+  "manifest": "recovery-manifest.json",
+  "manifest_sha256": "b7fc11b60a0013fbd800fabffdd52205750e9fbbbf07586ff9feed87b4935227",
+  "execution_kind": "Actual local execution, not static-only review",
+  "initial_install": {
+    "exit_code": 0,
+    "script_sha256": "bc6c525d37ef03d2ff26180c32b5eac9010ba695d030c4fe97694e666583df5c",
+    "scope": "Downloaded and installed official Zig archive and fixed-pin minimal dependencies; verified archive, binary, version, dependency pins, retained licenses and exact Unicode sparse scope. This was the preceding script revision before whole-toolchain installed-file comparison was added.",
+    "raw_logs_published": false
+  },
+  "existing_environment_rerun": {
+    "exit_code": 0,
+    "script_sha256": "1a50347e4826e43f772abb2655165c4d79b644781785444f9db530976c83b441",
+    "stdout_sha256": "eff0a292269a564b70835b80023185bba117b0dabae71aff281431c64eed3096",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output_hash_basis": "SHA-256 of locally captured stdout/stderr files; raw logs are not published",
+    "scope": "Reused existing archive, toolchain and dependency checkouts; compared every installed archive member and executed zig version only. No explicit download or Git fetch branch was needed."
+  },
+  "zig": {
+    "version": "0.16.0",
+    "platform": "x86_64-linux",
+    "url": "https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz",
+    "bytes": 55478392,
+    "sha256": "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00",
+    "binary_sha256": "2317bbb91798556d9d0f38aabdac23db83f0979b25f767259ae474546724087c",
+    "reported_version": "0.16.0",
+    "installed_regular_files_compared_to_verified_archive": 19546,
+    "comparison": "All archive regular-file bytes, sizes and executable bits; archive directory types and symbolic-link targets"
+  },
+  "verified_dependencies": [
+    {
+      "path": "third_party/freetype",
+      "pin": "526ec5c47b9ebccc4754c85ac0c0cdf7c85a5e9b",
+      "licenses": [
+        "LICENSE.TXT"
+      ]
+    },
+    {
+      "path": "third_party/miniaudio",
+      "pin": "9634bedb5b5a2ca38c1ee7108a9358a4e233f14d",
+      "licenses": [
+        "LICENSE"
+      ]
+    },
+    {
+      "path": "third_party/ogg",
+      "pin": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+      "licenses": [
+        "COPYING"
+      ]
+    },
+    {
+      "path": "third_party/opus",
+      "pin": "22244de5a79bd1d6d623c32e72bf1954b56235be",
+      "licenses": [
+        "LICENSE_PLEASE_READ.txt",
+        "COPYING"
+      ]
+    },
+    {
+      "path": "third_party/unicodetools",
+      "pin": "ecd26be2e82be37609090942c14e518e57e905d8",
+      "licenses": [
+        "LICENSE"
+      ]
+    }
+  ],
+  "unicode_materialized_files": [
+    "LICENSE",
+    "unicodetools/data/ucd/dev/auxiliary/GraphemeBreakProperty.txt",
+    "unicodetools/data/ucd/dev/DerivedCoreProperties.txt",
+    "unicodetools/data/ucd/dev/emoji/emoji-data.txt",
+    "unicodetools/data/ucd/dev/auxiliary/GraphemeBreakTest.txt"
+  ],
+  "excluded_dependencies": [
+    "third_party/in_dreaming_gpu",
+    "third_party/noto_cjk"
+  ],
+  "project_build_or_tests_run": false,
+  "project_build_graph_executed": false,
+  "system_global_installation_or_configuration_changed": false,
+  "final_script_fresh_install_run_tested": false,
+  "limitations": [
+    "The final published script revision was executed against the already restored environment. Its fresh-install path and interrupted-transfer/dirty-target failure cases were not separately exercised.",
+    "Repository source-tree qualification is recorded separately in restoration-validation.json. This environment verification checks root gitlink pins but does not claim that ongoing development work remains identical to the recovered source tree.",
+    "Successful restoration and integrity checks do not imply any passing project build, test, replay, benchmark or acceptance result.",
+    "Local state alone is not durable storage and does not establish executor stability."
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "scope": "Offline source reconstruction only; not build/test qualification",
+  "verified_at_utc": "2026-10-21T02:46:17Z",
+  "script": "restore_source.py",
+  "script_sha256": "822d5be02cbcc7175b60a34bf44135bb723c784dcd0ee411d161c988eb62bc67",
+  "manifest": "recovery-manifest.json",
+  "manifest_sha256": "b7fc11b60a0013fbd800fabffdd52205750e9fbbbf07586ff9feed87b4935227",
+  "execution_kind": "Actual local execution, not a static-only review",
+  "initial_run": {
+    "exit_code": 0,
+    "stdout_sha256": "abd2058004996a29b5d4704cd54f9e7cb4955b9cdfd3dd2c0520ae15e7fd4f24",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output_hash_basis": "Exact UTF-8 stdout string returned by execution tool; raw stdout is deliberately not published"
+  },
+  "idempotent_rerun": {
+    "exit_code": 0,
+    "action": "Verified final HEAD tree and clean worktree without reconstructing or creating another commit",
+    "script_stdout_sha256": "c256e599b792a13b00034934649bf8dd626fd314dbb52199f16c3c81dcd886b6",
+    "output_hash_basis": "Exact UTF-8 script stdout line returned by execution tool, excluding subsequent shell inspection output"
+  },
+  "verified_trees": [
+    {
+      "stage": "cb2c224",
+      "tree": "85b35b269e470ffb253b127d6b1ae9a7e7c3ecc0"
+    },
+    {
+      "stage": "4cdbbf5",
+      "tree": "b0e1334ea1030f9920ef1f84671b6736aa78d916"
+    },
+    {
+      "stage": "6f3fb3a",
+      "tree": "49098fa120fe090e3c81c320bca9161d16d749d1"
+    },
+    {
+      "stage": "6c154b8",
+      "tree": "6e2ad9f1b59a78257c06a5d7710d4ab2e24af58b"
+    },
+    {
+      "stage": "94f5907",
+      "tree": "7544c203628534da89cd65084e65163d272a6e8a"
+    },
+    {
+      "stage": "e15de12",
+      "tree": "9c726fe11f07af1936f365a6b9b505153be93709"
+    }
+  ],
+  "final_tree": "9c726fe11f07af1936f365a6b9b505153be93709",
+  "synthetic_local_commit": "36d4e6c97cd9cc6a099ae273b7655a1fd3a335d1",
+  "original_commit_history_restored": false,
+  "gitlinks_preserved": 7,
+  "dirty_worktree_overwrite_tested": false,
+  "interrupted_stage_resume_tested": false,
+  "build_or_tests_run": false,
+  "toolchain_or_dependency_installation_included": false,
+  "limitations": [
+    "Initial recovery and clean no-op rerun were observed. Interrupted recovery and dirty-target failure modes were not exercised.",
+    "The local synthetic commit identifies this one recovery execution only, not the original source commit.",
+    "Hashes of console output are evidence references, not an assertion that raw logs are available from this repository."
+  ]
+}
