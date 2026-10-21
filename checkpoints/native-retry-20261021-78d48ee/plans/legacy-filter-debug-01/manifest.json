@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "status": "prepared_only_not_built_or_run",
+  "classification": "derived_same_graph_not_original_live_tick_argv",
+  "expected_source_commit_at_preparation": "94d77ca413ef1e99207aed79ec57948bf06df610",
+  "expected_source_tree": "78d48eed7e7fabf242a7a0572a944e2c13f2a656",
+  "template": {
+    "file": "argv-template.rsp",
+    "sha256": "8b1814d5b55b4951c02fa6d0f85b3b27532b800591a1c3bf065c3382081097eb",
+    "argc": 3772,
+    "original_repo": "/SOURCE_REPO_TEMPLATE",
+    "original_root": "tests/sme/live_acceptance_retry_test.zig",
+    "origin": "Path-tokenized public derivative of the original response file; not byte-identical to the original archive."
+  },
+  "options": {
+    "file": "options.zig",
+    "sha256": "9eb9ef937b541840cc0509c9f5a53f023f19e117b064adebf6b59c74eff48fef",
+    "origin": "Original generated .zig-cache/c/1b538c0e4d0fbe1157b9275f4c390c70/options.zig; preserved byte-for-byte",
+    "resource_profile": "baseline256"
+  },
+  "toolchain": {
+    "version": "0.16.0",
+    "platform": "x86_64-linux",
+    "sha256": "2317bbb91798556d9d0f38aabdac23db83f0979b25f767259ae474546724087c"
+  },
+  "derived_root": "tests/sme/live_tick_test.zig",
+  "tests": [
+    "legacy control tick still rejects the original ticket on a real supply frame mismatch",
+    "live Worker rejects legally begun serial recording on the same registered Worker before Service scan"
+  ],
+  "optimization": "Debug",
+  "timeout_seconds_total": 600,
+  "initial_free_floor_bytes": 3355443200,
+  "running_free_floor_bytes": 2281701376,
+  "disk_poll_seconds": 1,
+  "progress_interval_seconds": 5,
+  "run_count": 1,
+  "evidence_basis": [
+    "build_support/sme_steps.zig:232-255 constructs the same module/native graph for these ordinary test roots",
+    "The archived response file and current semantic_live_process_test response file differ only in root module path and artifact name",
+    "All 294 module and native-source paths enumerated from the template existed at preparation"
+  ],
+  "excluded": [
+    "whole live_tick test suite",
+    "new target registration",
+    "source edits",
+    "installation",
+    "retry on failure",
+    "capacity changes",
+    "ReleaseSafe conversion",
+    "claim of native replay proof"
+  ],
+  "public_provenance": {
+    "original_local_manifest_sha256": "5d576289e63f4ab5aa4a23ee0d350466967ce9580d62e2bd584f226f116f19ec",
+    "original_template_sha256": "26dde4d2d08fe3a6b5296a5c9bcb47c97c159685254d453ff5d0fd3bc9716068",
+    "original_invocation_plan_sha256": "a4ef9aa9982c8c78ef91d376b1eb51981d3c74b82d1fff1645928678721684b3",
+    "transformation": "Only absolute repository/cache/Zig-lib locations in the template are tokenized. Runner substitutions produce identical arguments after assigning the same local locations. Exact shlex argc and data-only normalized argv comparison verified; no compilation or tests executed by this transformation.",
+    "template_byte_identical_to_original": false,
+    "runner_and_options_byte_identical_to_original": true,
+    "runner_sha256": "5dc1730b5a0cf6898783a93f6360ac917dd334ed90c6fc27e1bcd1639ea931a7"
+  }
+}

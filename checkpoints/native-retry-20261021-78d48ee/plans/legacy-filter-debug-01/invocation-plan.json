@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "classification": "derived_same_graph_not_original_live_tick_argv",
+  "status": "prepared_not_executed",
+  "internal_timeout_seconds": 600,
+  "initial_free_floor_bytes": 3355443200,
+  "running_free_floor_bytes": 2281701376,
+  "external_process_group_timeout_guard": false,
+  "runner_sha256": "5dc1730b5a0cf6898783a93f6360ac917dd334ed90c6fc27e1bcd1639ea931a7",
+  "manifest_sha256": "9b6850f55295d1c4bd7cf608545bc4111f91ed6c708acd657873221851e50793",
+  "argv_template": [
+    "${PYTHON_BIN}",
+    "-u",
+    "${PLAN_DIR}/run_filtered_compatibility.py",
+    "--repo",
+    "${SOURCE_REPO}",
+    "--zig",
+    "${ZIG_BIN}",
+    "--output-dir",
+    "${OUTPUT_DIR}",
+    "--execute"
+  ],
+  "cwd_template": "${SOURCE_REPO}",
+  "public_provenance": {
+    "original_local_invocation_plan_sha256": "a4ef9aa9982c8c78ef91d376b1eb51981d3c74b82d1fff1645928678721684b3",
+    "original_local_manifest_sha256": "5d576289e63f4ab5aa4a23ee0d350466967ce9580d62e2bd584f226f116f19ec",
+    "public_execution_is_parameterized": true
+  },
+  "result_policy": {
+    "before_start": "not_run",
+    "timeout_or_external_interruption": "unknown",
+    "missing_terminal_result": "unknown",
+    "source_guard_changed": "invalid qualification",
+    "pass_requires": "Both exact named tests plus All 2 tests passed marker, not exit zero alone."
+  },
+  "python_execution_requirement": "Use normal Python without -O/-OO or PYTHONOPTIMIZE; safety/source/hash guards use assert."
+}
