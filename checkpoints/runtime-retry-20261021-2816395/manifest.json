@@ -1,0 +1,81 @@
+{
+  "stage": "UNVERIFIED runtime candidate after observed causal baseline",
+  "original_source": "e15de1243d23fa67449674ab75fcebe735e9840d",
+  "base_tree": "aa0726beb9d86db5075ac6e413ac37914810f21d",
+  "synthetic_base": "36d4e6c97cd9cc6a099ae273b7655a1fd3a335d1",
+  "source_commit": "5b7ed9ad97dda2e6068c7ed38580d2acc5e228d2",
+  "source_tree": "28163955b35b0fc304055574b2ea069c9615f378",
+  "timeout_seconds": 600,
+  "resource_bounds": {
+    "parallel_build_jobs": 1,
+    "start_disk_min_bytes": 3355443200,
+    "runtime_disk_floor_bytes": 2281701376,
+    "test_barrier_seconds": 5
+  },
+  "expected_baseline": "Expected after: all3 controlled tests and codec tests pass. Unchanged runtime causal failure retained separately in Git9536ff27. No Windows or universal realtime guarantee.",
+  "files": {
+    "tests/sme/live_acceptance_retry_test.zig": "def14404d44dbf206183d276d1e8177431236c304d60821d10e44e3f4e39191d",
+    "tests/sme/live_semantic_codec_test.zig": "fe6edf2e703f29c4061954e48a44aa9b143df4d8fe436335aa54e7f8ea7c821b",
+    "build_support/sme_tasks/task-017.zon": "acab18cc71ef8c7619295229a540775ca1425926049c277a2e53b91be27153a0",
+    "src/runtime/runtime.zig": "92e9a575e5075a7db3c248aa9cf81fb8b92ee55b5b3ad037ea2ed69ae679462c"
+  },
+  "checkpoint_files": {
+    "source.patch": "1cd60254d16235eb175cfd4326d82ccbfe8f42b4ae4119ce6a3d489aa59d4517",
+    "run_guarded.py reused": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+  },
+  "base_commit": "8aec6033fb43ab63f8f72a0b12bfcbd84cd03d2d",
+  "corrections": "Apply reviewed +15/-1 runtime candidate. One extra typed odd/sequence_changed attempt per tick within unchanged total capacity. Original evidence/defer order, full Service checks, success updates unchanged.",
+  "command_template": [
+    "python",
+    "${CHECKPOINT_DIR}/run_guarded.py",
+    "--repo",
+    "${SOURCE_REPO}",
+    "--out",
+    "${OUTPUT_DIR}",
+    "--seconds",
+    "600",
+    "--",
+    "${ZIG_BIN}",
+    "build",
+    "sme-live-acceptance-retry-test",
+    "sme-live-semantic-codec-check",
+    "-j1",
+    "-Doptimize=Debug",
+    "--summary",
+    "all"
+  ],
+  "status": "UNVERIFIED_PLANNED_NOT_RUN",
+  "cwd_template": "${SOURCE_REPO}",
+  "path_parameters": {
+    "CHECKPOINT_DIR": "Directory containing the unchanged runner retrieved from runner_source. Not necessarily this increment's directory.",
+    "SOURCE_REPO": "Restored and patched repository at the exact source_tree above.",
+    "OUTPUT_DIR": "New, nonexistent per-run output directory.",
+    "ZIG_BIN": "Verified Zig 0.16.0 Linux x86_64 binary pinned by the recovery manifest."
+  },
+  "result_policy": {
+    "source_snapshot_is_not_validation": true,
+    "failed_baseline_assertions_remain_failed": "Confirming an expected baseline defect requires the specific retained runtime evidence, not merely a nonzero exit.",
+    "timeout_or_external_interruption": "unknown",
+    "missing_final_result": "unknown",
+    "source_changed_during_run": "invalid qualification",
+    "before_start": "not_run",
+    "raw_logs_and_private_environment_paths": "Do not publish; retain public technical summaries and evidence hashes only."
+  },
+  "runner_source": {
+    "delivery_commit": "93813b70910692c105d1ebf3d4754e6626fdf8a3",
+    "path": "checkpoints/baseline-retry-20261021-6327086/run_guarded.py",
+    "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+  },
+  "provenance": {
+    "local_run_manifest_sha256": "646a0173aa7c65950941868189752104729067135cf736d71bdd37e32a9876e9",
+    "public_manifest_transformation": "Absolute execution locations are parameterized and explanatory metadata is added; public command is a template, not the byte-identical local argv. Zig arguments and resource bounds are unchanged.",
+    "reconstructed_tests": "New implementation after recovery, not a claim to restore lost original source blobs.",
+    "original_unapplied_candidate_sha256": "be0b9228f4b31b92dc413971f1898b628d6a86621897c2bb6b6f71016271fffc",
+    "increment_format_note": "This Git diff has different wrapper/context bytes but identical added and deleted source lines to the preserved original candidate."
+  },
+  "causal_baseline": {
+    "delivery_commit": "9536ff27a6b6a0a1be2ce038418489797ceb02a7",
+    "path": "checkpoints/baseline-retry-20261021-aa0726b/results/debug-attempt-01.json",
+    "classification": "EXPECTED_CAUSAL_BASELINE_FAILURE"
+  }
+}
