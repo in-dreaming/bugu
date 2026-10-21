@@ -1,0 +1,41 @@
+{
+  "classification": "VERIFIED_INCOMPLETE_PREFIX_NOT_REPLAY",
+  "source_file_sha256": "12e494c482f132615d393f5e36af860b33869a35b7a552ef22937bc48548d5cc",
+  "valid_record_prefix_end": 3932057,
+  "trailing_partial_payload_bytes": 103,
+  "first": {
+    "occurrence": 53689,
+    "tick": 66,
+    "frame": 4864,
+    "input_order": 1,
+    "job": 29,
+    "sequence_before": 153,
+    "outcome": "availability_unavailable",
+    "defer": "odd_sequence"
+  },
+  "second": {
+    "occurrence": 54482,
+    "same_incoming": true,
+    "same_selected": true,
+    "sequence_before": 155,
+    "outcome": "availability_unavailable",
+    "defer": "odd_sequence",
+    "cut": null,
+    "accepted": null,
+    "publication": null,
+    "effects": "all false"
+  },
+  "later_acceptance": {
+    "occurrence": 56546,
+    "tick": 67,
+    "cut_sequence": 174,
+    "cut_frame": 5568,
+    "available": 4928,
+    "prefix_start": 6528,
+    "prefix_end": 6784,
+    "batch": 30
+  },
+  "diagnosis": "Test coordinator observed even154 then allowed Render into next odd155 before second actual attempt. Existing production validation correctly deferred again.",
+  "proposal": "Test-only fixed once even barrier waits for second-attempt completion/cancel with same500ms timeout; exact failure diagnostics. No engine value writes or validation weakening.",
+  "full_prefix_report_sha256": "92c72fffab9973cc52b338de29b96f76b50aa0f55368691957be95ca94921909"
+}
