@@ -67,3 +67,7 @@ manifest 的 UNVERIFIED 是计划保存时的状态，保持不改写；后续�
 ## Windows 首次 Play 与持续播放结果更新（2026-10-21）
 
 上述“Windows 尚未验收”为交付时状态。[f28bee4 / f8bbbeb 单次默认 Debug 摘要](ordered-admission-20261021-f8bbbeb/results/windows-default-debug-01.json) 现已报告 8/9：首次 Play accepted/executed 通过，随后持续播放仍出现 stream fault 23168，候选未整体修复。tick31 的非 coherent 扫描观察到 1 running + 3 queued、无 completion，不能据此证明 OS 调度或解码耗时是根因。仅存执行结果及只读补证的转述摘要，原始日志仍在 Windows，本分支未备份原件；没有重跑，也未覆盖此前 fresh replay 失败。
+
+## 被动供给计时诊断交付（9e0ccb49 / 088da407）
+
+[小补丁、只读解析器与说明](../patches/sme-passive-timing-9e0ccb49/README.zh-CN.md) 只适用于精确 f28bee4 / f8bbbeb 基底，生产供给策略不变。[单次云端 Debug 10/10 与生产编译](https://github.com/in-dreaming/bugu/blob/ec0cc238d75f2b73c9abf07eba1ae9e6465bb607/checkpoints/passive-timing-20261021-088da40/results/default-debug-01.json)、[独立解析结果](https://github.com/in-dreaming/bugu/blob/42f6928eb027697d7b27b9f5370f665dbdabf9fc/checkpoints/passive-timing-20261021-088da40/results/output-inspection-01.json) 已保存，真实尾部找到 10 条可用关联链，但覆盖仍不完整；诊断固定增加 16480 B，容量不变。该补丁不是持续播放修复，不能倒推此前 Windows 的耗时原因；未运行新 Windows 或 fresh replay，旧失败保留。

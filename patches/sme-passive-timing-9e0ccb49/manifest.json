@@ -1,0 +1,49 @@
+{
+  "schema": "sme.patch.delivery.v1",
+  "base": {
+    "source_commit": "f28bee4e4f6cbb0e0b8fdb8d1d4decad37e76fef",
+    "tree": "f8bbbebd01520966237fab954a868c4dd1dee85f"
+  },
+  "target": {
+    "source_commit": "9e0ccb49f39ed5eeebe4b8d030880726e7810721",
+    "tree": "088da407ad1d556f4c831778fe16742ef1a182fd"
+  },
+  "files": {
+    "source.patch": {
+      "bytes": 28376,
+      "sha256": "990572215211ea113b99afd42fe2baa89df488f50dc7bb7730445cf68b4cfa83"
+    },
+    "inspect_timing_output.py": {
+      "bytes": 16764,
+      "sha256": "adde6e15ce383e5ba1ecda9339fb292c71ea57d4be1e7458cd0fed9878648c6f"
+    },
+    "README.zh-CN.md": {
+      "bytes": 3277,
+      "sha256": "2d1d12b40e1ed5ff29b8bb4ab276ae2b1360d7c01a27542f9779c64ea6e7cf10"
+    }
+  },
+  "patch_reconstruction": "An independent temporary Git index seeded with the exact base tree and applying source.patch produced the exact target tree. The normal index and working tree were unchanged. This is content verification, not a test run.",
+  "result_references": [
+    {
+      "kind": "single_cloud_Debug_10_of_10_and_production_compile",
+      "commit": "ec0cc238d75f2b73c9abf07eba1ae9e6465bb607",
+      "path": "checkpoints/passive-timing-20261021-088da40/results/default-debug-01.json",
+      "sha256": "b7d52bd938f19e093d50f63bcb24f7f4d4738a4e3d4bba7a8dca0f422e86190f"
+    },
+    {
+      "kind": "read_only_parser_7_synthetic_cases_and_real_output_10_usable_retained_chains",
+      "commit": "42f6928eb027697d7b27b9f5370f665dbdabf9fc",
+      "path": "checkpoints/passive-timing-20261021-088da40/results/output-inspection-01.json",
+      "sha256": "c5fcf63d393e0c904bae1ce14d46e0de13885d83567fa80082c44ce792bfc10c"
+    }
+  ],
+  "scope_limits": [
+    "Test-only passive timing diagnostics; no production supply policy, Worker sleep, buffer capacity, retry count or PCM oracle changes.",
+    "Apply only to the exact base content. Not directly applicable to remote main; do not apply twice after the equivalent incremental patch.",
+    "Delivery commits are not source commits and do not publish the source repository's complete history.",
+    "Cloud timing validation and retained associations do not reproduce or fix the earlier Windows sustained playback failure.",
+    "The prior fresh replay failure remains valid. No new Windows, ReleaseSafe, recording or fresh replay run is claimed.",
+    "Timing observations may perturb scheduling. Worker intervals are not CPU decoding time or proof of underrun causation.",
+    "Raw logs and binary artifacts are not included; hashes are identities, not backups. Any proposed Windows execution requires separate approval."
+  ]
+}
