@@ -45,3 +45,7 @@ manifest 的 UNVERIFIED 是计划保存时的状态，保持不改写；后续�
 [合并后的单份补丁与中文说明](../patches/sme-bounded-retry-94d77ca/README-zh.txt) 可从精确 e15de12 基线直接更新至上述94d77ca / 78d48ee源码树；补丁71799字节，不能与七步增量链重复应用，也不能直接在远端main应用。交付Git提交与来源源码提交不同。
 
 最终树的 [ReleaseSafe default11/11](https://github.com/in-dreaming/bugu/blob/4d008f10c31d6b242837196deb3e07ca281bfc50/checkpoints/native-retry-20261021-78d48ee/results/default-releasesafe-01.json) 与 [两条原legacy Debug2/2](https://github.com/in-dreaming/bugu/blob/2b3ae3b1c4c4796a19cbcb48f01cd4bea7469086/checkpoints/native-retry-20261021-78d48ee/results/legacy-filter-debug-01.json) 已分别实际执行并追加终态结果。未运行完整历史矩阵、完整live_tick套件或本候选Windows验收；前述long录制失败保持有效，不被这些结果覆盖。
+
+## Windows 验收更新（2026-10-21）
+
+上述“Windows 未运行”为先前交付时状态。现已收到同一 94d77ca / 78d48ee 内容树的 [Windows 独立验收摘要](native-retry-20261021-78d48ee/results/windows-acceptance-01.json)：panel 8/9、chronology Debug 7/8、ReleaseSafe 7/8，三项均失败，候选仍未修复完成。该文件是 Windows 执行结果的转述摘要；原始日志仍仅在 Windows，本分支未备份原件。此前云端通过记录不覆盖这些失败。

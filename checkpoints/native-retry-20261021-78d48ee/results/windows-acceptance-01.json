@@ -1,0 +1,165 @@
+{
+  "schema": 1,
+  "recorded_at_utc": "2026-10-21T06:30:00Z",
+  "platform": "Windows",
+  "status": "ACCEPTANCE_FAILED_CANDIDATE_NOT_FIXED",
+  "source": {
+    "candidate_commit": "94d77ca413ef1e99207aed79ec57948bf06df610",
+    "effective_tree": "78d48eed7e7fabf242a7a0572a944e2c13f2a656",
+    "delivery_commit": "4677ad518e6a0ee2b268187d28936f03f942aecf",
+    "patch_sha256": "c53f2c09da22be36e0c193af9586f989136c83863992d1cb4c9850ec3fd115e8",
+    "windows_head_abbrev": "4cdbbf5",
+    "windows_checkout_state": "patch-applied; reported effective content tree matches the candidate, not a claim that HEAD itself equals the candidate commit",
+    "protected_files_unchanged": 6677
+  },
+  "provenance": {
+    "kind": "Windows executor reported result summaries",
+    "independently_reviewed_raw_logs": false,
+    "raw_artifacts_backed_up_by_this_commit": false,
+    "raw_logs_location_scope": "Windows only",
+    "summary_only": true,
+    "private_paths_and_internal_report_identifiers_omitted": true
+  },
+  "runs": [
+    {
+      "target": "panel",
+      "status": "FAILED",
+      "passed": 8,
+      "total": 9,
+      "error": "LivePanelTerminalRejected",
+      "elapsed_seconds": 166.667,
+      "seed": "0x7658d760",
+      "stop": {
+        "command": "Stop2",
+        "initially_accepted": true,
+        "terminal_result": "rejected.invalid_state",
+        "acknowledged": true
+      },
+      "fault": {
+        "frame": 97984,
+        "last_frame": 97983,
+        "cursor": 14144,
+        "layer": 1
+      },
+      "stderr": {
+        "sha256": "cfa150d91431ab5766296e57781f2476bb19774de0de9dca033bf4034a4559b8",
+        "bytes": null,
+        "published": false
+      },
+      "cleanup": {
+        "exact_close_counters_reported": false,
+        "residual_process_reported": false
+      }
+    },
+    {
+      "target": "chronology Debug",
+      "status": "FAILED",
+      "passed": 7,
+      "total": 8,
+      "failed_test": "Host",
+      "exit_code": 1,
+      "crashes": 0,
+      "fault": {
+        "frame": 59584,
+        "cursor": 13632,
+        "layer": 0
+      },
+      "reported_tail": [
+        {
+          "tick": 80,
+          "event": "no completion",
+          "frame": 59136
+        },
+        {
+          "tick": 81,
+          "job": 57,
+          "event": "accepted",
+          "reported_position_pair": [
+            60352,
+            60416
+          ]
+        },
+        {
+          "tick": 81,
+          "job": 58,
+          "event": "odd sequence 1891 then retry accepted",
+          "odd_sequence": 1891,
+          "reported_position_pair": [
+            60416,
+            60544
+          ]
+        }
+      ],
+      "stderr": {
+        "sha256": null,
+        "bytes": null,
+        "published": false
+      },
+      "cleanup": {
+        "opened": 16,
+        "closed": 16,
+        "live": 0,
+        "leases": 0,
+        "instances": 0,
+        "joined": true
+      }
+    },
+    {
+      "target": "chronology ReleaseSafe",
+      "status": "FAILED",
+      "passed": 7,
+      "total": 8,
+      "failed_test": "Host",
+      "exit_code": 1,
+      "crashes": 0,
+      "elapsed_seconds": 79.520092,
+      "seed": "0x2b40e757",
+      "fault": {
+        "frame": 34816,
+        "cursor": 11904,
+        "layer": 0
+      },
+      "reported_tail": {
+        "typed_defer_observed_in_last_three_ticks": false,
+        "events": [
+          {
+            "tick": 46,
+            "event": "no completion",
+            "frame": 34048
+          },
+          {
+            "event": "next accepted",
+            "frame": 35328,
+            "available": 0
+          }
+        ]
+      },
+      "stderr": {
+        "bytes": 376780,
+        "sha256": "b13f2e5748af3d5a4476569567096429c0f45760eccf28916ecb39783296c666",
+        "published": false
+      },
+      "cleanup": {
+        "opened": 16,
+        "closed": 16,
+        "live": 0,
+        "leases": 0,
+        "instances": 0,
+        "joined": true
+      }
+    }
+  ],
+  "interpretation": [
+    "All three reported acceptance runs completed and failed; no rerun is represented here.",
+    "A reported successful typed retry in Debug does not establish the fault cause or prove overall recovery.",
+    "No typed defer in the last three reported ReleaseSafe ticks is a bounded-tail observation, not proof that none occurred earlier.",
+    "Previous cloud successes remain limited to their documented platform, tree and scenarios; they do not override these Windows failures.",
+    "Reported hashes identify local raw logs but do not make those raw bytes externally recoverable. Missing metrics are not inferred."
+  ],
+  "actions_in_this_record": {
+    "source_changes": false,
+    "test_execution": false,
+    "windows_operations": false,
+    "raw_log_or_binary_upload": false
+  }
+}
