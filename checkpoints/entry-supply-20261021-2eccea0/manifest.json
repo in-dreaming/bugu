@@ -1,0 +1,62 @@
+{
+  "stage": "UNVERIFIED deterministic cold-entry progress baseline; expected causal assertion failure only after real recovery and cleanup",
+  "base_tree": "63994cdb520eb3ece4ac137a46a830bf96101340",
+  "command": [
+    "python",
+    "${RECOVERY_ROOT}/qualification/run_guarded.py",
+    "--repo",
+    "${RECOVERY_ROOT}/repo",
+    "--out",
+    "${RECOVERY_ROOT}/qualification/entry-supply-baseline-debug",
+    "--seconds",
+    "900",
+    "--",
+    "${RECOVERY_ROOT}/toolchains/zig-x86_64-linux-0.16.0/zig",
+    "build",
+    "sme-live-initial-entry-supply-test",
+    "-j1",
+    "-Doptimize=Debug",
+    "--summary",
+    "all"
+  ],
+  "timeout_seconds": 900,
+  "resource_bounds": {
+    "parallel_build_jobs": 1,
+    "start_disk_min_bytes": 3355443200,
+    "runtime_disk_floor_bytes": 2281701376,
+    "fixture_loop_iterations": 512,
+    "maximum_interventions": 4,
+    "actual_render_frames_per_intervention": 64
+  },
+  "expected": "Natural original Play preparation uses actual Provider/Worker/decode/admission. Only after four request-owned real acknowledged prefixes reach6144, before_stream_supply hook renders64 real frames for four bounded calls. Current source expected entry_supply/frame_mismatch; remove hook, recover original ticket, check1024 real four-stem PCM frames, Stop and actual cleanup, then desired-progress expects0 entry defers and is expected to fail4. Compile/fixture failure is not causal baseline; nonzero alone insufficient. No production edits, no buffer/capacity changes, no synthetic counters/PCM/admission.",
+  "limits": [
+    "Controlled single-owner causal fixture, not natural Windows scheduling reproduction.",
+    "Windows available6144 is known but actual acknowledged prefixes were not retained; this fixture acquires its own real receipt evidence.",
+    "Do not run whole live_tick suite or retry timing."
+  ],
+  "source_commit": "56e5213deee81ab7767382c0e4d401ffe1da7825",
+  "source_tree": "2eccea052197d2063605ae264c3ce49d646aab38",
+  "base_commit": "2f766bb8db0addb92c23d7a72e228b9b7ea9fd18",
+  "files": {
+    "source.patch": "49861008184201cfdcc90fb8c73290fb062008f21d935cbeca9b9af8cc10e6a1",
+    "run_guarded.py": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+  },
+  "pre_run_validation": [
+    "fmt/diff check and independent static review only; no compile or execution."
+  ],
+  "publication": {
+    "status": "UNVERIFIED",
+    "local_manifest_sha256": "3b181281cd770e5e424025fa4954878f85d209b8cdc30f51b435f02b41da5d57",
+    "path_binding": "Resolve ${RECOVERY_ROOT} to the recovered tree's parent directory. Public argv is path-parameterized, not a byte-identical local command.",
+    "runner": {
+      "commit": "93813b70910692c105d1ebf3d4754e6626fdf8a3",
+      "path": "checkpoints/baseline-retry-20261021-6327086/run_guarded.py",
+      "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+    },
+    "execution_requirements": [
+      "Use ordinary Python without -O/PYTHONOPTIMIZE; guards use assert.",
+      "An interruption with no terminal result is UNKNOWN, never pass.",
+      "Expected failure is causal evidence only if actual recovery, PCM, Stop and cleanup preconditions complete before the final assertion."
+    ]
+  }
+}
