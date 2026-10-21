@@ -1,0 +1,22 @@
+{
+  "exit": 1,
+  "stop_reason": null,
+  "elapsed_seconds": 32.1698862520002,
+  "source_guard_equal": true,
+  "minimum_free_bytes": 28759650304,
+  "stage": "baseline-retry-20261021-aa0726b",
+  "classification": "EXPECTED_CAUSAL_BASELINE_FAILURE",
+  "tests": {
+    "pass": 1,
+    "fail": 2,
+    "crash": 0
+  },
+  "evidence": {
+    "release_case": "Actual selected ready job and odd defer assertions passed; attempts1 accepted32->32 expected36. All4 visible prefixes stayed6272 after next real Render. Pending StreamFault frame6848 cursor6272 layer0, collectedfaultcount0 is stale.",
+    "hold_case": "Real Render held odd: original attempts1, candidate contract expects2.",
+    "empty_case": "Actual no_completion one attempt passed.",
+    "cleanup": "Tests terminated without panic/leak report; fixture executes real Render release/join and finishChronology. No Windows acceptance claim."
+  },
+  "log_sha256": "ecc29f897cacfabc60535a557f8cf1bceda88141b0dae595d37e794de620deb4",
+  "next_action": "Apply reviewed bounded retry runtime patch; checkpoint final source and plan before actual after-test."
+}
