@@ -1,0 +1,64 @@
+{
+  "stage": "UNVERIFIED test-only acceptance scan projection and actual text parser",
+  "base_tree": "78d48eed7e7fabf242a7a0572a944e2c13f2a656",
+  "command": [
+    "python",
+    "${RECOVERY_ROOT}/qualification/run_guarded.py",
+    "--repo",
+    "${RECOVERY_ROOT}/repo",
+    "--out",
+    "${RECOVERY_ROOT}/qualification/scan-state-debug",
+    "--seconds",
+    "900",
+    "--",
+    "env",
+    "-u",
+    "SME_DEFAULT_CONTROL_DELAY_MS",
+    "-u",
+    "SME_DEFAULT_WORKER_DELAY_MS",
+    "-u",
+    "SME_LIVE_SEMANTIC_MODE",
+    "-u",
+    "SME_LIVE_SEMANTIC_WORKLOAD",
+    "${RECOVERY_ROOT}/toolchains/zig-x86_64-linux-0.16.0/zig",
+    "build",
+    "sme-author-live-default-chronology-test",
+    "-j1",
+    "-Doptimize=Debug",
+    "--summary",
+    "all"
+  ],
+  "timeout_seconds": 900,
+  "resource_bounds": {
+    "parallel_build_jobs": 1,
+    "start_disk_min_bytes": 3355443200,
+    "runtime_disk_floor_bytes": 2281701376
+  },
+  "expected": "New projection/output parsing self-test and existing diagnostics must pass. Actual default Host integration runs once with unchanged PCM/runtime/cleanup oracles; failures preserved, no timing retries. No production change, no claim of Windows reproduction.",
+  "diagnostic_limits": "Sequential slot observations, noncoherent and nonglobal. 256-byte codes, unscanned slots255, explicit bounds/inconsistency. Fixed tail capacity unchanged, approximately64KiB additional owned storage and512hex chars per printed acceptance; output only after join. Additional copy can perturb timing.",
+  "source_commit": "2f766bb8db0addb92c23d7a72e228b9b7ea9fd18",
+  "source_tree": "63994cdb520eb3ece4ac137a46a830bf96101340",
+  "base_commit": "1d2fa7d90d3f62bd3523c389b518510003a23848",
+  "files": {
+    "source.patch": "b7f8e7a79bf7e1d936956d2aafa0b4b390ee841a1aef6f235f3e972561372217",
+    "run_guarded.py": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+  },
+  "validation_before_run": [
+    "Zig fmt and git diff --check only; no compile or native test yet.",
+    "Independent static review found no blocking issue."
+  ],
+  "publication": {
+    "status": "UNVERIFIED",
+    "local_manifest_sha256": "34f16ccdc0994710e37c7112eddd5c02e19ad6116f02f2f02560cece3fa55f9c",
+    "path_binding": "Resolve ${RECOVERY_ROOT} to the recovered tree's parent directory before execution. Public argv preserves argument ordering but is not a byte-identical copy of local absolute argv.",
+    "runner": {
+      "commit": "93813b70910692c105d1ebf3d4754e6626fdf8a3",
+      "path": "checkpoints/baseline-retry-20261021-6327086/run_guarded.py",
+      "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+    },
+    "execution_requirements": [
+      "Use ordinary Python without -O and without PYTHONOPTIMIZE, because guards use assert.",
+      "A missing terminal result after external environment/process loss is UNKNOWN, not pass; this runner cannot catch every interruption."
+    ]
+  }
+}
