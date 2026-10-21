@@ -1,0 +1,63 @@
+{
+  "source_commit": "9e0ccb49f39ed5eeebe4b8d030880726e7810721",
+  "source_tree": "088da407ad1d556f4c831778fe16742ef1a182fd",
+  "classification": "PASS_REAL_STDERR_TIMING_FIELDS_AND_RETAINED_ASSOCIATION_COVERAGE",
+  "execution": [
+    {
+      "exit": 0,
+      "elapsed_seconds": 0.036673877999419346,
+      "stderr": ""
+    },
+    {
+      "exit": 0,
+      "elapsed_seconds": 0.06991111199931765,
+      "stderr": ""
+    }
+  ],
+  "self_test": {
+    "synthetic_cases": 7,
+    "native_execution": false,
+    "scope": "lexical, timing fields, missing/error/optional validation; not full report fixture"
+  },
+  "raw_log_sha256": "890f31680c616a156a513c205df983c933fdb0db92cd3b3074e1326a3d277de4",
+  "full_local_report_sha256": "c6e4ee33fc32da3abb397c33b417e1bebefa115f37c5afcb28a8d3930a722f4e",
+  "parsed_reports": 1,
+  "retained_control_events": 256,
+  "retained_worker_events": 128,
+  "complete_chain_count": 10,
+  "usable_chain_count": 10,
+  "identity_mismatch_count": 0,
+  "retained_chain_orphans": 54,
+  "worker_timing_orphans": 0,
+  "completed_pair_invalid": 0,
+  "completed_nonmonotonic": 0,
+  "sample_counts": {
+    "absent": 236,
+    "usable": 148
+  },
+  "coverage": {
+    "incomplete": true,
+    "control_overwritten": 8725,
+    "worker_overwritten": 602,
+    "control_after_failure_omitted": 0,
+    "counter_exhausted": false,
+    "completeness_asserted": false,
+    "global_order": false
+  },
+  "storage_bytes": {
+    "before": 299160,
+    "after": 315640,
+    "added": 16480,
+    "control_tail_added": 6144,
+    "worker_tail_added": 10240,
+    "control_capacity": 256,
+    "worker_capacity": 128
+  },
+  "limitations": [
+    "Only retained diagnostic rows; overwrite, omission and missing identities limit coverage.",
+    "Only timing/association schema is checked; unrelated event payloads are not fully semantically validated.",
+    "Post-queue observation is after the real store; Worker begin may precede it. Signed deltas are not rejected.",
+    "Worker sample interval is not CPU time, sleep duration, store linearization, Render admission, or underrun causation.",
+    "No cross-role global order, native qualification or replay certificate is established."
+  ]
+}
