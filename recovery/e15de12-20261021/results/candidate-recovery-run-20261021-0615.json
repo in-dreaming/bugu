@@ -1,0 +1,153 @@
+{
+  "schema": 1,
+  "scope": "Source and minimal environment recovery after executor replacement; no new project build or test",
+  "completed_at_utc": "2026-10-21T06:15:54.913434Z",
+  "recipe_delivery_commit": "4677ad518e6a0ee2b268187d28936f03f942aecf",
+  "recipe_directory": "recovery/e15de12-20261021",
+  "recipe_file_sha256": {
+    "recovery-manifest.json": "b7fc11b60a0013fbd800fabffdd52205750e9fbbbf07586ff9feed87b4935227",
+    "restore_source.py": "822d5be02cbcc7175b60a34bf44135bb723c784dcd0ee411d161c988eb62bc67",
+    "restore_environment.py": "1a50347e4826e43f772abb2655165c4d79b644781785444f9db530976c83b441"
+  },
+  "source_base_restoration": {
+    "script": "restore_source.py",
+    "exit_code": 0,
+    "stdout_sha256": "cc81f527b84db1cd6f58383dbeeb4a94d8bc600572d3496bb167837973e21eba",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "verified_trees": [
+      {
+        "stage": "cb2c224",
+        "tree": "85b35b269e470ffb253b127d6b1ae9a7e7c3ecc0"
+      },
+      {
+        "stage": "4cdbbf5",
+        "tree": "b0e1334ea1030f9920ef1f84671b6736aa78d916"
+      },
+      {
+        "stage": "6f3fb3a",
+        "tree": "49098fa120fe090e3c81c320bca9161d16d749d1"
+      },
+      {
+        "stage": "6c154b8",
+        "tree": "6e2ad9f1b59a78257c06a5d7710d4ab2e24af58b"
+      },
+      {
+        "stage": "94f5907",
+        "tree": "7544c203628534da89cd65084e65163d272a6e8a"
+      },
+      {
+        "stage": "e15de12",
+        "tree": "9c726fe11f07af1936f365a6b9b505153be93709"
+      }
+    ]
+  },
+  "final_candidate": {
+    "source_candidate": "94d77ca",
+    "tree": "78d48eed7e7fabf242a7a0572a944e2c13f2a656",
+    "synthetic_commit": "1d2fa7d90d3f62bd3523c389b518510003a23848",
+    "base_synthetic_commit": "8428c72264570c0c6cd266683199ace55fcd699c",
+    "delivery_commit": "4677ad518e6a0ee2b268187d28936f03f942aecf",
+    "patch_sha256": "c53f2c09da22be36e0c193af9586f989136c83863992d1cb4c9850ec3fd115e8",
+    "verified_at_utc": "2026-10-21T06:13:56.216714+00:00",
+    "clean_worktree": true,
+    "build_or_tests_run": false,
+    "original_commit_history_restored": false,
+    "historical_elf_and_tape_originals_restored": false
+  },
+  "minimal_environment": {
+    "script": "restore_environment.py",
+    "execution": "Actual fresh installation with the exact persisted final script revision",
+    "exit_code": 0,
+    "stdout_sha256": "eff0a292269a564b70835b80023185bba117b0dabae71aff281431c64eed3096",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "zig_archive": {
+      "version": "0.16.0",
+      "platform": "x86_64-linux",
+      "url": "https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz",
+      "bytes": 55478392,
+      "sha256": "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00",
+      "binary_sha256": "2317bbb91798556d9d0f38aabdac23db83f0979b25f767259ae474546724087c"
+    },
+    "zig_version": "0.16.0",
+    "zig_binary_sha256": "2317bbb91798556d9d0f38aabdac23db83f0979b25f767259ae474546724087c",
+    "installed_toolchain_files_verified": 19546,
+    "dependencies": [
+      {
+        "path": "third_party/freetype",
+        "pin": "526ec5c47b9ebccc4754c85ac0c0cdf7c85a5e9b",
+        "licenses": [
+          "LICENSE.TXT"
+        ]
+      },
+      {
+        "path": "third_party/miniaudio",
+        "pin": "9634bedb5b5a2ca38c1ee7108a9358a4e233f14d",
+        "licenses": [
+          "LICENSE"
+        ]
+      },
+      {
+        "path": "third_party/ogg",
+        "pin": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+        "licenses": [
+          "COPYING"
+        ]
+      },
+      {
+        "path": "third_party/opus",
+        "pin": "22244de5a79bd1d6d623c32e72bf1954b56235be",
+        "licenses": [
+          "LICENSE_PLEASE_READ.txt",
+          "COPYING"
+        ]
+      },
+      {
+        "path": "third_party/unicodetools",
+        "pin": "ecd26be2e82be37609090942c14e518e57e905d8",
+        "licenses": [
+          "LICENSE"
+        ]
+      }
+    ],
+    "builds_or_tests_run": false,
+    "excluded_dependencies": [
+      "third_party/in_dreaming_gpu",
+      "third_party/noto_cjk"
+    ]
+  },
+  "historical_originals": {
+    "restored": false,
+    "recreated": false,
+    "exact_previous_locations_checked": true,
+    "absence_confirmed": [
+      {
+        "name": "retry-workload-tape-v3/exact-process-elf",
+        "bytes": 206810497,
+        "sha256": "a9f32cc5a392bf2618700e71ab3467b0fc62f69a17099559233fff50a56e2db5"
+      },
+      {
+        "name": "retry-workload-tape-v3/history.bin",
+        "bytes": 8605012,
+        "sha256": "3bee2242a969397bdea02e21b38f76f9cf538387471ccfb15102a908582cc6eb"
+      },
+      {
+        "name": "retry-workload-tape-v3/bank.bin",
+        "bytes": 1283976,
+        "sha256": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+      },
+      {
+        "name": "retry-occ52291-negative directory"
+      }
+    ]
+  },
+  "project_build_graph_run": false,
+  "project_build_or_tests_run": false,
+  "new_source_development_performed": false,
+  "limitations": [
+    "The final source content is exactly reconstructed; original commit objects and history are not restored.",
+    "The recovered source and newly installed toolchain are not historical process ELF/tape originals.",
+    "This recovery run does not rerun, supersede, or strengthen prior runtime/acceptance claims.",
+    "Only logs hashes are supplied here; no raw logs, private download links, credentials, Library identifiers, or local absolute paths are published.",
+    "Local reconstruction does not guarantee execution-environment persistence."
+  ]
+}
