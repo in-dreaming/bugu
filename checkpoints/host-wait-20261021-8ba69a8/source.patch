@@ -1,0 +1,512 @@
+diff --git a/tests/sme/author_live_default_chronology_test.zig b/tests/sme/author_live_default_chronology_test.zig
+index bde2e41..667ccd3 100644
+--- a/tests/sme/author_live_default_chronology_test.zig
++++ b/tests/sme/author_live_default_chronology_test.zig
+@@ -243,6 +243,92 @@ fn DiagnosticTail(comptime T: type, comptime capacity: usize) type {
+         }
+     };
+ }
++// Test-only passive Host sleep observations, not a scheduler or sleep-result
++// certificate. Each role exclusively owns its state until actual native joins.
++const WaitDiagnostics = struct {
++    const capacity = 64;
++    const Sample = struct { clock_ready: bool, clock: stream.OfflineClockSample };
++    const Observation = struct { point: live.TestWaitPoint, sample: Sample };
++    const Pair = struct {
++        id: ?u64 = null,
++        before: ?Observation = null,
++        after: ?Observation = null,
++        missing_before: bool = false,
++        missing_after: bool = false,
++        metadata_mismatch: bool = false,
++        pair_invalid: bool = false,
++        nonmonotonic: bool = false,
++    };
++    const RoleState = struct {
++        next_id: u64 = 0,
++        id_exhausted: bool = false,
++        pending: ?Pair = null,
++        tail: DiagnosticTail(Pair, capacity) = .{},
++        fn observe(self: *@This(), point: live.TestWaitPoint, sample: Sample) void {
++            const observation: Observation = .{ .point = point, .sample = sample };
++            if (point.edge == .before) {
++                if (self.pending) |pending| {
++                    var missing = pending;
++                    missing.missing_after = true;
++                    missing.pair_invalid = true;
++                    self.tail.append(missing);
++                }
++                var id: ?u64 = null;
++                if (self.next_id == std.math.maxInt(u64)) {
++                    self.id_exhausted = true;
++                } else {
++                    id = self.next_id;
++                    self.next_id += 1;
++                }
++                self.pending = .{ .id = id, .before = observation };
++            } else {
++                var pair = self.pending orelse Pair{ .missing_before = true };
++                pair.after = observation;
++                if (pair.before) |before| {
++                    var normalized = point;
++                    normalized.edge = .before;
++                    pair.metadata_mismatch = !std.meta.eql(before.point, normalized);
++                    const first = before.sample.clock;
++                    const last = sample.clock;
++                    pair.nonmonotonic = before.sample.clock_ready and sample.clock_ready and first.available and last.available and first.error_code == 0 and last.error_code == 0 and last.value < first.value;
++                }
++                pair.pair_invalid = pair.missing_before or pair.metadata_mismatch or pair.id == null;
++                self.tail.append(pair);
++                self.pending = null;
++            }
++        }
++    };
++    control: RoleState = .{},
++    worker: RoleState = .{},
++
++    fn writeAfterJoin(self: *const @This(), writer: *std.Io.Writer) std.Io.Writer.Error!void {
++        inline for (.{ "control", "worker" }) |role| {
++            const state = &@field(self, role);
++            try writer.print("DEFAULT_HOST_WAIT_TAIL schema=1 role={s}", .{role});
++            try FlatDiagnostic.fields(writer, "wait", .{
++                .capacity = capacity,
++                .retained = state.tail.len,
++                .next = state.tail.next,
++                .overwritten = state.tail.overwritten,
++                .tail_counter_exhausted = state.tail.counter_exhausted,
++                .next_id = state.next_id,
++                .id_exhausted = state.id_exhausted,
++                .pending = state.pending,
++                .completeness_asserted = false,
++                .units = @as(enum { ns }, .ns),
++                .interval_not_pure_sleep = true,
++                .after_not_sleep_success = true,
++            });
++            try writer.writeByte('\n');
++            for (0..state.tail.len) |i| {
++                const entry = state.tail.at(i);
++                try writer.print("DEFAULT_HOST_WAIT_EVENT schema=1 role={s} ordinal={d}", .{ role, entry.ordinal });
++                try FlatDiagnostic.fields(writer, "pair", entry.value);
++                try writer.writeByte('\n');
++            }
++        }
++    }
++};
+ const NativeDiagnostics = struct {
+     const control_capacity = 256;
+     const worker_capacity = 128;
+@@ -334,6 +420,21 @@ const NativeDiagnostics = struct {
+         first_control_failure: @FieldType(NativeDiagnostics, "first_control_failure"),
+         control_after_failure_omitted: u64,
+     };
++    // Exact previous passive-clock diagnostic layout, before wait tails.
++    const BeforeWaitDiagnostics = struct {
++        owner: ?*f.music.MusicRuntime,
++        service: ?*f.rt.streaming.Service,
++        installed: bool,
++        setup_failed: bool,
++        worker_identity_missing: u64,
++        diagnostic_clock: ?trace.metrics.Clock,
++        worker_timing: WorkerTiming,
++        worker_timing_orphans: u64,
++        control: ControlTail,
++        worker: WorkerTail,
++        first_control_failure: @FieldType(NativeDiagnostics, "first_control_failure"),
++        control_after_failure_omitted: u64,
++    };
+     const ControlTail = DiagnosticTail(ControlEvent, control_capacity);
+     const WorkerTail = DiagnosticTail(WorkerEvent, worker_capacity);
+     // Set on Control before worker_ready, then immutable. Service is installed
+@@ -346,6 +447,8 @@ const NativeDiagnostics = struct {
+     // Copied once by load Worker before load.completed release, immutable for
+     // Control thereafter. Same Clock/frequency/domain as native Worker samples.
+     diagnostic_clock: ?trace.metrics.Clock = null,
++    clock_ready: std.atomic.Value(bool) = .init(false),
++    waits: WaitDiagnostics = .{},
+     worker_timing: WorkerTiming = .{}, // Worker owned until genuine join.
+     worker_timing_orphans: u64 = 0,
+     control: ControlTail = .{},
+@@ -379,6 +482,7 @@ const NativeDiagnostics = struct {
+         }
+         self.service = service;
+         self.diagnostic_clock = service.clock;
++        self.clock_ready.store(true, .release);
+         service.test_worker_clock_observer = .{ .context = self, .observe = workerClock };
+         service.test_supply_hook = .{ .context = self, .call = supply };
+         service.test_supply_return_hook = .{ .context = self, .call = supplyReturn };
+@@ -386,6 +490,19 @@ const NativeDiagnostics = struct {
+         service.test_worker_stage_hook = .{ .context = self, .call = workerStage };
+         self.installed = true;
+     }
++    fn waitSample(self: *const NativeDiagnostics) WaitDiagnostics.Sample {
++        // Host startup waits can precede prepared. Never read Clock before HB.
++        const ready = self.clock_ready.load(.acquire);
++        return .{ .clock_ready = ready, .clock = if (ready) self.controlClock() else .{ .value = 0, .available = false } };
++    }
++    fn hostWait(raw: *anyopaque, point: live.TestWaitPoint) void {
++        const self: *NativeDiagnostics = @ptrCast(@alignCast(raw));
++        const sample = self.waitSample();
++        switch (point.role) {
++            .control => self.waits.control.observe(point, sample),
++            .worker => self.waits.worker.observe(point, sample),
++        }
++    }
+     fn position(self: *const NativeDiagnostics) Position {
+         const owner = self.owner.?;
+         return .{ .control_tick = owner.control.stream_control_tick, .input_order = owner.control.stream_input_order, .accepted_control_frame = owner.control.tick_v1.frame };
+@@ -565,6 +682,16 @@ const NativeDiagnostics = struct {
+             .control_tail_added_bytes = @sizeOf(ControlTail) - @sizeOf(DiagnosticTail(LegacyControlEvent, control_capacity)),
+             .worker_tail_added_bytes = @sizeOf(WorkerTail) - @sizeOf(DiagnosticTail(LegacyWorkerEvent, worker_capacity)),
+         });
++        try FlatDiagnostic.line(writer, "DEFAULT_HOST_WAIT_STORAGE", "storage", .{
++            .before_bytes = @sizeOf(BeforeWaitDiagnostics),
++            .after_bytes = @sizeOf(NativeDiagnostics),
++            .added_bytes = @sizeOf(NativeDiagnostics) - @sizeOf(BeforeWaitDiagnostics),
++            .pair_tails_bytes = @sizeOf(WaitDiagnostics),
++            .control_capacity = control_capacity,
++            .worker_capacity = worker_capacity,
++            .wait_capacity_per_role = WaitDiagnostics.capacity,
++        });
++        try self.waits.writeAfterJoin(writer);
+         try FlatDiagnostic.line(writer, "DEFAULT_HOST_EVENT_FAILURE", "failure", self.first_control_failure);
+         for (0..self.control.len) |i| try writeControlEvent(writer, self.control.at(i));
+         for (0..self.worker.len) |i| try writeWorkerEvent(writer, self.worker.at(i));
+@@ -907,6 +1034,7 @@ test "default Host without capture accepts cross-frame completions and preserves
+         .semantic = null,
+         .test_capture = null,
+         .test_worker_wait_ms = worker_delay_ms,
++        .test_wait_observer = .{ .context = diagnostics, .call = NativeDiagnostics.hostWait },
+         .test_before_worker = .{ .context = diagnostics, .call = NativeDiagnostics.beforeWorker },
+         .test_setup = .{ .context = probe, .call = Probe.install },
+         .test_tick_outcome = .{ .context = probe, .call = Probe.outcome },
+@@ -1428,3 +1556,151 @@ test "passive diagnostic timing preserves raw samples missing errors ordering an
+     const unavailable = diagnostics.controlClock();
+     try t.expect(!unavailable.available and unavailable.error_code == 0);
+ }
++
++test "Host passive wait diagnostics preserve raw pairs unavailable errors mismatch and bounded tails" {
++    const diagnostics = try a.create(NativeDiagnostics);
++    defer a.destroy(diagnostics);
++    diagnostics.* = .{};
++    const early = diagnostics.waitSample();
++    try t.expect(!early.clock_ready and !early.clock.available);
++    diagnostics.clock_ready.store(true, .release); // published null Clock, no engine.
++    const unavailable = diagnostics.waitSample();
++    try t.expect(unavailable.clock_ready and !unavailable.clock.available);
++    const before: live.TestWaitPoint = .{ .role = .worker, .edge = .before, .reason = .burst_budget, .calls = 4, .worked = 3, .requested_ms = 1 };
++    var after = before;
++    after.edge = .after;
++    const Sample = WaitDiagnostics.Sample;
++    const zero: Sample = .{ .clock_ready = true, .clock = .{ .value = 0, .available = true } };
++    const later: Sample = .{ .clock_ready = true, .clock = .{ .value = 19, .available = true } };
++    const failed: Sample = .{ .clock_ready = true, .clock = .{ .value = 0, .available = true, .error_code = 1 } };
++    const state = &diagnostics.waits.worker;
++    state.observe(before, early);
++    state.observe(after, unavailable);
++    state.observe(before, zero);
++    state.observe(after, later);
++    state.observe(before, later);
++    state.observe(after, zero); // raw backwards observation, no delta/clamp.
++    state.observe(before, failed);
++    var mismatch = after;
++    mismatch.requested_ms = 16;
++    state.observe(mismatch, later);
++    state.observe(after, later); // no before, no fabricated ID.
++    state.observe(before, zero);
++    state.observe(before, later); // missing after retained before replacement.
++    state.observe(after, failed);
++    state.next_id = std.math.maxInt(u64);
++    state.observe(before, zero);
++    state.observe(after, later);
++    try t.expectEqual(@as(usize, 8), state.tail.len);
++    try t.expect(state.id_exhausted);
++    try t.expect(state.tail.at(2).value.nonmonotonic);
++    try t.expect(state.tail.at(3).value.metadata_mismatch);
++    try t.expect(state.tail.at(4).value.missing_before);
++    try t.expect(state.tail.at(5).value.missing_after);
++    try t.expect(state.tail.at(7).value.id == null);
++    // Actual flat writer bytes round-trip every raw sample and reason flag.
++    var output: [262144]u8 = undefined;
++    var writer: std.Io.Writer = .fixed(&output);
++    try diagnostics.waits.writeAfterJoin(&writer);
++    const Parser = struct {
++        fn token(line: []const u8, key: []const u8) ![]const u8 {
++            var words = std.mem.tokenizeScalar(u8, line, ' ');
++            while (words.next()) |word| {
++                if (word.len > key.len and std.mem.startsWith(u8, word, key) and word[key.len] == '=') return word[key.len + 1 ..];
++            }
++            return error.MissingWaitField;
++        }
++        fn number(line: []const u8, key: []const u8) !u64 {
++            return std.fmt.parseInt(u64, try token(line, key), 10);
++        }
++        fn boolean(line: []const u8, key: []const u8) !bool {
++            const value = try token(line, key);
++            if (std.mem.eql(u8, value, "true")) return true;
++            if (std.mem.eql(u8, value, "false")) return false;
++            return error.InvalidWaitBoolean;
++        }
++        fn observation(line: []const u8, comptime key: []const u8, expected: ?WaitDiagnostics.Observation) !void {
++            try t.expectEqual(expected != null, try boolean(line, key ++ ".present"));
++            if (expected) |value| {
++                try t.expectEqual(value.sample.clock_ready, try boolean(line, key ++ ".sample.clock_ready"));
++                try t.expectEqual(value.sample.clock.value, try number(line, key ++ ".sample.clock.value"));
++                try t.expectEqual(value.sample.clock.available, try boolean(line, key ++ ".sample.clock.available"));
++                try t.expectEqual(value.sample.clock.error_code, try number(line, key ++ ".sample.clock.error_code"));
++                try t.expectEqualStrings(@tagName(value.point.reason), try token(line, key ++ ".point.reason"));
++                try t.expectEqual(value.point.requested_ms, try number(line, key ++ ".point.requested_ms"));
++                try t.expectEqual(value.point.calls, try number(line, key ++ ".point.calls"));
++                try t.expectEqual(value.point.worked, try number(line, key ++ ".point.worked"));
++                try t.expectEqual(value.point.failed, try number(line, key ++ ".point.failed"));
++            } else try t.expectEqualStrings("null", try token(line, key));
++        }
++    };
++    var lines = std.mem.splitScalar(u8, writer.buffered(), '\n');
++    var parsed: usize = 0;
++    while (lines.next()) |line| {
++        if (!std.mem.startsWith(u8, line, "DEFAULT_HOST_WAIT_EVENT ")) continue;
++        try t.expectEqualStrings("worker", try Parser.token(line, "role"));
++        const expected = state.tail.at(parsed);
++        try t.expectEqual(expected.ordinal, try Parser.number(line, "ordinal"));
++        try t.expectEqual(expected.value.id != null, try Parser.boolean(line, "pair.id.present"));
++        if (expected.value.id) |id| try t.expectEqual(id, try Parser.number(line, "pair.id")) else try t.expectEqualStrings("null", try Parser.token(line, "pair.id"));
++        try Parser.observation(line, "pair.before", expected.value.before);
++        try Parser.observation(line, "pair.after", expected.value.after);
++        inline for (.{ "missing_before", "missing_after", "metadata_mismatch", "pair_invalid", "nonmonotonic" }) |field| try t.expectEqual(@field(expected.value, field), try Parser.boolean(line, "pair." ++ field));
++        parsed += 1;
++    }
++    try t.expectEqual(state.tail.len, parsed);
++    var control_before = before;
++    control_before.role = .control;
++    var control_after = control_before;
++    control_after.edge = .after;
++    for (0..WaitDiagnostics.capacity + 2) |_| {
++        diagnostics.waits.control.observe(control_before, zero);
++        diagnostics.waits.control.observe(control_after, later);
++    }
++    try t.expectEqual(@as(usize, 64), diagnostics.waits.control.tail.len);
++    try t.expectEqual(@as(u64, 2), diagnostics.waits.control.tail.overwritten);
++    writer = .fixed(&output);
++    try diagnostics.waits.writeAfterJoin(&writer);
++    var overflow_lines = std.mem.splitScalar(u8, writer.buffered(), '\n');
++    const overflow_header = overflow_lines.next().?;
++    try t.expectEqual(@as(u64, 2), try Parser.number(overflow_header, "wait.overwritten"));
++    try t.expectEqual(@as(u64, 64), try Parser.number(overflow_header, "wait.retained"));
++    diagnostics.waits.control.observe(control_before, zero); // unfinished at join explicit.
++    diagnostics.waits.control.tail.next = std.math.maxInt(u64);
++    diagnostics.waits.control.observe(control_after, later);
++    try t.expect(diagnostics.waits.control.tail.counter_exhausted);
++    // Counter-exhaustion state is synthetic diagnostic-only; do not traverse it.
++    diagnostics.waits.control = .{};
++    diagnostics.waits.control.observe(control_before, zero);
++    writer = .fixed(&output);
++    try diagnostics.writeAfterJoin(&writer);
++    try FlatFixture.tokens(writer.buffered(), &.{ "wait.pending.present=true", "wait.completeness_asserted=false", "wait.interval_not_pure_sleep=true", "storage.wait_capacity_per_role=64", "storage.control_capacity=256", "storage.worker_capacity=128" });
++    var size_lines = std.mem.splitScalar(u8, writer.buffered(), '\n');
++    var found_size = false;
++    while (size_lines.next()) |line| {
++        if (!std.mem.startsWith(u8, line, "DEFAULT_HOST_WAIT_STORAGE ")) continue;
++        const added = try Parser.number(line, "storage.added_bytes");
++        try t.expectEqual(@sizeOf(NativeDiagnostics) - @sizeOf(NativeDiagnostics.BeforeWaitDiagnostics), added);
++        try t.expectEqual(@sizeOf(NativeDiagnostics), try Parser.number(line, "storage.after_bytes"));
++        found_size = true;
++        std.debug.print("DEFAULT_HOST_WAIT_STORAGE_TEST added={d} wait_capacity_per_role=64 control_capacity=256 worker_capacity=128\n", .{added});
++    }
++    try t.expect(found_size);
++}
++
++test "default fixture passive wait observer rejects semantic and legacy capture before owners" {
++    const Noop = struct {
++        fn call(_: *anyopaque, _: live.TestWaitPoint) void {}
++    };
++    var marker: u8 = 0;
++    var session: live.semantic.Session = .{};
++    // Deliberately uninitialized: options rejection precedes any capture borrow.
++    const capture = try a.create(live.TestCapture.Session);
++    defer a.destroy(capture);
++    const observer: live.TestWaitObserver = .{ .context = &marker, .call = Noop.call };
++    inline for (.{ @as(@FieldType(live.semantic.Session, "mode"), .capture), @as(@FieldType(live.semantic.Session, "mode"), .replay) }) |mode| {
++        session.mode = mode;
++        try t.expectError(error.InvalidState, live.Host.create(launch(&.{}), .{ .io = t.io, .device = .{ .backend = .null_backend }, .semantic = &session, .test_wait_observer = observer }));
++    }
++    try t.expectError(error.InvalidState, live.Host.create(launch(&.{}), .{ .io = t.io, .test_capture = capture, .test_wait_observer = observer }));
++}
+diff --git a/tools/sme_authoring/core/live_owner.zig b/tools/sme_authoring/core/live_owner.zig
+index 676a955..112a3be 100644
+--- a/tools/sme_authoring/core/live_owner.zig
++++ b/tools/sme_authoring/core/live_owner.zig
+@@ -27,6 +27,40 @@ pub const Launch = struct {
+ pub const TestSetup = struct { context: *anyopaque, call: *const fn (*anyopaque, *music.MusicRuntime) void };
+ pub const TestCapture = if (@import("builtin").is_test) @import("live_capture_private.zig") else struct {};
+ pub const TestTickOutcome = struct { context: *anyopaque, call: *const fn (*anyopaque, music.MusicRuntime.LiveControlTickOutcomeV1) void };
++/// Passive test observation of one existing wait invocation. Role-local pair
++/// and burst identifiers belong to the test collector, with explicit overflow.
++/// An after edge reports return from the existing catch, not successful sleep.
++pub const TestWaitPoint = struct {
++    role: enum { control, worker },
++    edge: enum { before, after },
++    reason: enum { startup, burst_budget, claim_deferred, park, gate_error, control_turn },
++    calls: u8 = 0,
++    /// Normal workerStep returns of true; never the catch fallback.
++    worked: u8 = 0,
++    /// workerStep errors only, not gate/ack errors or ordinary false returns.
++    failed: u8 = 0,
++    deferred: bool = false,
++    requested_ms: u8,
++};
++pub const TestWaitObserver = struct { context: *anyopaque, call: *const fn (*anyopaque, TestWaitPoint) void };
++const WaitProgress = struct {
++    value: if (@import("builtin").is_test) TestWaitPoint else void = if (@import("builtin").is_test) .{ .role = .worker, .edge = .before, .reason = .burst_budget, .requested_ms = 1 } else {},
++    inline fn reason(self: *WaitProgress, value: @FieldType(TestWaitPoint, "reason")) void {
++        if (comptime @import("builtin").is_test) self.value.reason = value;
++    }
++    inline fn failed(self: *WaitProgress) void {
++        if (comptime @import("builtin").is_test) self.value.failed += 1;
++    }
++    inline fn completed(self: *WaitProgress, worked: bool, deferred: bool) void {
++        if (comptime @import("builtin").is_test) {
++            // Exactly one update per returned call in the existing four-call loop.
++            self.value.calls += 1;
++            self.value.worked += @intFromBool(worked);
++            self.value.deferred = self.value.deferred or deferred;
++            if (deferred) self.value.reason = .claim_deferred;
++        }
++    }
++};
+ pub const Options = struct {
+     /// Borrowed thread-safe Io; must outlive both actual thread joins. Used only
+     /// for synchronous sleeps, never async work or device callback execution.
+@@ -53,6 +87,9 @@ pub const Options = struct {
+     test_retry_workload: if (@import("builtin").is_test) ?audio.runtime.streaming.stream.TestRetryWorkload else void = if (@import("builtin").is_test) null else {},
+     /// Test-only actual Worker polling delay; never changes Control or Audio.
+     test_worker_wait_ms: if (@import("builtin").is_test) u8 else void = if (@import("builtin").is_test) 1 else {},
++    /// Passive before/after wait callbacks. Install before threads start and
++    /// retain through both joins; no waits, I/O, or engine access in callbacks.
++    test_wait_observer: if (@import("builtin").is_test) ?TestWaitObserver else void = if (@import("builtin").is_test) null else {},
+     test_capture: if (@import("builtin").is_test) ?*TestCapture.Session else void = if (@import("builtin").is_test) null else {},
+     test_fault: enum { none, open, start_after_callback, loss_after_start, reopen_after_callback } = .none,
+ };
+@@ -150,6 +187,7 @@ pub const Host = struct {
+         if (options.device.sample_rate != 48_000 or options.device.channels != 2 or options.device.period_frames != 256 or options.device.output_layout_request != null) return error.UnsupportedDeviceConfiguration;
+         if (!@import("builtin").is_test and (options.test_fault != .none or (options.device.backend == .null_backend and options.semantic == null))) return error.TestOnly;
+         if (@import("builtin").is_test) if (options.test_worker_wait_ms != 1 and options.test_worker_wait_ms != 16) return error.InvalidState;
++        if (@import("builtin").is_test) if (options.test_wait_observer != null and (options.semantic != null or options.test_capture != null)) return error.InvalidState;
+         if (@import("builtin").is_test) if (options.test_retry_workload != null) {
+             const session = options.semantic orelse return error.InvalidState;
+             if (session.mode != .capture or options.device.backend != .null_backend or options.recovery != .close or options.test_after_live_acceptance != null) return error.InvalidState;
+@@ -561,7 +599,9 @@ pub const Host = struct {
+                 if (self.options.semantic) |session| session.emitWorker(.startup_aborted);
+                 return;
+             }
+-            self.waitWorkerTurn();
++            var startup_wait: WaitProgress = .{};
++            startup_wait.reason(.startup);
++            self.waitWorkerTurn(startup_wait);
+         }
+         // This pointer is never loaded or dereferenced again after a park ACK
+         // until a matching resume. Terminal stop takes precedence over resume.
+@@ -571,12 +611,14 @@ pub const Host = struct {
+             capture.config.worker.emit(capture.config.worker.context, .{ .ready_acquired = .{ .committed = capture.committed } });
+         var acknowledged: u64 = 0;
+         while (true) {
++            var wait_progress: WaitProgress = .{};
+             for (0..4) |_| {
+                 if (self.options.semantic) |session| session.emitWorker(.gate_poll);
+                 const action = self.gate.workerAction(self.launch_identity.epoch) catch |err| {
+                     if (@import("builtin").is_test) if (self.options.test_capture) |capture| capture.workerGate(.{ .action = err });
+                     if (self.options.semantic) |session| session.emitWorker(.{ .gate = .{ .action = err } });
+                     self.worker_error.store(@intFromError(err), .release);
++                    wait_progress.reason(.gate_error);
+                     break;
+                 };
+                 if (@import("builtin").is_test) if (self.options.test_capture) |capture| capture.workerGate(.{ .action = action });
+@@ -584,6 +626,7 @@ pub const Host = struct {
+                 switch (action) {
+                     .stop => return,
+                     .park => |seq| {
++                        wait_progress.reason(.park);
+                         if (seq != acknowledged) {
+                             if (@import("builtin").is_test) {
+                                 if (self.options.test_capture) |capture| {
+@@ -606,7 +649,8 @@ pub const Host = struct {
+                     },
+                     .work => {
+                         var deferred = false;
+-                        _ = self.workerStep(owner, &deferred) catch |err| blk: {
++                        const worked = self.workerStep(owner, &deferred) catch |err| blk: {
++                            wait_progress.failed();
+                             if (@import("builtin").is_test and self.worker_error.load(.acquire) == 0) {
+                                 std.debug.print("live Worker first error: {s}\n", .{@errorName(err)});
+                                 if (@errorReturnTrace()) |trace| std.debug.dumpErrorReturnTrace(trace);
+@@ -614,6 +658,7 @@ pub const Host = struct {
+                             self.worker_error.store(@intFromError(err), .release);
+                             break :blk false;
+                         };
++                        wait_progress.completed(worked, deferred);
+                         _ = self.worker_calls.fetchAdd(1, .release);
+                         var completion_failure: ?anyerror = null;
+                         if (self.options.semantic) |session| session.emitWorker(.{ .gate = .{ .completion_begin = .{ .call_id = session.worker_calls, .deferred = deferred } } });
+@@ -636,7 +681,7 @@ pub const Host = struct {
+                     },
+                 }
+             }
+-            self.waitWorkerTurn();
++            self.waitWorkerTurn(wait_progress);
+         }
+     }
+     fn workerStep(self: *Host, owner: *music.MusicRuntime, deferred: *bool) !bool {
+@@ -664,12 +709,29 @@ pub const Host = struct {
+         }
+         return outcome.worked;
+     }
+-    fn waitWorkerTurn(self: *Host) void {
++    fn observeWait(self: *Host, point: TestWaitPoint) void {
++        if (comptime @import("builtin").is_test) if (self.options.test_wait_observer) |observer|
++            observer.call(observer.context, point);
++    }
++    fn waitWorkerTurn(self: *Host, progress: WaitProgress) void {
+         const milliseconds = if (@import("builtin").is_test) self.options.test_worker_wait_ms else 1;
++        if (comptime @import("builtin").is_test) {
++            var point = progress.value;
++            point.requested_ms = milliseconds;
++            self.observeWait(point);
++        }
+         std.Io.sleep(self.options.io, .fromMilliseconds(milliseconds), .awake) catch {};
++        if (comptime @import("builtin").is_test) {
++            var point = progress.value;
++            point.requested_ms = milliseconds;
++            point.edge = .after;
++            self.observeWait(point);
++        }
+     }
+     fn waitTurn(self: *Host) void {
++        if (comptime @import("builtin").is_test) self.observeWait(.{ .role = .control, .edge = .before, .reason = .control_turn, .requested_ms = 1 });
+         std.Io.sleep(self.options.io, .fromMilliseconds(1), .awake) catch {};
++        if (comptime @import("builtin").is_test) self.observeWait(.{ .role = .control, .edge = .after, .reason = .control_turn, .requested_ms = 1 });
+     }
+     fn replayFailed(self: *const Host) bool {
+         const session = self.options.semantic orelse return false;
+@@ -1775,3 +1837,23 @@ const CaptureAdapter = if (@import("builtin").is_test) struct {
+         capture.config.control.emit(capture.config.control.context, .worker_joined);
+     }
+ } else struct {};
++
++test "passive wait observer cannot attach to semantic or legacy capture options" {
++    const t = std.testing;
++    const Noop = struct {
++        fn call(_: *anyopaque, _: TestWaitPoint) void {}
++    };
++    var marker: u8 = 0;
++    var session: semantic.Session = .{};
++    // The options gate must reject before dereferencing legacy capture, parsing
++    // a bank, allocating a Host, or creating a native thread.
++    const capture = try t.allocator.create(TestCapture.Session);
++    defer t.allocator.destroy(capture);
++    const invalid: Launch = .{ .document_id = 1, .revision = 1, .draft_hash = @splat(0), .state = @enumFromInt(1), .compiled = &.{} };
++    const observer: TestWaitObserver = .{ .context = &marker, .call = Noop.call };
++    inline for (.{ @as(@FieldType(semantic.Session, "mode"), .capture), @as(@FieldType(semantic.Session, "mode"), .replay) }) |mode| {
++        session.mode = mode;
++        try t.expectError(error.InvalidState, Host.create(invalid, .{ .io = t.io, .device = .{ .backend = .null_backend }, .semantic = &session, .test_wait_observer = observer }));
++    }
++    try t.expectError(error.InvalidState, Host.create(invalid, .{ .io = t.io, .test_capture = capture, .test_wait_observer = observer }));
++}

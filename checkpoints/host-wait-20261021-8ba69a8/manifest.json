@@ -1,0 +1,81 @@
+{
+  "stage": "UNVERIFIED passive Host wait boundary diagnostic, single cloud Debug validation",
+  "source_commit": "e09b38df925020f5877e0ed637d75fad5ea3e681",
+  "source_tree": "8ba69a82caabe29ed9a6a55566d90969497b110a",
+  "command": [
+    "python",
+    "${RECOVERY_ROOT}/qualification/run_guarded.py",
+    "--repo",
+    "${RECOVERY_ROOT}/repo",
+    "--out",
+    "${RECOVERY_ROOT}/qualification/host-wait-debug-01",
+    "--seconds",
+    "900",
+    "--",
+    "env",
+    "-u",
+    "SME_LIVE_ADMISSION_TAPE",
+    "-u",
+    "SME_LIVE_ADMISSION_IDENTITY_JSON",
+    "-u",
+    "SME_LIVE_SEMANTIC_MODE",
+    "-u",
+    "SME_LIVE_SEMANTIC_DIR",
+    "-u",
+    "SME_LIVE_SEMANTIC_WORKLOAD",
+    "-u",
+    "SME_LIVE_SEMANTIC_WRITER",
+    "-u",
+    "SME_LIVE_SEMANTIC_FAIL_AFTER",
+    "-u",
+    "SME_LIVE_SEMANTIC_REQUIRE_CROSS_FRAME",
+    "-u",
+    "SME_DEFAULT_CONTROL_DELAY_MS",
+    "-u",
+    "SME_DEFAULT_WORKER_DELAY_MS",
+    "${RECOVERY_ROOT}/toolchains/zig-x86_64-linux-0.16.0/zig",
+    "build",
+    "sme-author-live-default-chronology-test",
+    "sme-author-live-production-check",
+    "-j1",
+    "-Doptimize=Debug",
+    "--summary",
+    "all"
+  ],
+  "timeout_seconds": 900,
+  "resource_bounds": {
+    "parallel_build_jobs": 1,
+    "start_disk_min_bytes": 3355443200,
+    "runtime_disk_floor_bytes": 2281701376
+  },
+  "runner_sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+  "expected": "Existing exact default Host oracle plus new fixed wait-pair serialization and semantic/capture preowner rejection self-tests; production compile. No changed sleeps, loops, buffers or supply policy. Independent static review passed.",
+  "limitations": [
+    "A wait observation interval includes callback/timing/scheduling costs; it is not pure kernel sleep or CPU time.",
+    "No new Worker service clock samples; Host wait observer adds test-only same-source reads safely after clock_ready publication. Before publication it records unavailable without reading clock.",
+    "Two new role-private tails each hold at most64 wait pairs plus pending; original Control256/Worker128 event tails unchanged. Overwrite/missing/counter exhaustion/nonmonotonic samples remain explicit.",
+    "No Windows execution, new recording, retries or notification policy. Old sustained faults and fresh replay mismatch remain unchanged."
+  ],
+  "environment_policy": "Explicitly unset recorded semantic/admission environment names and both default delays. The prior runner subprocess environment does not mutate the parent. Before execution verify no extra SME_LIVE_SEMANTIC_* or SME_LIVE_ADMISSION_* names in parent; if present update and refreeze plan, do not silently run.",
+  "base_commit": "9e0ccb49f39ed5eeebe4b8d030880726e7810721",
+  "base_tree": "088da407ad1d556f4c831778fe16742ef1a182fd",
+  "files": {
+    "source.patch": "061f507d7333e6d8072459ff457865fea4bfa50cf857b6cb08b63cdbd29a6c8e"
+  },
+  "publication": {
+    "status": "UNVERIFIED",
+    "local_manifest_sha256": "5be780e01ea86300b6d55f5a3f6c9ec01cab91f4f659620d07194fc650d50716",
+    "path_binding": "Resolve ${RECOVERY_ROOT} to the recovered tree's parent directory. Public argv is parameterized and not byte-identical to the local absolute argv.",
+    "runner": {
+      "commit": "93813b70910692c105d1ebf3d4754e6626fdf8a3",
+      "path": "checkpoints/baseline-retry-20261021-6327086/run_guarded.py",
+      "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+    },
+    "execution_requirements": [
+      "Use ordinary Python without -O/PYTHONOPTIMIZE.",
+      "An external interruption without a terminal result is UNKNOWN, not pass.",
+      "Only source and the bounded cloud plan are stored here. Results and any separately reviewed output-inspection plan must be preserved independently.",
+      "No Windows run is authorized by this cloud checkpoint."
+    ]
+  }
+}
