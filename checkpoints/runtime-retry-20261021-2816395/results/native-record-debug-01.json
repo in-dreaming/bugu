@@ -1,0 +1,61 @@
+{
+  "exit": 1,
+  "stop_reason": null,
+  "elapsed_seconds": 27.161145296000086,
+  "source_guard_equal": true,
+  "minimum_free_bytes": 28350623744,
+  "stage": "runtime-retry-20261021-2816395/native-record-debug-01",
+  "classification": "NATIVE_CAPTURE_REJECTED_CONTROL_LANE_OVERFLOW_NO_SEALED_TAPE",
+  "tests": {
+    "passed": 7,
+    "failed": 1,
+    "total": 8
+  },
+  "evidence": {
+    "submitted_frames": 30720,
+    "control_queued_bytes": 4191528,
+    "control_peak_records": 12890,
+    "control_lane_poison": "overflow",
+    "controlled_cross_frame": {
+      "classification": "controlled",
+      "used": true,
+      "pause_exit": "callbacks_observed",
+      "tick": 58,
+      "first_frame": 4352,
+      "same_tick_acceptance": true,
+      "later_frame_or_zero": 4864,
+      "callback_returns_before": 17,
+      "callback_returns_after": 19,
+      "multi_frame_ticks": 4
+    },
+    "cleanup": {
+      "worker_joined": true,
+      "source_opened": 16,
+      "source_closed": 16,
+      "source_live": 0,
+      "leases": 0,
+      "instances": 0
+    }
+  },
+  "artifacts": {
+    "exact-process-elf": {
+      "bytes": 169189596,
+      "sha256": "6489333f8b74838481905eab81a8016095de3e24191cc4fa3706e3cebfc815d5"
+    },
+    "history.incomplete.bin": {
+      "bytes": 15400960,
+      "sha256": "444c1f5a7338bd46beb7ff2a92cf90b2bd304668c69916910597051222ad8b68"
+    },
+    "controlled-cross-frame.json": {
+      "bytes": 241,
+      "sha256": "2952d64b48106d034424d76f48343a47b74d2d69dcede81e6ce3bca8bb37ef0d"
+    }
+  },
+  "log_sha256": "1b9f3446822cc43c3bd885f34ac9d7246a6dfeb16e17b0f59bd1ebce500a4997",
+  "limitations": [
+    "No sealed history.bin; no fresh replay possible.",
+    "No retry coverage assertion from incomplete tape.",
+    "Existing long workload duration/recorder limits unchanged; no timing rerun or capacity expansion."
+  ],
+  "next_action": "Persist rejection. Assess separate explicit narrow retry workload; retain original long-test assertions and failure."
+}
