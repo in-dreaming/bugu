@@ -1,0 +1,61 @@
+{
+  "classification": "CONTROLLED_INITIAL_ENTRY_CAUSAL_AND_ELIGIBILITY_PASS",
+  "source_commit": "5dc8a31344e391142c6a0403c3bd49e9aca88840",
+  "source_tree": "1dafd4a23dc8da1f1a400ddac020751a79e8552c",
+  "result": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 24.17245772699971,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 28287033344
+  },
+  "tests": {
+    "pass": 54,
+    "fail": 0,
+    "crash": 0,
+    "codec_map_pass": 52,
+    "entry_supply_pass": 2
+  },
+  "causal": {
+    "interventions": 1,
+    "actual_render_frames": 64,
+    "entry_defers": 0,
+    "acknowledged_prefix_each": 6144,
+    "background_defer_count": 1,
+    "actual_pending_original_ticket": true,
+    "valid_block": true,
+    "preparing_null": true,
+    "loop_end": "terminal",
+    "hook_enabled_at_terminal": true,
+    "executed_while_enabled": true,
+    "terminal_count": 1,
+    "stopped": true,
+    "oracle_pcm_frames": 1024,
+    "pcm_ok": true
+  },
+  "negative_qualification": {
+    "no_worker_waits": true,
+    "real_produced_without_render_ack_waits": true,
+    "wrong_request_rejected": true,
+    "stale_tick_rejected": true,
+    "pending_rejected": true,
+    "active_rejected": true,
+    "executed_rejected": true,
+    "recovery_pcm_frames": 1024,
+    "stopped": true
+  },
+  "both_cleanup": {
+    "opened": 16,
+    "closed": 16,
+    "live_sources": 0,
+    "sample_leases": 0,
+    "instances": 0,
+    "worker_joined": true
+  },
+  "limits": [
+    "Controlled real Render/Worker/Control fixture, not Windows scheduling reproduction.",
+    "No native record/fresh replay qualification on this source yet.",
+    "Windows continuous-playback underrun root cause remains separate and unresolved.",
+    "Prior red baseline and two candidate failed stages retained."
+  ]
+}
