@@ -1,0 +1,41 @@
+{
+  "exit": 0,
+  "stop_reason": null,
+  "elapsed_seconds": 275.3608436710001,
+  "source_guard_equal": true,
+  "minimum_free_bytes": 27133743104,
+  "classification": "RELEASESAFE_DEFAULT_CHRONOLOGY_AND_MODE_PASS",
+  "source_commit": "94d77ca413ef1e99207aed79ec57948bf06df610",
+  "source_tree": "78d48eed7e7fabf242a7a0572a944e2c13f2a656",
+  "tests_passed": 11,
+  "targets": {
+    "sme-author-live-default-chronology-test": 8,
+    "sme-author-live-default-mode-test": 3
+  },
+  "chronology": {
+    "tick": 29,
+    "first_frame": 2048,
+    "later_frame": 2560,
+    "callbacks_before": 8,
+    "callbacks_after": 10,
+    "inputs": 710,
+    "schedule": 16,
+    "request_matches": 2,
+    "executed": 2,
+    "capture": "unavailable"
+  },
+  "pcm": {
+    "frames": 35072,
+    "audible": 33024,
+    "nonzero": 33010,
+    "ramp": 32,
+    "silence_after": 352,
+    "all_four_stems": true
+  },
+  "log_sha256": "9455de04171b3f1af650fefbfced666c73c96e628198d8c0cf58f2421a68cce8",
+  "limitations": [
+    "Existing controlled cross-frame pause is retained, but no new retry workload installed.",
+    "Fixed-tail diagnostics are incomplete and not a global causal ordering certificate.",
+    "Windows acceptance remains pending; no claim of sustained throughput qualification."
+  ]
+}
