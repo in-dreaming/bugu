@@ -1,0 +1,17 @@
+{
+  "script_sha256": "b5b0285d37d7f1c2b25e14e78b207d28a66c66949695069445a050fa5cb8f09b",
+  "source_schema_sha256": {
+    "tools/sme_authoring/core/live_semantic_codec.zig": "78ab7e666a211b3fd055a4f960635db48c842d5d574248ce697b90adaa7d570f",
+    "src/music/live_semantic_format.zig": "a386989322e60c1e18fb948961d514855ddcd759f88f3883cc85c3ba3cc4b3c0",
+    "src/streaming/music_stream.zig": "7c61a2029d0710fd75c351b1248b0b4f8ca70c47e1b9e612047175be456e85f3",
+    "src/streaming/acceptance_observation.zig": "be73a6389c108dcc84995539df3892bc67351e4bde4c72ec0d50d55b5771486e",
+    "src/streaming/ring.zig": "3849e93a4325a1818a84926ec7b617a1bffc5f89731b73fc7f21db08a1875d6a",
+    "src/streaming/visibility.zig": "d5932377a5b96253685962ebd756f37da74a25455bac2e11a60920c3d277f4c7",
+    "src/music/trace_schema.zig": "e6e115892897949da5623e2119267d53c1fb3aca2ec5bf14330cbfc353bc9909",
+    "src/music/trace_readiness.zig": "d96757782d0311eae36fc6a502054a46fa36b96b480418bbe3be3a0997563979"
+  },
+  "selfcheck": "selftest_retry_inspector.py: synthetic complete two-acceptance tape with one pair and exact selected hash byte offsets; 4 envelope corruptions rejected. Not native evidence.",
+  "limitations": "Not a full semantic validator or native coverage proof",
+  "review": "Independent field-order/schema review complete; fixed original-file bytes shadowing in pair loop.",
+  "source_note": "Updated against current four-file workload wiring freeze on 2026-10-21; workload hook fields do not enter canonical Acceptance wire schema. Final git tree identity is supplied by central checkpoint, not inferred here."
+}

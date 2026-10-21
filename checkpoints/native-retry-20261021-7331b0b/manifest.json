@@ -1,0 +1,94 @@
+{
+  "stage": "UNVERIFIED explicit short controlled retry native capture",
+  "original_source": "e15de1243d23fa67449674ab75fcebe735e9840d",
+  "base_tree": "28163955b35b0fc304055574b2ea069c9615f378",
+  "synthetic_base": "36d4e6c97cd9cc6a099ae273b7655a1fd3a335d1",
+  "source_commit": "3ef2fd8d66006725650052b143a5c64f80ebce9a",
+  "source_tree": "7331b0b3ca7771308ed777f87bef477a7bc6ec77",
+  "timeout_seconds": 900,
+  "resource_bounds": {
+    "parallel_build_jobs": 1,
+    "start_disk_min_bytes": 3355443200,
+    "runtime_disk_floor_bytes": 2281701376,
+    "test_barrier_seconds": 5
+  },
+  "expected_baseline": "Expected controlled_retry report and sealed history with native retry pair. Production compile and negative option/cancel tests must pass. Fresh process strict replay not claimed until separate same-ELF stage.",
+  "files": {
+    "src/music/resident_runtime.zig": "67fc65a19f1fcac1afc45b0f626fc0b12e52d9cadd351d1e691530131865fcf9",
+    "src/runtime/runtime.zig": "5a9c02497d29ec6e0c39932148421d8d45186b9c0e0c187aa6184c70a43920d4",
+    "src/streaming/music_stream.zig": "7c61a2029d0710fd75c351b1248b0b4f8ca70c47e1b9e612047175be456e85f3",
+    "tests/sme/semantic_live_process_test.zig": "613a89b6c1c028e30b33f5d118232aa19cf86601507e75575ca731f60bc35013",
+    "tools/sme_authoring/core/live_owner.zig": "021d2df20ff3b1490dfd965d5b07f5ab88e8ea56a1572e9f38894b2c6ce28822"
+  },
+  "checkpoint_files": {
+    "run_guarded.py reused": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+    "source.patch": "92b709928046ffa465ce363b9411fcf511db0f9b6ca66bb051a99fcb8ee1f241",
+    "inspect_retry_tape.py": "b5b0285d37d7f1c2b25e14e78b207d28a66c66949695069445a050fa5cb8f09b",
+    "selftest_retry_inspector.py": "4e5368514d4fa803f486715c9a49cd7861069e5b7a5517a7968d1f9acc05353d",
+    "inspect_retry_tape.manifest.json": "74fb517070769934138f4c6679338adce36092876256d5a02b87b24711fd9fca"
+  },
+  "base_commit": "5b7ed9ad97dda2e6068c7ed38580d2acc5e228d2",
+  "corrections": "Explicit test-only capture/null/close-only handshake using real queued/Worker completed/Render odd/even/actual acceptance facts. No wire or recorder capacity change; original long>=32768 untouched. New short retry requires same incoming failed odd then successful second acceptance, actual descriptor-hash admission,8192 submitted frames afterwards, actual Stop/Close. Independent24576 frame bound.",
+  "command_template": [
+    "python",
+    "${CHECKPOINT_DIR}/run_guarded.py",
+    "--repo",
+    "${SOURCE_REPO}",
+    "--out",
+    "${OUTPUT_DIR}",
+    "--seconds",
+    "900",
+    "--",
+    "env",
+    "SME_LIVE_SEMANTIC_MODE=record",
+    "SME_LIVE_SEMANTIC_DIR=${TAPE_DIR}",
+    "SME_LIVE_SEMANTIC_WRITER=stream",
+    "SME_LIVE_SEMANTIC_WORKLOAD=retry",
+    "${ZIG_BIN}",
+    "build",
+    "sme-live-semantic-process-test",
+    "sme-author-live-production-check",
+    "-j1",
+    "-Doptimize=Debug",
+    "--summary",
+    "all"
+  ],
+  "status": "UNVERIFIED_PLANNED_NOT_RUN",
+  "cwd_template": "${SOURCE_REPO}",
+  "result_policy": {
+    "source_snapshot_is_not_validation": true,
+    "failed_baseline_assertions_remain_failed": "Confirming an expected baseline defect requires the specific retained runtime evidence, not merely a nonzero exit.",
+    "timeout_or_external_interruption": "unknown",
+    "missing_final_result": "unknown",
+    "source_changed_during_run": "invalid qualification",
+    "before_start": "not_run",
+    "raw_logs_and_private_environment_paths": "Do not publish; retain public technical summaries and evidence hashes only."
+  },
+  "runner_source": {
+    "delivery_commit": "93813b70910692c105d1ebf3d4754e6626fdf8a3",
+    "path": "checkpoints/baseline-retry-20261021-6327086/run_guarded.py",
+    "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+  },
+  "path_parameters": {
+    "CHECKPOINT_DIR": "Directory containing the unchanged runner retrieved from runner_source. Not necessarily this increment's directory.",
+    "SOURCE_REPO": "Restored and patched repository at the exact source_tree above.",
+    "OUTPUT_DIR": "New, nonexistent per-run output directory.",
+    "ZIG_BIN": "Verified Zig 0.16.0 Linux x86_64 binary pinned by the recovery manifest.",
+    "TAPE_DIR": "New, dedicated native recording directory retained locally for separately planned fresh-process replay. Raw tape and bank bytes are not published here."
+  },
+  "provenance": {
+    "local_run_manifest_sha256": "a6076fcf30c080b2064dcfde71275f9fd561744d0948328f172cd0b4f4b418d3",
+    "public_manifest_transformation": "Absolute execution locations are parameterized and explanatory metadata is added; public command is a template, not the byte-identical local argv. Zig arguments and resource bounds are unchanged.",
+    "inspection_tools": "Pure-text inspector and synthetic selfcheck are preserved byte-for-byte. They are not the authoritative native replay validator; checkpointing them is not a test result."
+  },
+  "source_chain_parent": {
+    "delivery_commit": "8191e34f7223368f2562ba480948bec4fbd67747",
+    "path": "checkpoints/source-chain-2816395.json"
+  },
+  "single_attempt_only": true,
+  "long_workload_failure_retained": {
+    "delivery_commit": "e5c3165d851aab7d9c14d6b563013bde7a93c384",
+    "path": "checkpoints/runtime-retry-20261021-2816395/results/native-record-debug-01.json"
+  },
+  "validation_scope": "Separate short controlled retry workload, not replacement for the failed long recording, natural timing or Windows acceptance."
+}

@@ -1,0 +1,559 @@
+diff --git a/src/music/resident_runtime.zig b/src/music/resident_runtime.zig
+index 9f34a2e..e487ce3 100644
+--- a/src/music/resident_runtime.zig
++++ b/src/music/resident_runtime.zig
+@@ -1039,6 +1039,7 @@ pub const MusicRuntime = struct {
+     /// Raw clocks are inputs; Service.replay_mode remains false. No recorded
+     /// plan/readiness/result may be installed through this binding.
+     pub fn attachLiveSemanticReplayV1(self: *MusicRuntime, hooks: rt.streaming.stream.LiveSemanticHooks) !void {
++        if (@import("builtin").is_test) if (hooks.test_retry_workload != null) return error.InvalidMode;
+         const offline_clock = hooks.clock orelse return error.InvalidMode;
+         try offline_clock.validateInitial();
+         return self.attachLiveSemanticOwnedV1(hooks);
+diff --git a/src/runtime/runtime.zig b/src/runtime/runtime.zig
+index d5502a4..10377b3 100644
+--- a/src/runtime/runtime.zig
++++ b/src/runtime/runtime.zig
+@@ -1980,6 +1980,7 @@ pub const ControlRuntime = struct {
+             var acceptance_finished = false;
+             defer {
+                 if (sink) |value| value.emit(value.context, &attempt, self.tick_v1.frame);
++                if (@import("builtin").is_test) service.testRetryWorkload(.{ .after_attempt = .{ .attempt = &attempt, .effective_frame = self.tick_v1.frame, .finished = acceptance_finished } });
+                 // Service initializes attempt before every return, including
+                 // null/defer/error. This observer cannot supply engine values.
+                 if (@import("builtin").is_test) if (self.test_live_acceptance_attempt) |hook|
+@@ -1990,6 +1991,7 @@ pub const ControlRuntime = struct {
+                 if (@import("builtin").is_test) if (acceptance_finished) if (self.test_after_live_acceptance) |hook|
+                     hook.call(hook.context, position.control_tick, self.tick_v1.frame);
+             }
++            if (@import("builtin").is_test) service.testRetryWorkload(.{ .before_attempt = position });
+             const accepted = service.acceptCompletedLiveV1(position, self.scheduled.next_batch_id, &attempt) catch {
+                 self.stream_input_overflow +|= 1;
+                 self.stream_input_evidence_failures +|= 1;
+diff --git a/src/streaming/music_stream.zig b/src/streaming/music_stream.zig
+index de47c80..c350c6b 100644
+--- a/src/streaming/music_stream.zig
++++ b/src/streaming/music_stream.zig
+@@ -271,15 +271,33 @@ pub const LiveSemanticConsumeCheckpoint = struct {
+     context: *anyopaque,
+     checkpoint: *const fn (*anyopaque, ConsumedCheckpoint) void,
+ };
++/// Explicit capture-only controlled workload. Not an engine-result channel.
++/// Context is immutable and pinned until genuine Worker/Render joins. Only
++/// the test coordinator may wait, with bounded cancellation, at rendezvous
++/// events; queue_before and worker_completed are notification-only.
++pub const TestRetryWorkloadEvent = union(enum) {
++    queue_before: struct { job: u64, handle: Handle },
++    worker_completed: struct { job: u64, outcome: trace.schema.Readiness },
++    before_attempt: trace.schema.Position,
++    after_attempt: struct { attempt: *const LiveAcceptanceAttemptV1, effective_frame: u64, finished: bool },
++    render_odd: u64,
++    render_even: u64,
++};
++pub const TestRetryWorkload = struct {
++    context: *anyopaque,
++    call: *const fn (*anyopaque, TestRetryWorkloadEvent) void,
++};
+ pub const LiveSemanticHooks = struct {
+     cuts: live_semantic.Binding,
+     worker_facts: ?WorkerFactSink = null,
+     source: ?SourceFactSink = null,
+     clock: ?*live_semantic.OfflineClock = null,
+     consume: ?LiveSemanticConsumeCheckpoint = null,
++    test_retry_workload: if (@import("builtin").is_test) ?TestRetryWorkload else void = if (@import("builtin").is_test) null else {},
+     pub fn same(a: LiveSemanticHooks, b: LiveSemanticHooks) bool {
+         return live_semantic.Binding.same(a.cuts, b.cuts) and std.meta.eql(a.worker_facts, b.worker_facts) and
+-            std.meta.eql(a.source, b.source) and a.clock == b.clock and std.meta.eql(a.consume, b.consume);
++            std.meta.eql(a.source, b.source) and a.clock == b.clock and std.meta.eql(a.consume, b.consume) and
++            (if (@import("builtin").is_test) std.meta.eql(a.test_retry_workload, b.test_retry_workload) else true);
+     }
+ };
+ 
+@@ -1256,6 +1274,8 @@ pub const Service = struct {
+         const queued_descriptor = job.descriptor;
+         self.offline(.job_queued, .before, job_index, queued_descriptor.job, @intFromEnum(State.queued));
+         self.orderCheckpoint(.control, .job_queued, .before, job_index, queued_descriptor.job, @intFromEnum(State.queued));
++        // All descriptor fields are initialized. No Worker can see queued yet.
++        if (@import("builtin").is_test) self.testRetryWorkload(.{ .queue_before = .{ .job = queued_descriptor.job, .handle = handle } });
+         job.state.store(.queued, .release);
+         self.orderCheckpoint(.control, .job_queued, .after, job_index, queued_descriptor.job, @intFromEnum(State.queued));
+         self.offline(.job_queued, .after, job_index, queued_descriptor.job, @intFromEnum(State.queued));
+@@ -1374,6 +1394,7 @@ pub const Service = struct {
+         };
+         const end = self.workerClock(.end, job.descriptor.job);
+         job.elapsed_ns = if (begin != 0 and end > begin) end - begin else 0;
++        const completed_outcome = if (@import("builtin").is_test) job.outcome else {};
+         completed_id = job.descriptor.job;
+         self.offline(.worker_completed, .before, best_index, completed_id, @intFromEnum(State.completed));
+         self.orderCheckpoint(.worker, .worker_completed, .before, best_index, completed_id, @intFromEnum(State.completed));
+@@ -1382,6 +1403,7 @@ pub const Service = struct {
+         self.offline(.worker_completed, .after, best_index, completed_id, @intFromEnum(State.completed));
+         // Control can now return/reuse the slot. Only copied identity survives.
+         self.workerFact(.{ .completed = .{ .job = completed_id, .slot = best_index } });
++        if (@import("builtin").is_test) self.testRetryWorkload(.{ .worker_completed = .{ .job = completed_id, .outcome = completed_outcome } });
+         if (comptime @import("builtin").is_test) if (self.test_worker_stage_hook) |hook| hook.call(hook.context, .after_completed, completed_id);
+         return completed_id;
+     }
+@@ -2263,10 +2285,18 @@ pub const Service = struct {
+     /// Host must abort the pinned clock on any global comparison/cut failure
+     /// before native cleanup. Clock failure never grants lifetime authority.
+     pub fn attachLiveSemanticReplayQuiescent(self: *Service, hooks: LiveSemanticHooks) Error!void {
++        if (@import("builtin").is_test) if (hooks.test_retry_workload != null) return error.InvalidState;
+         const clock = hooks.clock orelse return error.InvalidState;
+         clock.validateInitial() catch return error.InvalidState;
+         try self.attachLiveSemanticBindingQuiescent(hooks);
+     }
++    /// No scheduling state is read from the engine by this callback path.
++    pub fn testRetryWorkload(self: *Service, event: TestRetryWorkloadEvent) void {
++        if (@import("builtin").is_test) {
++            if (self.live_semantic_hooks) |hooks| if (hooks.test_retry_workload) |workload|
++                workload.call(workload.context, event);
++        }
++    }
+     fn attachLiveSemanticBindingQuiescent(self: *Service, hooks: LiveSemanticHooks) Error!void {
+         if (self.live_semantic_hooks != null or self.prerequisite_order != null or
+             self.prerequisite_order_mode != .prerequisite or self.offline_causal_replay != null or
+@@ -2477,6 +2507,7 @@ pub const Service = struct {
+         self.orderCheckpoint(.render, .render_sequence_odd, .after, 0, 0, sequence_before +% 1);
+         self.offline(.render_sequence_odd, .after, 0, 0, sequence_before +% 1);
+         self.frontierHook(.after_odd, sequence_before +% 1);
++        if (@import("builtin").is_test) self.testRetryWorkload(.{ .render_odd = sequence_before +% 1 });
+         self.semanticBoundary(.render, .service_render_consumed_prefix, .before, frame, sequence_before +% 1, null);
+         for (self.slot_guards, 0..) |*guard, i| {
+             // A failed acquire owns no descriptor. Keep both CAS edges keyed
+@@ -2512,6 +2543,7 @@ pub const Service = struct {
+         self.orderCheckpoint(.render, .render_sequence_even, .after, 0, 0, odd +% 1);
+         self.offline(.render_sequence_even, .after, 0, 0, odd +% 1);
+         self.frontierHook(.after_even, odd +% 1);
++        if (@import("builtin").is_test) self.testRetryWorkload(.{ .render_even = odd +% 1 });
+     }
+     /// Host-quiesced scheduling query: Control is serialized and Render is
+     /// parked. Only unread publications need another real Render gate; an
+diff --git a/tests/sme/semantic_live_process_test.zig b/tests/sme/semantic_live_process_test.zig
+index 093bb81..ec029c0 100644
+--- a/tests/sme/semantic_live_process_test.zig
++++ b/tests/sme/semantic_live_process_test.zig
+@@ -122,11 +122,177 @@ const ControlledCrossFrame = struct {
+         std.debug.print("SEMANTIC_CONTROLLED_CROSS_FRAME {s}", .{bytes});
+     }
+ };
+-const Workload = enum { long, short_ui };
++// One test-only native scheduling workload. Neither Recorder callback waits:
++// waiting is confined to the explicit test seam after the original operation.
++const RetryWorkload = struct {
++    const stream = fixture.rt.streaming.stream;
++    const Position = fixture.music.trace.schema.Position;
++    recorder: *recording.Recorder,
++    audio: live.audio.device.SemanticAudioSink,
++    output: fixture.music.MusicRuntime.SemanticOutputSinkV1,
++    armed: std.atomic.Value(bool) = .init(false),
++    cancelled: std.atomic.Value(bool) = .init(false),
++    failed: std.atomic.Value(bool) = .init(false),
++    target: std.atomic.Value(u64) = .init(0),
++    worker_ready: std.atomic.Value(bool) = .init(false),
++    waiting_odd: std.atomic.Value(bool) = .init(false),
++    odd_held: std.atomic.Value(bool) = .init(false),
++    release_render: std.atomic.Value(bool) = .init(false),
++    even_observed: std.atomic.Value(bool) = .init(false),
++    succeeded: std.atomic.Value(bool) = .init(false),
++    admitted: std.atomic.Value(bool) = .init(false),
++    callback_returns: std.atomic.Value(u64) = .init(0),
++    nonzero_submitted_samples: std.atomic.Value(u64) = .init(0),
++    // Single-role fields: Control owns attempts/admission, Render owns sequence.
++    begun: bool = false,
++    first: ?stream.LiveAcceptanceAttemptV1 = null,
++    second: ?stream.LiveAcceptanceAttemptV1 = null,
++    publication: @FieldType(stream.observation.Acceptance, "publication") = null,
++    publication_hash: [32]u8 = undefined,
++    admission_frame: u64 = 0,
++    odd_sequence: u64 = 0,
++    even_sequence: u64 = 0,
++    render_used: bool = false,
++    fn fail(self: *RetryWorkload) void {
++        self.failed.store(true, .release);
++        self.cancelled.store(true, .release);
++        self.release_render.store(true, .release);
++    }
++    fn wait(self: *RetryWorkload, flag: *std.atomic.Value(bool)) bool {
++        const began = std.Io.Clock.awake.now(t.io);
++        while (!flag.load(.acquire)) {
++            if (self.cancelled.load(.acquire)) return false;
++            if (!self.recorder.healthy() or began.durationTo(std.Io.Clock.awake.now(t.io)).nanoseconds >= 500 * std.time.ns_per_ms) {
++                self.fail();
++                return false;
++            }
++            pause();
++        }
++        return !self.cancelled.load(.acquire);
++    }
++    fn event(raw: *anyopaque, value: stream.TestRetryWorkloadEvent) void {
++        const self: *RetryWorkload = @ptrCast(@alignCast(raw));
++        if (!self.armed.load(.acquire) or self.cancelled.load(.acquire)) return;
++        switch (value) {
++            .queue_before => |queued| {
++                if (self.target.load(.acquire) == 0) self.target.store(queued.job, .release);
++            },
++            .worker_completed => |completed| {
++                if (completed.job == self.target.load(.acquire)) {
++                    if (completed.outcome != .ready) self.fail() else self.worker_ready.store(true, .release);
++                }
++            },
++            .before_attempt => {
++                if (self.begun or self.target.load(.acquire) == 0) return;
++                self.begun = true;
++                if (!self.wait(&self.worker_ready)) return;
++                self.waiting_odd.store(true, .release);
++                _ = self.wait(&self.odd_held);
++            },
++            .render_odd => |sequence| {
++                if (self.render_used or !self.waiting_odd.load(.acquire)) return;
++                self.render_used = true;
++                self.odd_sequence = sequence;
++                self.odd_held.store(true, .release);
++                _ = self.wait(&self.release_render);
++            },
++            .render_even => |sequence| {
++                if (self.render_used and !self.even_observed.load(.acquire)) {
++                    self.even_sequence = sequence;
++                    self.even_observed.store(true, .release);
++                }
++            },
++            .after_attempt => |actual| {
++                if (!self.begun or self.second != null) return;
++                const selected = actual.attempt.evidence.selected orelse {
++                    self.fail();
++                    return;
++                };
++                if (self.first == null) {
++                    self.first = actual.attempt.*;
++                    if (selected.outcome != .ready or actual.finished or
++                        actual.attempt.deferred == null or actual.attempt.deferred.?.reason != .odd_sequence or
++                        actual.attempt.evidence.outcome != .availability_unavailable or actual.attempt.evidence.accepted != null or
++                        actual.attempt.evidence.publication != null or !std.meta.eql(actual.attempt.evidence.effects, stream.observation.Effects{}))
++                    {
++                        self.fail();
++                        return;
++                    }
++                    self.release_render.store(true, .release);
++                    _ = self.wait(&self.even_observed);
++                } else {
++                    self.second = actual.attempt.*;
++                    if (!actual.finished or actual.attempt.deferred != null or actual.attempt.cut == null or !std.meta.eql(self.first.?.incoming, actual.attempt.incoming) or
++                        !std.meta.eql(self.first.?.evidence.selected, actual.attempt.evidence.selected) or
++                        actual.attempt.evidence.accepted == null or actual.attempt.evidence.accepted.?.stale or
++                        !actual.attempt.evidence.effects.pcm_published or !actual.attempt.evidence.effects.publication_published)
++                    {
++                        self.fail();
++                        return;
++                    }
++                    self.publication = actual.attempt.evidence.publication orelse {
++                        self.fail();
++                        return;
++                    };
++                    const canonical = fixture.rt.streaming.visibility.encode(self.publication.?);
++                    self.publication_hash = format.hash(&canonical);
++                    self.succeeded.store(true, .release);
++                }
++            },
++        }
++    }
++    fn onInput(raw: *anyopaque, value: fixture.music.trace.Input) void {
++        const self: *RetryWorkload = @ptrCast(@alignCast(raw));
++        self.output.input(self.output.context, value);
++        if (value.payload == .admission) if (self.publication) |publication| {
++            const admission = value.payload.admission;
++            if (admission.batch_id == publication.batch_id and admission.kind == .stream_visibility) {
++                if (admission.disposition != .admitted or !std.mem.eql(u8, &admission.content_hash, &self.publication_hash)) {
++                    self.fail();
++                    return;
++                }
++                self.admission_frame = admission.frame;
++                self.admitted.store(true, .release);
++            }
++        };
++    }
++    fn onSchedule(raw: *anyopaque, value: fixture.music.trace.ScheduleEntry) void {
++        const self: *RetryWorkload = @ptrCast(@alignCast(raw));
++        self.output.schedule(self.output.context, value);
++    }
++    fn invalidate(raw: *anyopaque) void {
++        const self: *RetryWorkload = @ptrCast(@alignCast(raw));
++        self.output.invalidate(self.output.context);
++    }
++    fn onAudio(raw: *anyopaque, value: live.audio.device.SemanticAudioEvent) void {
++        const self: *RetryWorkload = @ptrCast(@alignCast(raw));
++        self.audio.call(self.audio.context, value);
++        if (value == .callback_return) _ = self.callback_returns.fetchAdd(1, .release);
++        if (value == .pcm and value.pcm.disposition == .submitted and self.admitted.load(.acquire)) {
++            var nonzero: u64 = 0;
++            for (value.pcm.samples) |sample| if (sample != 0) {
++                nonzero += 1;
++            };
++            _ = self.nonzero_submitted_samples.fetchAdd(nonzero, .release);
++        }
++    }
++    // Called only after actual Control and Worker joins and device stop.
++    fn report(self: *const RetryWorkload, directory: std.Io.Dir) !void {
++        const first = self.first;
++        const second = self.second;
++        const bytes = try std.fmt.allocPrint(allocator, "{{\"classification\":\"controlled_retry\",\"target_job\":{d},\"selected_job\":{d},\"worker_ready\":{},\"first_seen\":{},\"second_seen\":{},\"same_incoming\":{},\"odd_sequence\":{d},\"even_sequence\":{d},\"succeeded\":{},\"admitted\":{},\"admission_frame\":{d},\"prefix_start\":{d},\"prefix_end\":{d},\"nonzero_submitted_samples_after_admission\":{d},\"failed\":{}}}\n", .{ self.target.load(.acquire), if (first) |v| if (v.evidence.selected) |v_selected| v_selected.descriptor.job else 0 else 0, self.worker_ready.load(.acquire), first != null, second != null, if (first != null and second != null) std.meta.eql(first.?.incoming, second.?.incoming) else false, self.odd_sequence, self.even_sequence, self.succeeded.load(.acquire), self.admitted.load(.acquire), self.admission_frame, if (self.publication) |p| p.prefix_start else 0, if (self.publication) |p| p.prefix_end else 0, self.nonzero_submitted_samples.load(.acquire), self.failed.load(.acquire) });
++        defer allocator.free(bytes);
++        try writeFile(directory, "controlled-retry.json", bytes);
++        std.debug.print("SEMANTIC_CONTROLLED_RETRY {s}", .{bytes});
++    }
++};
++
++const Workload = enum { long, short_ui, retry };
+ fn workload() !Workload {
+     const value = std.process.Environ.getPosix(t.environ, "SME_LIVE_SEMANTIC_WORKLOAD") orelse "long";
+     if (std.mem.eql(u8, value, "long")) return .long;
+     if (std.mem.eql(u8, value, "short-ui")) return .short_ui;
++    if (std.mem.eql(u8, value, "retry")) return .retry;
+     return error.UnsupportedSemanticWorkload;
+ }
+ const ReceiptLog = struct {
+@@ -303,6 +469,7 @@ fn recordProcess(directory: std.Io.Dir) !void {
+     const controlled_text = std.process.Environ.getPosix(t.environ, "SME_LIVE_SEMANTIC_CONTROLLED_CROSS_FRAME");
+     const controlled = if (controlled_text) |text| if (std.mem.eql(u8, text, "1")) true else return error.InvalidControlledCrossFrameMode else false;
+     if (controlled and (!streaming or scenario != .long or fail_text != null)) return error.UnsupportedControlledCrossFrameScope;
++    if (scenario == .retry and (!streaming or controlled or fail_text != null)) return error.UnsupportedRetryWorkloadScope;
+ 
+     const bytes = try buildBank();
+     defer allocator.free(bytes);
+@@ -324,6 +491,9 @@ fn recordProcess(directory: std.Io.Dir) !void {
+     defer if (corpus_owned) {
+         if (corpus) |storage| allocator.free(storage);
+     };
++    var retry_context: ?*RetryWorkload = null;
++    var retry_owned = true;
++    defer if (retry_owned) if (retry_context) |context| allocator.destroy(context);
+     var cross_frame: ?*ControlledCrossFrame = null;
+     var cross_frame_owned = true;
+     defer if (cross_frame_owned) if (cross_frame) |context| allocator.destroy(context);
+@@ -344,7 +514,7 @@ fn recordProcess(directory: std.Io.Dir) !void {
+         };
+         sink.init(file, fail_after);
+         file_stream = sink;
+-        try recorder.initStreaming(try identity(bytes), .{ .context = sink, .write = FileStream.write }, format.max_file_bytes, @sizeOf(FileStream) + (if (controlled) @sizeOf(ControlledCrossFrame) else @as(usize, 0)));
++        try recorder.initStreaming(try identity(bytes), .{ .context = sink, .write = FileStream.write }, format.max_file_bytes, @sizeOf(FileStream) + (if (controlled) @sizeOf(ControlledCrossFrame) else @as(usize, 0)) + (if (scenario == .retry) @sizeOf(RetryWorkload) else @as(usize, 0)));
+     } else {
+         corpus = try allocator.alloc(u8, recording.default_corpus_bytes);
+         try recorder.init(try identity(bytes), corpus.?);
+@@ -355,13 +525,25 @@ fn recordProcess(directory: std.Io.Dir) !void {
+         cross_frame = context;
+         recorder.session.config.audio = .{ .context = context, .call = ControlledCrossFrame.onAudio };
+     }
+-    const host = try live.Host.createWithTestAllocator(memory, launch(bytes), .{ .io = t.io, .device = .{ .backend = .null_backend }, .semantic = &recorder.session, .test_after_live_acceptance = if (cross_frame) |context| .{ .context = context, .call = ControlledCrossFrame.afterAcceptance } else null });
++    if (scenario == .retry) {
++        const context = try allocator.create(RetryWorkload);
++        context.* = .{ .recorder = recorder, .audio = recorder.session.config.audio, .output = recorder.session.config.output };
++        retry_context = context;
++        recorder.session.config.audio = .{ .context = context, .call = RetryWorkload.onAudio };
++        recorder.session.config.output = .{ .context = context, .input = RetryWorkload.onInput, .schedule = RetryWorkload.onSchedule, .invalidate = RetryWorkload.invalidate };
++    }
++    const host = try live.Host.createWithTestAllocator(memory, launch(bytes), .{ .io = t.io, .device = .{ .backend = .null_backend }, .semantic = &recorder.session, .test_retry_workload = if (retry_context) |context| .{ .context = context, .call = RetryWorkload.event } else null, .test_after_live_acceptance = if (cross_frame) |context| .{ .context = context, .call = ControlledCrossFrame.afterAcceptance } else null });
+     var host_alive = true;
+     var receipts: ReceiptLog = .{};
+     defer if (host_alive) {
+         if (cross_frame) |context| context.cancelled.store(true, .release);
++        if (retry_context) |context| {
++            context.cancelled.store(true, .release);
++            context.release_render.store(true, .release);
++        }
+         const cleanup = closeActual(host, recorder, &receipts);
+         if (cleanup) |closed| {
++            if (retry_context) |context| context.report(directory) catch |err| std.debug.print("SEMANTIC_RETRY_REPORT_FAILED {s}\n", .{@errorName(err)});
+             if (cross_frame) |context| context.report(directory, recorder.finalStats().multi_frame_ticks) catch |err| std.debug.print("SEMANTIC_CONTROLLED_REPORT_FAILED {s}\n", .{@errorName(err)});
+             std.debug.print("SEMANTIC_REJECTED_CAPTURE healthy={any} stats={any} cleanup_worker_joined={any} provider={any} leases={d} instances={d}\n", .{ recorder.healthy(), recorder.finalStats(), closed.worker_joined, closed.provider, closed.sample_leases, closed.live_instances });
+         } else |err| {
+@@ -372,6 +554,7 @@ fn recordProcess(directory: std.Io.Dir) !void {
+             corpus_owned = false;
+             stream_owned = false;
+             cross_frame_owned = false;
++            retry_owned = false;
+         }
+     };
+     if (scenario == .short_ui) {
+@@ -379,6 +562,7 @@ fn recordProcess(directory: std.Io.Dir) !void {
+     } else {
+         const start = std.Io.Clock.awake.now(t.io);
+         var start_frames: ?u64 = null;
++        var retry_admitted_frames: ?u64 = null;
+         var last_ui_poll: ?@TypeOf(start) = null;
+         while (true) {
+             // Drain every collector pass, even while the UI cadence is closed.
+@@ -387,6 +571,7 @@ fn recordProcess(directory: std.Io.Dir) !void {
+             const backlog = try drain(recorder);
+             if (!recorder.healthy()) return error.SemanticCaptureIncomplete;
+             if (cross_frame) |context| if (context.timed_out.load(.acquire)) return error.ControlledCrossFrameTimedOut;
++            if (retry_context) |context| if (context.failed.load(.acquire)) return error.ControlledRetryFailed;
+             const now = std.Io.Clock.awake.now(t.io);
+             const poll_ui = if (last_ui_poll) |last| last.durationTo(now).nanoseconds >= std.time.ns_per_ms else true;
+             if (poll_ui) {
+@@ -402,12 +587,23 @@ fn recordProcess(directory: std.Io.Dir) !void {
+                     const progress = recorder.progress();
+                     if (status.play_executed and receipts.executed[0]) {
+                         if (start_frames == null) start_frames = progress.submitted_frames;
++                        if (retry_context) |context| if (context.callback_returns.load(.acquire) != 0) context.armed.store(true, .release);
+                         if (cross_frame) |context| if (context.callback_returns.load(.acquire) != 0) context.armed.store(true, .release);
+                     }
+                     if (start_frames) |base| {
+                         // Natural cross-frame ticks are reported coverage, not
+                         // a reason to extend or retry an otherwise valid run.
+-                        if (receipts.ids[1] == 0 and progress.submitted_frames >= base + 32768) receipts.ids[1] = (try host.submit(host.identity(), .stop)).id;
++                        if (scenario == .long) {
++                            if (receipts.ids[1] == 0 and progress.submitted_frames >= base + 32768) receipts.ids[1] = (try host.submit(host.identity(), .stop)).id;
++                        } else if (retry_context) |context| {
++                            if (context.succeeded.load(.acquire) and context.admitted.load(.acquire) and retry_admitted_frames == null) retry_admitted_frames = progress.submitted_frames;
++                            if (retry_admitted_frames) |admitted_at| {
++                                if (receipts.ids[1] == 0 and progress.submitted_frames >= admitted_at + 8192) receipts.ids[1] = (try host.submit(host.identity(), .stop)).id;
++                            }
++                            // Independent short workload bound, never extend the
++                            // old long fixture or keep recording to seek luck.
++                            if (progress.submitted_frames > base + 24576) return error.ControlledRetryFrameBound;
++                        }
+                     }
+                     if (receipts.executed[1] and status.stop_executed) break;
+                 }
+@@ -417,6 +613,10 @@ fn recordProcess(directory: std.Io.Dir) !void {
+         }
+     }
+     if (cross_frame) |context| context.cancelled.store(true, .release);
++    if (retry_context) |context| {
++        context.cancelled.store(true, .release);
++        context.release_render.store(true, .release);
++    }
+     const status = try closeActual(host, recorder, &receipts);
+     host_alive = false;
+     try t.expect(status.worker_joined and status.phase == .closed);
+@@ -429,6 +629,14 @@ fn recordProcess(directory: std.Io.Dir) !void {
+     if (scenario == .long) {
+         if (!status.play_executed or !status.stop_executed or !receipts.accepted[0] or !receipts.accepted[1] or
+             !receipts.terminal[0] or !receipts.terminal[1] or !receipts.executed[0] or !receipts.executed[1]) return error.LongFixtureCommandWitnessMissing;
++    } else if (scenario == .retry) {
++        if (!status.play_executed or !status.stop_executed or !receipts.accepted[0] or !receipts.accepted[1] or
++            !receipts.terminal[0] or !receipts.terminal[1] or !receipts.executed[0] or !receipts.executed[1]) return error.RetryFixtureCommandWitnessMissing;
++        const context = retry_context.?;
++        try context.report(directory);
++        if (context.failed.load(.acquire) or !context.succeeded.load(.acquire) or !context.admitted.load(.acquire) or
++            !context.worker_ready.load(.acquire) or context.nonzero_submitted_samples.load(.acquire) == 0 or
++            context.even_sequence <= context.odd_sequence) return error.RetryFixtureWitnessMissing;
+     } else {
+         if (status.play_executed or status.stop_executed) return error.ShortFixtureUnexpectedPlayback;
+         for (0..11) |index| if (!receipts.terminal[index] or !receipts.acknowledged[index]) return error.ShortFixtureTerminalWitnessMissing;
+@@ -458,6 +666,8 @@ fn recordProcess(directory: std.Io.Dir) !void {
+     if (scenario == .long) {
+         if (stats.command_submitted != 2 or stats.command_terminal != 2 or stats.terminal_acknowledged != 2) return error.LongFixtureCommandWitnessMissing;
+         if (stats.submitted_frames < 32768 or stats.ui_calls == 0) return error.LongFixtureDurationWitnessMissing;
++    } else if (scenario == .retry) {
++        if (stats.command_submitted != 2 or stats.command_terminal != 2 or stats.terminal_acknowledged != 2 or stats.submitted_frames < 8192) return error.RetryFixtureCommandWitnessMissing;
+     } else {
+         if (stats.command_submitted != 11 or stats.command_terminal != 11 or stats.terminal_acknowledged != 11) return error.ShortFixtureCommandWitnessMissing;
+         // No Play is not a promise of zero native startup/silence audio.
+@@ -512,6 +722,10 @@ fn replayProcess(directory: std.Io.Dir) !void {
+             if (report.command_submitted != 2 or report.command_accepted != 2 or report.command_terminal != 2 or report.terminal_acknowledged != 2) return error.LongFixtureCommandWitnessMissing;
+             if (report.pcm_samples[@intFromEnum(live.audio.device.SemanticAudioPcmDisposition.submitted)] < 32768 * 2) return error.LongFixtureDurationWitnessMissing;
+             if (!report.final_status.?.play_executed or !report.final_status.?.stop_executed) return error.LongFixtureCommandWitnessMissing;
++        } else if (scenario == .retry) {
++            if (report.command_submitted != 2 or report.command_accepted != 2 or report.command_terminal != 2 or report.terminal_acknowledged != 2 or
++                !report.final_status.?.play_executed or !report.final_status.?.stop_executed or
++                report.pcm_samples[@intFromEnum(live.audio.device.SemanticAudioPcmDisposition.submitted)] < 8192 * 2) return error.RetryFixtureCommandWitnessMissing;
+         } else {
+             if (report.command_submitted != 11 or report.command_accepted != 0 or report.command_terminal != 11 or report.terminal_acknowledged != 11) return error.ShortFixtureCommandWitnessMissing;
+             if (report.final_status.?.play_executed or report.final_status.?.stop_executed) return error.ShortFixtureUnexpectedPlayback;
+@@ -642,3 +856,42 @@ test "launch argument mismatches reject before admission owner or native threads
+     try t.expect(!driver.running and !driver.completed and !driver.report.host_joined and !driver.report.host_destroyed);
+     try t.expect(driver.session.address == null);
+ }
++
++test "retry workload rejects noncapture nonnull recovery and hidden service binding before owner creation" {
++    const Noop = struct {
++        fn event(_: *anyopaque, _: fixture.rt.streaming.stream.TestRetryWorkloadEvent) void {}
++        fn acceptance(_: *anyopaque, _: u64, _: u64) void {}
++    };
++    var marker: u8 = 0;
++    const hook: fixture.rt.streaming.stream.TestRetryWorkload = .{ .context = &marker, .call = Noop.event };
++    var memory: live.TestAllocator = .init;
++    defer {
++        if (memory.deinit() != .ok) @panic("rejected retry workload allocated retained ownership");
++    }
++    // A genuinely initialized Recorder gives a fully defined Session, while
++    // an empty bank proves these policy errors precede bank/owner admission.
++    const recorder = try allocator.create(recording.Recorder);
++    defer allocator.destroy(recorder);
++    recorder.address = null;
++    recorder.session = .{};
++    var corpus: [4096]u8 = undefined;
++    try recorder.init(.{ .build = @splat(1), .bank = @splat(2), .config = @splat(3), .source = @splat(4) }, &corpus);
++    const session = &recorder.session;
++    const invalid_launch = launch(&.{});
++    try t.expectError(error.InvalidState, live.Host.createWithTestAllocator(&memory, invalid_launch, .{ .io = t.io, .device = .{ .backend = .null_backend }, .test_retry_workload = hook }));
++    session.mode = .replay;
++    try t.expectError(error.InvalidState, live.Host.createWithTestAllocator(&memory, invalid_launch, .{ .io = t.io, .device = .{ .backend = .null_backend }, .semantic = session, .test_retry_workload = hook }));
++    session.mode = .capture;
++    try t.expectError(error.InvalidState, live.Host.createWithTestAllocator(&memory, invalid_launch, .{ .io = t.io, .device = .{ .backend = .system }, .semantic = session, .test_retry_workload = hook }));
++    try t.expectError(error.InvalidState, live.Host.createWithTestAllocator(&memory, invalid_launch, .{ .io = t.io, .device = .{ .backend = .null_backend }, .semantic = session, .recovery = .restart_at_bar, .test_retry_workload = hook }));
++    try t.expectError(error.InvalidState, live.Host.createWithTestAllocator(&memory, invalid_launch, .{ .io = t.io, .device = .{ .backend = .null_backend }, .semantic = session, .test_retry_workload = hook, .test_after_live_acceptance = .{ .context = &marker, .call = Noop.acceptance } }));
++    // A caller cannot smuggle the blocking seam through the passive config.
++    session.config.service.test_retry_workload = hook;
++    try t.expectError(error.InvalidState, live.Host.createWithTestAllocator(&memory, invalid_launch, .{ .io = t.io, .device = .{ .backend = .null_backend }, .semantic = session }));
++    try t.expect(session.host == null and !session.used);
++    var coordinator: RetryWorkload = .{ .recorder = recorder, .audio = session.config.audio, .output = session.config.output };
++    var unmet: std.atomic.Value(bool) = .init(false);
++    coordinator.fail();
++    try t.expect(!coordinator.wait(&unmet));
++    try t.expect(coordinator.cancelled.load(.acquire) and coordinator.release_render.load(.acquire));
++}
+diff --git a/tools/sme_authoring/core/live_owner.zig b/tools/sme_authoring/core/live_owner.zig
+index 4954c6b..676a955 100644
+--- a/tools/sme_authoring/core/live_owner.zig
++++ b/tools/sme_authoring/core/live_owner.zig
+@@ -49,6 +49,8 @@ pub const Options = struct {
+     /// Controlled cross-frame workload only. Bound before publication; caller
+     /// owns bounded cancellation and context through real Host destruction.
+     test_after_live_acceptance: if (@import("builtin").is_test) ?audio.ControlRuntime.TestAfterLiveAcceptance else void = if (@import("builtin").is_test) null else {},
++    /// Explicit capture-only retry workload; immutable through actual joins.
++    test_retry_workload: if (@import("builtin").is_test) ?audio.runtime.streaming.stream.TestRetryWorkload else void = if (@import("builtin").is_test) null else {},
+     /// Test-only actual Worker polling delay; never changes Control or Audio.
+     test_worker_wait_ms: if (@import("builtin").is_test) u8 else void = if (@import("builtin").is_test) 1 else {},
+     test_capture: if (@import("builtin").is_test) ?*TestCapture.Session else void = if (@import("builtin").is_test) null else {},
+@@ -148,7 +150,12 @@ pub const Host = struct {
+         if (options.device.sample_rate != 48_000 or options.device.channels != 2 or options.device.period_frames != 256 or options.device.output_layout_request != null) return error.UnsupportedDeviceConfiguration;
+         if (!@import("builtin").is_test and (options.test_fault != .none or (options.device.backend == .null_backend and options.semantic == null))) return error.TestOnly;
+         if (@import("builtin").is_test) if (options.test_worker_wait_ms != 1 and options.test_worker_wait_ms != 16) return error.InvalidState;
++        if (@import("builtin").is_test) if (options.test_retry_workload != null) {
++            const session = options.semantic orelse return error.InvalidState;
++            if (session.mode != .capture or options.device.backend != .null_backend or options.recovery != .close or options.test_after_live_acceptance != null) return error.InvalidState;
++        };
+         if (options.semantic) |session| {
++            if (@import("builtin").is_test) if (session.config.service.test_retry_workload != null) return error.InvalidState;
+             if (session.mode == .replay and options.device.backend != .null_backend) return error.UnsupportedDeviceConfiguration;
+             if (!session.pristine() or options.recovery != .close or options.test_fault != .none or !std.meta.eql(options.source_fault, @as(source.Fault, .{}))) return error.InvalidState;
+             if (@import("builtin").is_test) if (options.test_capture != null or options.test_before_worker != null or options.test_setup != null or options.test_tick_outcome != null or options.test_pcm != null or options.test_worker_wait_ms != 1) return error.InvalidState;
+@@ -505,16 +512,24 @@ pub const Host = struct {
+         self.load_ticket = try self.captureCall(captureArgs(.load, .{ .source_hash = self.launch_identity.artifact_hash, .source_bytes = self.bytes.len }), music.MusicRuntime.loadBankWithSources, .{ self.owner.?, self.bytes, self.provider.?.provider() });
+     }
+     fn bindSemantic(self: *Host, session: *semantic.Session) void {
++        const service_hooks = blk: {
++            if (@import("builtin").is_test) {
++                var hooks = session.config.service;
++                hooks.test_retry_workload = self.options.test_retry_workload;
++                break :blk hooks;
++            }
++            break :blk session.config.service;
++        };
+         self.captureCall(.bind_output, music.MusicRuntime.attachSemanticOutputSinkV1, .{ self.owner.?, session.config.output }) catch {
+             session.poison();
+             return;
+         };
+         if (session.mode == .replay) {
+-            self.captureCall(.bind_live, music.MusicRuntime.attachLiveSemanticReplayV1, .{ self.owner.?, session.config.service }) catch {
++            self.captureCall(.bind_live, music.MusicRuntime.attachLiveSemanticReplayV1, .{ self.owner.?, service_hooks }) catch {
+                 session.poison();
+                 return;
+             };
+-        } else self.captureCall(.bind_live, music.MusicRuntime.attachLiveSemanticV1, .{ self.owner.?, session.config.service }) catch {
++        } else self.captureCall(.bind_live, music.MusicRuntime.attachLiveSemanticV1, .{ self.owner.?, service_hooks }) catch {
+             session.poison();
+             return;
+         };
