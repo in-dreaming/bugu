@@ -1,0 +1,157 @@
+{
+  "schema": 1,
+  "recorded_at_utc": "2026-10-21T07:08:00Z",
+  "reported_completed_at_utc": "2026-10-21T07:06:54Z",
+  "platform": "Windows",
+  "status": "ACCEPTANCE_FAILED_CANDIDATE_NOT_FIXED",
+  "classification": "STARTUP_PCM_SAMPLE_CAPACITY_EXHAUSTED_NO_CONFIRMED_STREAM_FAULT",
+  "source": {
+    "candidate_commit": "2f766bb8db0addb92c23d7a72e228b9b7ea9fd18",
+    "effective_tree": "63994cdb520eb3ece4ac137a46a830bf96101340",
+    "delivery_commit": "c7b0397705ca703a8aa65cb4665cc5dee69de238",
+    "patch_sha256": "b7f8e7a79bf7e1d936956d2aafa0b4b390ee841a1aef6f235f3e972561372217",
+    "protected_files_unchanged": 6768
+  },
+  "provenance": {
+    "kind": "Windows executor reported result summary",
+    "independently_reviewed_raw_logs": false,
+    "raw_artifacts_backed_up_by_this_commit": false,
+    "raw_logs_location_scope": "Windows only",
+    "summary_only": true,
+    "private_paths_and_internal_report_identifiers_omitted": true
+  },
+  "execution": {
+    "target": "sme-author-live-default-chronology-test",
+    "optimization": "Debug",
+    "attempts": 1,
+    "reruns": 0,
+    "tests_passed": 8,
+    "tests_total": 9,
+    "diagnostic_tests_passed": 8,
+    "failed_test": "Host",
+    "exit_code": 1,
+    "crashes": 0,
+    "seed": "0xba111e92",
+    "elapsed_seconds": 112.090387
+  },
+  "failure": {
+    "error": "DefaultPcmCapacityOrShape",
+    "phase": "waiting for first Play receipt",
+    "first_frame": 192000,
+    "channels": 2,
+    "sample_count": 512,
+    "stored_records": 750,
+    "record_capacity": 1024,
+    "used_samples": 384000,
+    "sample_capacity": 384000,
+    "remaining_samples": 0,
+    "failed_check": "sample capacity only",
+    "runtime_present": false,
+    "confirmed_stream_fault": false,
+    "confirmed_fault_handle": null
+  },
+  "acceptance_tail": {
+    "records": [
+      {
+        "tick": 260,
+        "frame": 189952,
+        "outcome": "no_completion",
+        "selected": "empty",
+        "retry": false
+      },
+      {
+        "tick": 261,
+        "frame": 190720,
+        "outcome": "no_completion",
+        "selected": "empty",
+        "retry": false
+      },
+      {
+        "tick": 262,
+        "frame": 191680,
+        "outcome": "no_completion",
+        "selected": "empty",
+        "retry": false
+      }
+    ],
+    "common_scan_projection": {
+      "job_slots": 48,
+      "scanned": 48,
+      "representation_complete": true,
+      "states_valid_len": 48,
+      "states_truncated": false,
+      "states_inconsistent": false,
+      "states_projection_complete": true,
+      "states_hex": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "states_encoding": "u8: 0 free, 1 queued, 2 running, 3 completed, 255 unobserved",
+      "coherent_snapshot": false
+    },
+    "encodings_validated": 58
+  },
+  "prefetch_tail": {
+    "handle": "0:1",
+    "availability_error": "InvalidState",
+    "reason": "frame_mismatch",
+    "records": [
+      {
+        "requested_frame": 189952,
+        "observed_frame": 190336,
+        "available": null,
+        "pending": null,
+        "slot": null
+      },
+      {
+        "requested_frame": 190720,
+        "observed_frame": 190784,
+        "available": null,
+        "pending": null,
+        "slot": null
+      },
+      {
+        "requested_frame": 191680,
+        "observed_frame": 192256,
+        "available": null,
+        "pending": null,
+        "slot": null
+      }
+    ]
+  },
+  "bounded_evidence": {
+    "control_overwritten": 1014,
+    "control_after_failure_omitted": 5,
+    "worker_retained": 48,
+    "worker_overwritten": 0,
+    "global_order": false,
+    "complete_history": false
+  },
+  "cleanup": {
+    "sources_opened": 16,
+    "sources_closed": 16,
+    "live": 0,
+    "leases": 0,
+    "instances": 0,
+    "joined": true,
+    "residual_process_reported": false
+  },
+  "stderr": {
+    "bytes": 428843,
+    "sha256": "eb38d5abd21ead13d0e5e4d13b0177b4d1696524d7c2898e62894948b2944b79",
+    "published": false
+  },
+  "interpretation": [
+    "This single Windows run failed during startup while waiting for the first Play receipt; it is not a confirmed reproduction of the earlier sustained-stream faults.",
+    "The reported sample buffer was full; neither sample/record capacity nor production behavior was changed for this record.",
+    "The last three reported acceptance scans observed 48 free slots and no selected completion. These sequential observations are not a coherent snapshot or proof that all jobs were always absent.",
+    "Null available/pending/slot values are unknown/unreached fields, not zero availability or an identified pending job.",
+    "Bounded tails contain overwritten/omitted Control evidence and do not establish a full cross-role causal chronology.",
+    "All 58 reported state encodings passed validation, but diagnostic validity does not mean the Host test or candidate passed.",
+    "The stderr hash identifies a Windows-local artifact; this summary does not externally back up those bytes."
+  ],
+  "actions_in_this_record": {
+    "source_changes": false,
+    "capacity_changes": false,
+    "test_execution": false,
+    "windows_operations": false,
+    "raw_log_or_binary_upload": false
+  }
+}

@@ -53,3 +53,7 @@ manifest 的 UNVERIFIED 是计划保存时的状态，保持不改写；后续�
 ## 诊断补缺交付（2f766bb / 63994cd）
 
 [独立诊断补丁与短说明](../patches/sme-scan-state-2f766bb/README-zh.txt) 只从精确 94d77ca / 78d48ee 基底补齐测试日志的扫描槽状态，生产代码不变。[默认 Debug 9/9](https://github.com/in-dreaming/bugu/blob/d36175ddc62cca3f4a822abdb32c88864fcf555e/checkpoints/scan-state-20261021-63994cd/results/default-debug-01.json) 和 [预声明 Worker16/Control0 单次 9/9](https://github.com/in-dreaming/bugu/blob/cb1a35184b458b76a7bbedbab8ac8093e25b546f/checkpoints/scan-state-20261021-63994cd/results/worker16-control0-debug-01.json) 均为云端结果，未复现 Windows 故障，也不证明已修复。Windows 最小下一步只是一份待授权建议，本轮没有执行。
+
+## Windows 诊断单次结果更新（2026-10-21）
+
+[2f766bb / 63994cd 的单次默认 Debug 摘要](scan-state-20261021-63994cd/results/windows-default-debug-01.json) 已报告：8/9，Host 在等待首个 Play receipt 时发生 DefaultPcmCapacityOrShape，样本容量 384000/384000 耗尽；58 条扫描编码检查通过。没有确认的 runtime stream fault/handle，不能混同此前持续播放故障。此轮已完成、未重跑，候选仍未修复。仅存执行结果转述摘要，原始日志仍在 Windows，并未由本分支备份。
