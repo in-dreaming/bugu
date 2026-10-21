@@ -57,3 +57,9 @@ manifest 的 UNVERIFIED 是计划保存时的状态，保持不改写；后续�
 ## Windows 诊断单次结果更新（2026-10-21）
 
 [2f766bb / 63994cd 的单次默认 Debug 摘要](scan-state-20261021-63994cd/results/windows-default-debug-01.json) 已报告：8/9，Host 在等待首个 Play receipt 时发生 DefaultPcmCapacityOrShape，样本容量 384000/384000 耗尽；58 条扫描编码检查通过。没有确认的 runtime stream fault/handle，不能混同此前持续播放故障。此轮已完成、未重跑，候选仍未修复。仅存执行结果转述摘要，原始日志仍在 Windows，并未由本分支备份。
+
+## 首次 Play 启动与显式准入交付（f28bee4 / f8bbbeb）
+
+[合并补丁与验证范围](../patches/sme-initial-entry-f28bee4/README.zh-CN.md) 从精确 2f766bb / 63994cd 更新至 f28bee4 / f8bbbeb，不能与分阶段增量重复应用，也不能直接套用远端 main。最终树 [codec/CLI 73/73](https://github.com/in-dreaming/bugu/blob/fe24282cdac16fc3e882144b338fec053ea79e17/checkpoints/ordered-admission-20261021-f8bbbeb/results/codec-cli-debug-01.json)、[默认 RS 12/12](https://github.com/in-dreaming/bugu/blob/85763958ff36c501ea5581d203f77ae390904a0c/checkpoints/ordered-admission-20261021-f8bbbeb/results/default-releasesafe-01.json) 与 [两条旧断言 2/2](https://github.com/in-dreaming/bugu/blob/ab411ba22fff559b6c7a9462a067cad33ad2e150/checkpoints/ordered-admission-20261021-f8bbbeb/results/legacy-filter-debug-01.json) 各自独立保存。
+
+此前同 ELF 的 [fresh replay 失败](https://github.com/in-dreaming/bugu/blob/41e73c51baf885dceb34deadaac60912a8bf55b1/checkpoints/initial-entry-20261021-1dafd4a/results/fresh-replay-debug-01.json) 仍然有效；新 ordered_job_scans 的 owner 前拒绝不是重放成功。最终候选 Windows 尚未验收，不代表整体 SME 或持续播放问题已经解决。

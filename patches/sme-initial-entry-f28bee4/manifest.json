@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "status": "SCOPED_CLOUD_VALIDATION_NOT_OVERALL_SME_COMPLETE",
+  "baseline": {
+    "source_commit": "2f766bb8db0addb92c23d7a72e228b9b7ea9fd18",
+    "tree": "63994cdb520eb3ece4ac137a46a830bf96101340"
+  },
+  "candidate": {
+    "source_commit": "f28bee4e4f6cbb0e0b8fdb8d1d4decad37e76fef",
+    "tree": "f8bbbebd01520966237fab954a868c4dd1dee85f",
+    "history_note": "Source commits include synthetic recovery ancestry; delivery commits are distinct objects."
+  },
+  "files": {
+    "sme-initial-entry-f28bee4.patch": {
+      "bytes": 96524,
+      "sha256": "b48a1d69c0e579607dcc4fd33e0d80a28de10c15fb554536dbf10620a1c3087d"
+    },
+    "README.zh-CN.md": {
+      "sha256": "527aa8ce72c9e1dab7b28ed96c62b4510d48c0c64ef995c9ebb1ceddc0b79c29"
+    }
+  },
+  "application": {
+    "exact_baseline_required": true,
+    "apply_once": true,
+    "do_not_mix_with_incremental_chain": true,
+    "not_applicable_directly_to_remote_main": true,
+    "independent_temporary_index_reconstruction_verified": true,
+    "reconstructed_tree": "f8bbbebd01520966237fab954a868c4dd1dee85f"
+  },
+  "evidence": [
+    {
+      "kind": "expected causal baseline failure",
+      "commit": "ed05205076ee7fc63b06486c36e3f7b8fa5477e3",
+      "path": "checkpoints/entry-supply-20261021-2eccea0/results/baseline-debug-01.json"
+    },
+    {
+      "kind": "controlled startup and codec 54/54 on earlier tree 1dafd4a",
+      "commit": "45f695d8daaae62b1a0b1f9683665f1a2ffe9ed2",
+      "path": "checkpoints/initial-entry-20261021-1dafd4a/results/debug-01.json"
+    },
+    {
+      "kind": "native recording and production compile on earlier tree 1dafd4a",
+      "commit": "bb21e3d723c0ce76be5abf9788d2c72cd5666a6b",
+      "path": "checkpoints/initial-entry-20261021-1dafd4a/results/native-record-debug-01.json"
+    },
+    {
+      "kind": "genuine fresh replay FAILURE on earlier tree 1dafd4a; remains failed",
+      "commit": "41e73c51baf885dceb34deadaac60912a8bf55b1",
+      "path": "checkpoints/initial-entry-20261021-1dafd4a/results/fresh-replay-debug-01.json"
+    },
+    {
+      "kind": "final-tree codec/CLI 73/73 with original-tape pre-owner negative, not replay success",
+      "commit": "fe24282cdac16fc3e882144b338fec053ea79e17",
+      "path": "checkpoints/ordered-admission-20261021-f8bbbeb/results/codec-cli-debug-01.json"
+    },
+    {
+      "kind": "final-tree default ReleaseSafe 12/12",
+      "commit": "85763958ff36c501ea5581d203f77ae390904a0c",
+      "path": "checkpoints/ordered-admission-20261021-f8bbbeb/results/default-releasesafe-01.json"
+    },
+    {
+      "kind": "final-tree two original legacy assertions 2/2",
+      "commit": "ab411ba22fff559b6c7a9462a067cad33ad2e150",
+      "path": "checkpoints/ordered-admission-20261021-f8bbbeb/results/legacy-filter-debug-01.json"
+    }
+  ],
+  "limits": [
+    "Windows acceptance on this candidate has not run; previous Windows startup and sustained-stream failures remain evidence.",
+    "New ordered_job_scans admission is a narrower subset and does not make the preserved failed native_attempt replay pass.",
+    "No new final-tree native record/replay or full historical/legacy matrix is claimed.",
+    "Only text source, plans and summaries are delivered. Raw ELF/tape/bank files are not backed up by these hashes.",
+    "No main update, force-push or PR."
+  ]
+}
