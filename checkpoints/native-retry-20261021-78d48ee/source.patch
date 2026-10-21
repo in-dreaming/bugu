@@ -1,0 +1,285 @@
+diff --git a/tests/sme/semantic_live_process_test.zig b/tests/sme/semantic_live_process_test.zig
+index ec029c0..7e0d867 100644
+--- a/tests/sme/semantic_live_process_test.zig
++++ b/tests/sme/semantic_live_process_test.zig
+@@ -126,19 +126,53 @@ const ControlledCrossFrame = struct {
+ // waiting is confined to the explicit test seam after the original operation.
+ const RetryWorkload = struct {
+     const stream = fixture.rt.streaming.stream;
+-    const Position = fixture.music.trace.schema.Position;
++    const FailureReason = enum(u8) {
++        none,
++        test_cancel,
++        capture_unhealthy,
++        worker_not_ready,
++        wait_worker_ready_timeout,
++        wait_odd_timeout,
++        wait_release_timeout,
++        wait_even_timeout,
++        wait_second_timeout,
++        first_selected_missing,
++        first_not_ready,
++        first_finished,
++        first_defer_missing,
++        first_defer_not_odd,
++        first_wrong_outcome,
++        first_accepted,
++        first_publication,
++        first_effects,
++        second_selected_missing,
++        second_not_finished,
++        second_deferred,
++        second_cut_missing,
++        second_incoming_changed,
++        second_selected_changed,
++        second_accepted_missing,
++        second_stale,
++        second_pcm_missing,
++        second_publication_effect_missing,
++        second_publication_missing,
++        admission_rejected,
++        admission_hash_mismatch,
++    };
+     recorder: *recording.Recorder,
+     audio: live.audio.device.SemanticAudioSink,
+     output: fixture.music.MusicRuntime.SemanticOutputSinkV1,
+     armed: std.atomic.Value(bool) = .init(false),
+     cancelled: std.atomic.Value(bool) = .init(false),
+     failed: std.atomic.Value(bool) = .init(false),
++    failure_reason: std.atomic.Value(FailureReason) = .init(.none),
+     target: std.atomic.Value(u64) = .init(0),
+     worker_ready: std.atomic.Value(bool) = .init(false),
+     waiting_odd: std.atomic.Value(bool) = .init(false),
+     odd_held: std.atomic.Value(bool) = .init(false),
+     release_render: std.atomic.Value(bool) = .init(false),
+     even_observed: std.atomic.Value(bool) = .init(false),
++    second_attempt_returned: std.atomic.Value(bool) = .init(false),
+     succeeded: std.atomic.Value(bool) = .init(false),
+     admitted: std.atomic.Value(bool) = .init(false),
+     callback_returns: std.atomic.Value(u64) = .init(0),
+@@ -147,23 +181,36 @@ const RetryWorkload = struct {
+     begun: bool = false,
+     first: ?stream.LiveAcceptanceAttemptV1 = null,
+     second: ?stream.LiveAcceptanceAttemptV1 = null,
++    first_finished: bool = false,
++    second_finished: bool = false,
++    first_effective_frame: u64 = 0,
++    second_effective_frame: u64 = 0,
+     publication: @FieldType(stream.observation.Acceptance, "publication") = null,
+     publication_hash: [32]u8 = undefined,
+     admission_frame: u64 = 0,
+     odd_sequence: u64 = 0,
+     even_sequence: u64 = 0,
+     render_used: bool = false,
+-    fn fail(self: *RetryWorkload) void {
++    fn fail(self: *RetryWorkload, reason: FailureReason) void {
++        _ = self.failure_reason.cmpxchgStrong(.none, reason, .acq_rel, .acquire);
+         self.failed.store(true, .release);
+         self.cancelled.store(true, .release);
+         self.release_render.store(true, .release);
+     }
+-    fn wait(self: *RetryWorkload, flag: *std.atomic.Value(bool)) bool {
++    fn require(self: *RetryWorkload, condition: bool, reason: FailureReason) bool {
++        if (!condition) self.fail(reason);
++        return condition;
++    }
++    fn wait(self: *RetryWorkload, flag: *std.atomic.Value(bool), timeout_reason: FailureReason) bool {
+         const began = std.Io.Clock.awake.now(t.io);
+         while (!flag.load(.acquire)) {
+             if (self.cancelled.load(.acquire)) return false;
+-            if (!self.recorder.healthy() or began.durationTo(std.Io.Clock.awake.now(t.io)).nanoseconds >= 500 * std.time.ns_per_ms) {
+-                self.fail();
++            if (!self.recorder.healthy()) {
++                self.fail(.capture_unhealthy);
++                return false;
++            }
++            if (began.durationTo(std.Io.Clock.awake.now(t.io)).nanoseconds >= 500 * std.time.ns_per_ms) {
++                self.fail(timeout_reason);
+                 return false;
+             }
+             pause();
+@@ -179,61 +226,68 @@ const RetryWorkload = struct {
+             },
+             .worker_completed => |completed| {
+                 if (completed.job == self.target.load(.acquire)) {
+-                    if (completed.outcome != .ready) self.fail() else self.worker_ready.store(true, .release);
++                    if (completed.outcome != .ready) self.fail(.worker_not_ready) else self.worker_ready.store(true, .release);
+                 }
+             },
+             .before_attempt => {
+                 if (self.begun or self.target.load(.acquire) == 0) return;
+                 self.begun = true;
+-                if (!self.wait(&self.worker_ready)) return;
++                if (!self.wait(&self.worker_ready, .wait_worker_ready_timeout)) return;
+                 self.waiting_odd.store(true, .release);
+-                _ = self.wait(&self.odd_held);
++                _ = self.wait(&self.odd_held, .wait_odd_timeout);
+             },
+             .render_odd => |sequence| {
+                 if (self.render_used or !self.waiting_odd.load(.acquire)) return;
+                 self.render_used = true;
+                 self.odd_sequence = sequence;
+                 self.odd_held.store(true, .release);
+-                _ = self.wait(&self.release_render);
++                _ = self.wait(&self.release_render, .wait_release_timeout);
+             },
+             .render_even => |sequence| {
+                 if (self.render_used and !self.even_observed.load(.acquire)) {
+                     self.even_sequence = sequence;
+                     self.even_observed.store(true, .release);
++                    // A real even publication is not a stable window by itself.
++                    // Hold this one test Render until the actual second attempt
++                    // returns; no engine state or acceptance result is supplied.
++                    _ = self.wait(&self.second_attempt_returned, .wait_second_timeout);
+                 }
+             },
+             .after_attempt => |actual| {
+                 if (!self.begun or self.second != null) return;
+-                const selected = actual.attempt.evidence.selected orelse {
+-                    self.fail();
+-                    return;
+-                };
+                 if (self.first == null) {
+                     self.first = actual.attempt.*;
+-                    if (selected.outcome != .ready or actual.finished or
+-                        actual.attempt.deferred == null or actual.attempt.deferred.?.reason != .odd_sequence or
+-                        actual.attempt.evidence.outcome != .availability_unavailable or actual.attempt.evidence.accepted != null or
+-                        actual.attempt.evidence.publication != null or !std.meta.eql(actual.attempt.evidence.effects, stream.observation.Effects{}))
+-                    {
+-                        self.fail();
+-                        return;
+-                    }
++                    self.first_finished = actual.finished;
++                    self.first_effective_frame = actual.effective_frame;
++                    if (!self.require(actual.attempt.evidence.selected != null, .first_selected_missing)) return;
++                    if (!self.require(actual.attempt.evidence.selected.?.outcome == .ready, .first_not_ready)) return;
++                    if (!self.require(!actual.finished, .first_finished)) return;
++                    if (!self.require(actual.attempt.deferred != null, .first_defer_missing)) return;
++                    if (!self.require(actual.attempt.deferred.?.reason == .odd_sequence, .first_defer_not_odd)) return;
++                    if (!self.require(actual.attempt.evidence.outcome == .availability_unavailable, .first_wrong_outcome)) return;
++                    if (!self.require(actual.attempt.evidence.accepted == null, .first_accepted)) return;
++                    if (!self.require(actual.attempt.evidence.publication == null, .first_publication)) return;
++                    if (!self.require(std.meta.eql(actual.attempt.evidence.effects, stream.observation.Effects{}), .first_effects)) return;
+                     self.release_render.store(true, .release);
+-                    _ = self.wait(&self.even_observed);
++                    _ = self.wait(&self.even_observed, .wait_even_timeout);
+                 } else {
++                    // Even failure/no-selection returns release the even hold.
++                    defer self.second_attempt_returned.store(true, .release);
+                     self.second = actual.attempt.*;
+-                    if (!actual.finished or actual.attempt.deferred != null or actual.attempt.cut == null or !std.meta.eql(self.first.?.incoming, actual.attempt.incoming) or
+-                        !std.meta.eql(self.first.?.evidence.selected, actual.attempt.evidence.selected) or
+-                        actual.attempt.evidence.accepted == null or actual.attempt.evidence.accepted.?.stale or
+-                        !actual.attempt.evidence.effects.pcm_published or !actual.attempt.evidence.effects.publication_published)
+-                    {
+-                        self.fail();
+-                        return;
+-                    }
+-                    self.publication = actual.attempt.evidence.publication orelse {
+-                        self.fail();
+-                        return;
+-                    };
++                    self.second_finished = actual.finished;
++                    self.second_effective_frame = actual.effective_frame;
++                    if (!self.require(actual.attempt.evidence.selected != null, .second_selected_missing)) return;
++                    if (!self.require(actual.finished, .second_not_finished)) return;
++                    if (!self.require(actual.attempt.deferred == null, .second_deferred)) return;
++                    if (!self.require(actual.attempt.cut != null, .second_cut_missing)) return;
++                    if (!self.require(std.meta.eql(self.first.?.incoming, actual.attempt.incoming), .second_incoming_changed)) return;
++                    if (!self.require(std.meta.eql(self.first.?.evidence.selected, actual.attempt.evidence.selected), .second_selected_changed)) return;
++                    if (!self.require(actual.attempt.evidence.accepted != null, .second_accepted_missing)) return;
++                    if (!self.require(!actual.attempt.evidence.accepted.?.stale, .second_stale)) return;
++                    if (!self.require(actual.attempt.evidence.effects.pcm_published, .second_pcm_missing)) return;
++                    if (!self.require(actual.attempt.evidence.effects.publication_published, .second_publication_effect_missing)) return;
++                    if (!self.require(actual.attempt.evidence.publication != null, .second_publication_missing)) return;
++                    self.publication = actual.attempt.evidence.publication;
+                     const canonical = fixture.rt.streaming.visibility.encode(self.publication.?);
+                     self.publication_hash = format.hash(&canonical);
+                     self.succeeded.store(true, .release);
+@@ -247,10 +301,8 @@ const RetryWorkload = struct {
+         if (value.payload == .admission) if (self.publication) |publication| {
+             const admission = value.payload.admission;
+             if (admission.batch_id == publication.batch_id and admission.kind == .stream_visibility) {
+-                if (admission.disposition != .admitted or !std.mem.eql(u8, &admission.content_hash, &self.publication_hash)) {
+-                    self.fail();
+-                    return;
+-                }
++                if (!self.require(admission.disposition == .admitted, .admission_rejected)) return;
++                if (!self.require(std.mem.eql(u8, &admission.content_hash, &self.publication_hash), .admission_hash_mismatch)) return;
+                 self.admission_frame = admission.frame;
+                 self.admitted.store(true, .release);
+             }
+@@ -276,14 +328,46 @@ const RetryWorkload = struct {
+             _ = self.nonzero_submitted_samples.fetchAdd(nonzero, .release);
+         }
+     }
++    fn writeAttempt(writer: *std.Io.Writer, label: []const u8, value: ?stream.LiveAcceptanceAttemptV1, finished: bool, effective_frame: u64) !void {
++        try writer.print("attempt={s} present={} finished={} effective_frame={d}", .{ label, value != null, finished, effective_frame });
++        const attempt = value orelse {
++            try writer.writeAll("\n");
++            return;
++        };
++        const evidence = attempt.evidence;
++        try writer.print(" incoming_frame={d} incoming_tick={d} incoming_order={d} outcome={s} returned_error_present={} returned_error={s} cut_present={} defer_present={} defer_reason={s}", .{ attempt.incoming.accepted_control_frame, attempt.incoming.control_tick, attempt.incoming.input_order, @tagName(evidence.outcome), attempt.returned_error != null, if (attempt.returned_error) |err| @errorName(err) else "null", attempt.cut != null, attempt.deferred != null, if (attempt.deferred) |d| @tagName(d.reason) else "null" });
++        if (attempt.cut) |cut| try writer.print(" cut_sequence={d} cut_frame={d} cut_consumed={d} cut_produced={d} cut_available={d}", .{ cut.sequence, cut.frame, cut.consumed, cut.produced, cut.available });
++        if (attempt.deferred) |d| try writer.print(" defer_handle_index={d} defer_handle_generation={d} defer_before_present={} defer_before={d} defer_after_present={} defer_after={d} defer_frame_present={} defer_frame={d}", .{ d.handle.index, d.handle.generation, d.sequence_before != null, d.sequence_before orelse 0, d.sequence_after != null, d.sequence_after orelse 0, d.observed_frame != null, d.observed_frame orelse 0 });
++        try writer.print(" selected_present={}", .{evidence.selected != null});
++        if (evidence.selected) |selected| {
++            const job = selected.descriptor;
++            try writer.print(" selected_job={d} selected_outcome={s} selected_slot={d} selected_handle_index={d} selected_handle_generation={d} selected_ordinal={d} selected_count={d} selected_failure_code={d} selected_hash={s} selected_asset={d} selected_generation={d} selected_epoch={d} selected_operation={s} selected_group={d} selected_layer={d} selected_loop_epoch={d} selected_target_cursor={d} selected_realize_frame={d}", .{ job.job, @tagName(selected.outcome), selected.slot, selected.handle.index, selected.handle.generation, selected.ordinal, selected.count, selected.failure_code, std.fmt.bytesToHex(selected.content_hash, .lower), job.asset, job.generation, job.transport_epoch, @tagName(job.operation), job.group, job.layer, job.loop_epoch, job.target_cursor, job.realize_frame });
++        }
++        try writer.print(" accepted_present={} accepted_stale_present={} accepted_stale={}", .{ evidence.accepted != null, evidence.accepted != null, if (evidence.accepted) |accepted| accepted.stale else false });
++        if (evidence.accepted) |accepted| if (accepted.input.payload == .worker) try writer.print(" accepted_worker_job={d} accepted_worker_state={s}", .{ accepted.input.payload.worker.job, @tagName(accepted.input.payload.worker.state) });
++        const effects = evidence.effects;
++        try writer.print(" effect_stale_completion={} effect_pcm_published={} effect_publication_published={} effect_stream_failed={} effect_stream_cancelled={} effect_job_released={} effect_throughput_observation={} publication_present={}", .{ effects.stale_completion_counted, effects.pcm_published, effects.publication_published, effects.stream_failed, effects.stream_cancelled, effects.job_released, effects.throughput_observation_attempted, evidence.publication != null });
++        if (evidence.publication) |publication| {
++            const canonical = fixture.rt.streaming.visibility.encode(publication);
++            try writer.print(" publication_batch={d} publication_worker_job={d} publication_slot={d} publication_generation={d} publication_prefix_start={d} publication_prefix_end={d} publication_cursor={d} publication_loop_epoch={d} publication_pcm_hash={s} publication_descriptor_hash={s}", .{ publication.batch_id, publication.worker_job, publication.stream_slot, publication.stream_generation, publication.prefix_start, publication.prefix_end, publication.target_cursor, publication.loop_epoch, std.fmt.bytesToHex(publication.pcm_hash, .lower), std.fmt.bytesToHex(format.hash(&canonical), .lower) });
++        }
++        try writer.writeAll("\n");
++    }
+     // Called only after actual Control and Worker joins and device stop.
+     fn report(self: *const RetryWorkload, directory: std.Io.Dir) !void {
+         const first = self.first;
+         const second = self.second;
+-        const bytes = try std.fmt.allocPrint(allocator, "{{\"classification\":\"controlled_retry\",\"target_job\":{d},\"selected_job\":{d},\"worker_ready\":{},\"first_seen\":{},\"second_seen\":{},\"same_incoming\":{},\"odd_sequence\":{d},\"even_sequence\":{d},\"succeeded\":{},\"admitted\":{},\"admission_frame\":{d},\"prefix_start\":{d},\"prefix_end\":{d},\"nonzero_submitted_samples_after_admission\":{d},\"failed\":{}}}\n", .{ self.target.load(.acquire), if (first) |v| if (v.evidence.selected) |v_selected| v_selected.descriptor.job else 0 else 0, self.worker_ready.load(.acquire), first != null, second != null, if (first != null and second != null) std.meta.eql(first.?.incoming, second.?.incoming) else false, self.odd_sequence, self.even_sequence, self.succeeded.load(.acquire), self.admitted.load(.acquire), self.admission_frame, if (self.publication) |p| p.prefix_start else 0, if (self.publication) |p| p.prefix_end else 0, self.nonzero_submitted_samples.load(.acquire), self.failed.load(.acquire) });
++        const bytes = try std.fmt.allocPrint(allocator, "{{\"classification\":\"controlled_retry\",\"target_job\":{d},\"selected_job\":{d},\"worker_ready\":{},\"first_seen\":{},\"second_seen\":{},\"same_incoming\":{},\"odd_sequence\":{d},\"even_sequence\":{d},\"succeeded\":{},\"admitted\":{},\"admission_frame\":{d},\"prefix_start\":{d},\"prefix_end\":{d},\"nonzero_submitted_samples_after_admission\":{d},\"failed\":{},\"failure_reason\":\"{s}\",\"second_attempt_returned\":{}}}\n", .{ self.target.load(.acquire), if (first) |v| if (v.evidence.selected) |v_selected| v_selected.descriptor.job else 0 else 0, self.worker_ready.load(.acquire), first != null, second != null, if (first != null and second != null) std.meta.eql(first.?.incoming, second.?.incoming) else false, self.odd_sequence, self.even_sequence, self.succeeded.load(.acquire), self.admitted.load(.acquire), self.admission_frame, if (self.publication) |p| p.prefix_start else 0, if (self.publication) |p| p.prefix_end else 0, self.nonzero_submitted_samples.load(.acquire), self.failed.load(.acquire), @tagName(self.failure_reason.load(.acquire)), self.second_attempt_returned.load(.acquire) });
+         defer allocator.free(bytes);
+         try writeFile(directory, "controlled-retry.json", bytes);
+         std.debug.print("SEMANTIC_CONTROLLED_RETRY {s}", .{bytes});
++        var details: std.Io.Writer.Allocating = .init(allocator);
++        defer details.deinit();
++        try writeAttempt(&details.writer, "first", self.first, self.first_finished, self.first_effective_frame);
++        try writeAttempt(&details.writer, "second", self.second, self.second_finished, self.second_effective_frame);
++        try details.writer.print("selected_equal={} incoming_equal={}\n", .{ if (first != null and second != null) std.meta.eql(first.?.evidence.selected, second.?.evidence.selected) else false, if (first != null and second != null) std.meta.eql(first.?.incoming, second.?.incoming) else false });
++        try writeFile(directory, "controlled-retry-attempts.txt", details.written());
++        std.debug.print("SEMANTIC_CONTROLLED_RETRY_ATTEMPTS {s}", .{details.written()});
+     }
+ };
+ 
+@@ -891,7 +975,23 @@ test "retry workload rejects noncapture nonnull recovery and hidden service bind
+     try t.expect(session.host == null and !session.used);
+     var coordinator: RetryWorkload = .{ .recorder = recorder, .audio = session.config.audio, .output = session.config.output };
+     var unmet: std.atomic.Value(bool) = .init(false);
+-    coordinator.fail();
+-    try t.expect(!coordinator.wait(&unmet));
++    coordinator.fail(.test_cancel);
++    coordinator.fail(.wait_second_timeout);
++    try t.expect(!coordinator.wait(&unmet, .wait_second_timeout));
+     try t.expect(coordinator.cancelled.load(.acquire) and coordinator.release_render.load(.acquire));
++    try t.expectEqual(RetryWorkload.FailureReason.test_cancel, coordinator.failure_reason.load(.acquire));
++}
++
++test "retry attempt diagnostic writes actual flat fields and propagates truncated output" {
++    var value: fixture.rt.streaming.stream.LiveAcceptanceAttemptV1 = .{ .incoming = .{ .accepted_control_frame = 4864, .control_tick = 66, .input_order = 1 } };
++    value.evidence.outcome = .availability_unavailable;
++    value.deferred = .{ .reason = .odd_sequence, .handle = .{ .index = 3, .generation = 4 }, .observed_frame = null, .sequence_before = 155, .sequence_after = null };
++    var output: std.Io.Writer.Allocating = .init(allocator);
++    defer output.deinit();
++    try RetryWorkload.writeAttempt(&output.writer, "second", value, false, 4864);
++    const text = output.written();
++    for ([_][]const u8{ "attempt=second present=true finished=false", "incoming_tick=66 incoming_order=1", "outcome=availability_unavailable", "defer_reason=odd_sequence", "defer_before_present=true defer_before=155", "selected_present=false", "accepted_present=false accepted_stale_present=false", "effect_pcm_published=false effect_publication_published=false", "publication_present=false" }) |needle| try t.expect(std.mem.indexOf(u8, text, needle) != null);
++    var tiny: [8]u8 = undefined;
++    var fixed: std.Io.Writer = .fixed(&tiny);
++    try t.expectError(error.WriteFailed, RetryWorkload.writeAttempt(&fixed, "second", value, false, 4864));
+ }
