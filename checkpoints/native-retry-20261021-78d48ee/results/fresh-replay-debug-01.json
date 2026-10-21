@@ -1,0 +1,47 @@
+{
+  "exit": 0,
+  "stop_reason": null,
+  "elapsed_seconds": 8.145496852999713,
+  "source_guard_equal": true,
+  "minimum_free_bytes": 27500986368,
+  "classification": "FRESH_STRICT_REPLAY_PASS",
+  "source_commit": "94d77ca413ef1e99207aed79ec57948bf06df610",
+  "source_tree": "78d48eed7e7fabf242a7a0572a944e2c13f2a656",
+  "tests_passed": 10,
+  "replay": {
+    "profile": 9,
+    "fresh_replay_verified": true,
+    "matched_control": 60987,
+    "matched_worker": 65332,
+    "matched_render": 32832,
+    "matched_ui": 1168,
+    "submitted_samples": 28672,
+    "discarded_pending_samples": 0,
+    "discarded_generated_samples": 512,
+    "command_accepted": 2,
+    "command_terminal": 2,
+    "host_joined": true,
+    "host_destroyed": true,
+    "eof": true
+  },
+  "identity": {
+    "native_exit": 0,
+    "before": {
+      "exact-process-elf": "a9f32cc5a392bf2618700e71ab3467b0fc62f69a17099559233fff50a56e2db5",
+      "history.bin": "3bee2242a969397bdea02e21b38f76f9cf538387471ccfb15102a908582cc6eb",
+      "bank.bin": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+    },
+    "after": {
+      "exact-process-elf": "a9f32cc5a392bf2618700e71ab3467b0fc62f69a17099559233fff50a56e2db5",
+      "history.bin": "3bee2242a969397bdea02e21b38f76f9cf538387471ccfb15102a908582cc6eb",
+      "bank.bin": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+    },
+    "identity_unchanged": true
+  },
+  "log_sha256": "ea2c45dc66012dbfab12e967a1bae06bdb8653a080e03e53288ce3c85c350da2",
+  "limitations": [
+    "Controlled short workload, not sustained real-time throughput qualification.",
+    "ReleaseSafe/default and Windows acceptance remain pending.",
+    "Original long Debug recording capacity failure retained."
+  ]
+}
