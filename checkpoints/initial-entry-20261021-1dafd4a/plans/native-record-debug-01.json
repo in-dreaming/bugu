@@ -1,0 +1,81 @@
+{
+  "stage": "UNVERIFIED single actual native capture on fixed startup-source candidate",
+  "source_commit": "5dc8a31344e391142c6a0403c3bd49e9aca88840",
+  "source_tree": "1dafd4a23dc8da1f1a400ddac020751a79e8552c",
+  "setup": {
+    "create_exclusive_empty_directory": "${RECOVERY_ROOT}/qualification/initial-entry-native-tape"
+  },
+  "command": [
+    "python",
+    "${RECOVERY_ROOT}/qualification/run_guarded.py",
+    "--repo",
+    "${RECOVERY_ROOT}/repo",
+    "--out",
+    "${RECOVERY_ROOT}/qualification/initial-entry-native-record-debug-01",
+    "--seconds",
+    "900",
+    "--",
+    "/usr/bin/env",
+    "-u",
+    "SME_LIVE_SEMANTIC_STREAM_FAIL_AFTER",
+    "-u",
+    "SME_LIVE_SEMANTIC_CONTROLLED_CROSS_FRAME",
+    "-u",
+    "SME_DEFAULT_CONTROL_DELAY_MS",
+    "-u",
+    "SME_DEFAULT_WORKER_DELAY_MS",
+    "SME_LIVE_SEMANTIC_MODE=record",
+    "SME_LIVE_SEMANTIC_WRITER=stream",
+    "SME_LIVE_SEMANTIC_WORKLOAD=retry",
+    "SME_LIVE_SEMANTIC_DIR=${RECOVERY_ROOT}/qualification/initial-entry-native-tape",
+    "${RECOVERY_ROOT}/toolchains/zig-x86_64-linux-0.16.0/zig",
+    "build",
+    "sme-live-semantic-process-test",
+    "sme-author-live-production-check",
+    "-j1",
+    "-Doptimize=Debug",
+    "--summary",
+    "all"
+  ],
+  "timeout_seconds": 900,
+  "resource_bounds": {
+    "parallel_build_jobs": 1,
+    "start_disk_min_bytes": 3355443200,
+    "runtime_disk_floor_bytes": 2281701376,
+    "file_cap_bytes": 536870912,
+    "recording_and_callback_capacities": "unchanged production profile and original retry fixture",
+    "controlled_handshake_timeout_ms": 500
+  },
+  "expected": "Existing isolated retry workload: actual concurrent native Host, real source decoding/clocks and audio callbacks, actual same-incoming odd-to-even acceptance retry with admitted nonzero PCM, Play/Stop terminals and full teardown. Persist sealed history.bin+bank.bin; retain exact producing ELF by verified build hash. Verify new initial-entry raw-consumed/cancel sites occur in actual tape, envelope and retry reference witness, canonical Input/Schedule reference counts. This invocation records only; fresh-process strict replay and negative mutation are separate future plans. Production non-test target also compiles.",
+  "limits": [
+    "Controlled retry workload is not sustained-throughput qualification or a Windows reproduction.",
+    "No timing retries, capacity expansion, expected-output injection or replacement of failed history.",
+    "If capture is incomplete, preserve it and fail; do not proceed to fresh replay.",
+    "Historical tapes/ELFs are absent and this is explicitly a new same-build regeneration."
+  ],
+  "files": {
+    "run_guarded.py": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+    "inspect_retry_tape.py": "b5b0285d37d7f1c2b25e14e78b207d28a66c66949695069445a050fa5cb8f09b"
+  },
+  "publication": {
+    "status": "UNVERIFIED",
+    "local_manifest_sha256": "2075ab50d55ac0950052a3f203bee9a8adbf16eee9f757b800d4165d789b2258",
+    "path_binding": "Resolve ${RECOVERY_ROOT} to the recovered tree's parent directory. Public argv is parameterized and not byte-identical to the local absolute argv.",
+    "runner": {
+      "commit": "93813b70910692c105d1ebf3d4754e6626fdf8a3",
+      "path": "checkpoints/baseline-retry-20261021-6327086/run_guarded.py",
+      "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+    },
+    "inspector": {
+      "commit": "041ce50bc361959b6b5014d9a0afc679f6903942",
+      "path": "checkpoints/native-retry-20261021-78d48ee/plans/reference-negative-debug-01/inspect_retry_tape.py",
+      "sha256": "b5b0285d37d7f1c2b25e14e78b207d28a66c66949695069445a050fa5cb8f09b"
+    },
+    "execution_requirements": [
+      "Use ordinary Python without -O/PYTHONOPTIMIZE.",
+      "External interruption without a terminal result is UNKNOWN, never pass.",
+      "Only text plans and public technical summaries are published by this workflow, not raw ELF/tape/bank artifacts. Artifact hashes alone do not back up their bytes.",
+      "Do not run replay without a separately persisted fresh-process plan and actual sealed recording identity."
+    ]
+  }
+}
