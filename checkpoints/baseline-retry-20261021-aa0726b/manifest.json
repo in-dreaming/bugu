@@ -1,0 +1,77 @@
+{
+  "stage": "UNVERIFIED baseline with consistent direct real Render fixture",
+  "original_source": "e15de1243d23fa67449674ab75fcebe735e9840d",
+  "base_tree": "c0529a1fbab405ec38083cbd9c9d69d1b51866a3",
+  "synthetic_base": "36d4e6c97cd9cc6a099ae273b7655a1fd3a335d1",
+  "source_commit": "8aec6033fb43ab63f8f72a0b12bfcbd84cd03d2d",
+  "source_tree": "aa0726beb9d86db5075ac6e413ac37914810f21d",
+  "timeout_seconds": 600,
+  "resource_bounds": {
+    "parallel_build_jobs": 1,
+    "start_disk_min_bytes": 3355443200,
+    "runtime_disk_floor_bytes": 2281701376,
+    "test_barrier_seconds": 5
+  },
+  "expected_baseline": "Original Runtime stops on its first typed defer. The release case is expected to retain a real missing-suffix fault and fail accepted-count assertions; the hold case expects two attempts while the original produces one; the empty case should pass. A compilation or fixture failure does not confirm this causal hypothesis. Earlier unavailable run results remain UNKNOWN.",
+  "files": {
+    "tests/sme/live_acceptance_retry_test.zig": "def14404d44dbf206183d276d1e8177431236c304d60821d10e44e3f4e39191d",
+    "tests/sme/live_semantic_codec_test.zig": "fe6edf2e703f29c4061954e48a44aa9b143df4d8fe436335aa54e7f8ea7c821b",
+    "build_support/sme_tasks/task-017.zon": "acab18cc71ef8c7619295229a540775ca1425926049c277a2e53b91be27153a0"
+  },
+  "checkpoint_files": {
+    "source.patch": "2c88c095b21632a80fedb441b302ef9ddb85ab14b154eac9f4e9a1fc27a05d67",
+    "run_guarded.py reused": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+  },
+  "base_commit": "6cdfe4065dfbe7ccd484372b8147c1fd5b9b47df",
+  "corrections": "Use actual direct64 Render in ready and exact remaining-64 direct Render in drain; avoid mixing quantum adapter ahead-generation with direct spans. No changes to runtime, capacities, or expected assertions.",
+  "status": "UNVERIFIED_PLANNED_NOT_RUN",
+  "command_template": [
+    "python",
+    "${CHECKPOINT_DIR}/run_guarded.py",
+    "--repo",
+    "${SOURCE_REPO}",
+    "--out",
+    "${OUTPUT_DIR}",
+    "--seconds",
+    "600",
+    "--",
+    "${ZIG_BIN}",
+    "build",
+    "sme-live-acceptance-retry-test",
+    "-j1",
+    "-Doptimize=Debug",
+    "--summary",
+    "all"
+  ],
+  "cwd_template": "${SOURCE_REPO}",
+  "path_parameters": {
+    "CHECKPOINT_DIR": "Directory containing the unchanged runner retrieved from runner_source. Not necessarily this increment's directory.",
+    "SOURCE_REPO": "Restored and patched repository at the exact source_tree above.",
+    "OUTPUT_DIR": "New, nonexistent per-run output directory.",
+    "ZIG_BIN": "Verified Zig 0.16.0 Linux x86_64 binary pinned by the recovery manifest."
+  },
+  "result_policy": {
+    "source_snapshot_is_not_validation": true,
+    "failed_baseline_assertions_remain_failed": "Confirming an expected baseline defect requires the specific retained runtime evidence, not merely a nonzero exit.",
+    "timeout_or_external_interruption": "unknown",
+    "missing_final_result": "unknown",
+    "source_changed_during_run": "invalid qualification",
+    "before_start": "not_run",
+    "raw_logs_and_private_environment_paths": "Do not publish; retain public technical summaries and evidence hashes only."
+  },
+  "runner_source": {
+    "delivery_commit": "93813b70910692c105d1ebf3d4754e6626fdf8a3",
+    "path": "checkpoints/baseline-retry-20261021-6327086/run_guarded.py",
+    "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+  },
+  "provenance": {
+    "local_run_manifest_sha256": "8fe9d1585a639c3cef41f8a67043161efac7ae2f98fede22834ad4afb1eb350d",
+    "public_manifest_transformation": "Absolute execution locations are parameterized and explanatory metadata is added; public command is a template, not the byte-identical local argv. Zig arguments and resource bounds are unchanged.",
+    "reconstructed_tests": "New implementation after recovery, not a claim to restore lost original source blobs."
+  },
+  "previous_attempt": {
+    "delivery_commit": "37e61ec44b6fe3b8d3cb1a881fb2900370430f60",
+    "path": "checkpoints/baseline-retry-20261021-c0529a1/results/debug-attempt-01.json",
+    "classification": "FIXTURE_PRECONDITION_FAILED_NOT_CAUSAL_BASELINE"
+  }
+}

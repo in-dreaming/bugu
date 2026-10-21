@@ -1,0 +1,27 @@
+diff --git a/tests/sme/live_acceptance_retry_test.zig b/tests/sme/live_acceptance_retry_test.zig
+index 5ae0d67..fea2375 100644
+--- a/tests/sme/live_acceptance_retry_test.zig
++++ b/tests/sme/live_acceptance_retry_test.zig
+@@ -51,8 +51,8 @@ fn ready(rig: Rig) ![4]stream.Handle {
+     for (0..512) |_| {
+         _ = try owner.controlTickLiveChronologyV1(f.rt.max_control_drain, null);
+         try rig.engine.workers();
+-        const pcm = try rig.engine.run.render(64);
+-        a.free(pcm);
++        var pcm: [128]f32 = undefined;
++        rig.engine.run.renderer.render(&pcm, 64, 2);
+         while (try owner.pollReceiptV1()) |receipt| {
+             try t.expectEqualDeep(ticket, receipt.ticket);
+             if (receipt.event == .terminal) {
+@@ -177,8 +177,9 @@ fn exercise(case: Case) !void {
+             try t.expectEqual(remaining, ring.produced.load(.acquire) - ring.consumed.load(.acquire));
+         }
+         // Actual DSP consumes all but its final64; no readiness/counter writes.
+-        const pcm = try rig.engine.run.render(@intCast(remaining - 64));
+-        a.free(pcm);
++        var pcm: [6144 * 2]f32 = undefined;
++        const drain: u32 = @intCast(remaining - 64);
++        renderer.render(pcm[0 .. @as(usize, drain) * 2], drain, 2);
+         for (handles, 0..) |handle, i| {
+             const ring = try service.ringFor(handle);
+             try t.expectEqual(@as(u64, 64), ring.available());
