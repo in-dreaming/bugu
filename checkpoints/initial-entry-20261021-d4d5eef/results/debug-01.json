@@ -1,0 +1,61 @@
+{
+  "classification": "PARTIAL_PROGRESS_ORACLE_PHASE_MISMATCH_UNRESOLVED",
+  "source_commit": "2c53cb5f08890d808c150662e6c41b2fa341a602",
+  "source_tree": "d4d5eef38b7ba0942c96698c8675165b9e0c5cba",
+  "result": {
+    "exit": 1,
+    "stop_reason": null,
+    "elapsed_seconds": 26.178339275000326,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 28388192256
+  },
+  "tests": {
+    "pass": 53,
+    "fail": 1,
+    "crash": 0,
+    "codec_map_pass": 52,
+    "entry_supply_pass": 1,
+    "entry_supply_fail": 1
+  },
+  "original_case": {
+    "interventions": 1,
+    "entry_defers": 0,
+    "reported_defer_stage": "background_supply",
+    "reason": "frame_mismatch",
+    "requested": 448,
+    "observed": 512,
+    "acknowledged_prefix_each": 6144,
+    "terminal_count": 1,
+    "recovered": true,
+    "stopped": true,
+    "oracle_pcm_frames": 1024,
+    "pcm_ok": true,
+    "failure": "shape_ok expects entry_supply for every same-intervention-tick defer; actual later background_supply defer fails this assertion"
+  },
+  "new_case": {
+    "initial_eligible": true,
+    "wrong_request_rejected": true,
+    "stale_tick_rejected": true,
+    "pending_seen": true,
+    "active_seen": true,
+    "executed_seen": true,
+    "unexpected_result": false,
+    "executed": true,
+    "stopped": true,
+    "oracle_pcm_frames": 1024,
+    "pcm_ok": true
+  },
+  "both_cleanup": {
+    "opened": 16,
+    "closed": 16,
+    "live_sources": 0,
+    "sample_leases": 0,
+    "instances": 0,
+    "worker_joined": true
+  },
+  "next": "Read-only determine whether background defer occurs after actual schedule submission and whether original terminal arrived while interference remained enabled. Do not weaken oracle or broaden initial qualification into pending. No further edits/execution yet.",
+  "limits": [
+    "No native replay or Windows qualification.",
+    "This run remains a failed test stage."
+  ]
+}
