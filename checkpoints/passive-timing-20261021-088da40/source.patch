@@ -1,0 +1,385 @@
+diff --git a/src/music/live_bootstrap_test_binding.zig b/src/music/live_bootstrap_test_binding.zig
+index 2c4f36b..0697d7a 100644
+--- a/src/music/live_bootstrap_test_binding.zig
++++ b/src/music/live_bootstrap_test_binding.zig
+@@ -354,7 +354,7 @@ pub const Session = struct {
+             service.public_causal_exclusion != null or
+             service.public_causal_consumed_sink != null or service.offline_causal_replay != null or
+             service.test_consumed_hook != null or service.test_readiness_hook != null or
+-            service.test_availability_hook != null or service.test_supply_hook != null or service.test_supply_return_hook != null or
++            service.test_availability_hook != null or service.test_supply_hook != null or service.test_supply_return_hook != null or service.test_worker_clock_observer != null or
+             service.test_frontier_hook != null or service.test_worker_hook != null or
+             service.test_worker_stage_hook != null or service.test_publication_hook != null or
+             service.next_generation != 1 or service.next_job != 1 or service.next_snapshot != 1 or
+diff --git a/src/music/resident_runtime.zig b/src/music/resident_runtime.zig
+index 9312828..09b9807 100644
+--- a/src/music/resident_runtime.zig
++++ b/src/music/resident_runtime.zig
+@@ -750,7 +750,7 @@ pub const MusicRuntime = struct {
+             if (host) try session.validatePublishedBorrowSet(self, service) else try session.validateBorrowSet(self, service);
+             if (self.control.streaming_service != service or !service.runtime_attached or service.public_causal_exclusion != null or
+                 service.test_consumed_hook != null or service.test_readiness_hook != null or service.test_availability_hook != null or
+-                service.test_supply_hook != null or service.test_supply_return_hook != null or service.test_frontier_hook != null or service.test_worker_hook != null or
++                service.test_supply_hook != null or service.test_supply_return_hook != null or service.test_worker_clock_observer != null or service.test_frontier_hook != null or service.test_worker_hook != null or
+                 service.test_worker_stage_hook != null or service.test_publication_hook != null) return error.InvalidMode;
+             if (self.test_collect_hook != null or self.test_tick_hook != null or self.test_load_hook != null or
+                 self.test_source_observation_unavailable or self.ingress.test_hook != null or self.observer_storage != null or self.observer_handle != null or
+@@ -11498,7 +11498,7 @@ pub const MusicRuntime = struct {
+             service.offline_causal_replay != null or service.replay_mode or
+             (session.bootstrap == null and (service.prerequisite_order_mode != .prerequisite or service.live_slot_guard_points or service.live_availability_points)) or
+             (session.bootstrap == null and (service.test_checkpoint_hook != null or service.test_worker_clock_hook != null or service.test_acceptance_hook != null)) or service.test_consumed_hook != null or
+-            service.test_readiness_hook != null or service.test_availability_hook != null or service.test_supply_hook != null or service.test_supply_return_hook != null or service.test_frontier_hook != null or
++            service.test_readiness_hook != null or service.test_availability_hook != null or service.test_supply_hook != null or service.test_supply_return_hook != null or service.test_worker_clock_observer != null or service.test_frontier_hook != null or
+             service.test_worker_hook != null or service.test_worker_stage_hook != null or service.test_publication_hook != null) return error.DrainPending;
+         if (session.hasNativeBorrow()) try session.validateNativeFinal();
+         if (session.bootstrap != null and session.phase.load(.acquire) != .borrow_ended) {
+diff --git a/src/streaming/music_stream.zig b/src/streaming/music_stream.zig
+index 5fd7f73..51238a9 100644
+--- a/src/streaming/music_stream.zig
++++ b/src/streaming/music_stream.zig
+@@ -520,6 +520,14 @@ pub const TestJoinedClock = struct {
+         if (self.failure == .none) self.failure = .host_abort;
+     }
+ };
++/// Passive copy of the already acquired Worker clock result. No replacement
++/// function or clock access is exposed. Install/remove under Worker exclusion;
++/// callbacks must not wait or perform I/O and their storage outlives the Worker.
++pub const TestWorkerClockObserver = if (@import("builtin").is_test) struct {
++    context: *anyopaque,
++    observe: *const fn (*anyopaque, WorkerClockStage, u64, OfflineClockSample) void,
++} else struct {};
++
+ pub const TestWorkerClockHook = struct {
+     context: *anyopaque,
+     observe: *const fn (*anyopaque, WorkerClockStage, u64, OfflineClockSample) void,
+@@ -616,6 +624,9 @@ pub const Service = struct {
+     test_checkpoint_hook: if (@import("builtin").is_test) ?TestCheckpointHook else void = if (@import("builtin").is_test) null else {},
+     /// Install only while the sole Worker is parked; absent from shipping state.
+     test_worker_clock_hook: if (@import("builtin").is_test) ?TestWorkerClockHook else void = if (@import("builtin").is_test) null else {},
++    /// Test-only passive result notification, distinct from the substituting
++    /// clock hook. It never selects a sample or changes workerClock's return.
++    test_worker_clock_observer: if (@import("builtin").is_test) ?TestWorkerClockObserver else void = if (@import("builtin").is_test) null else {},
+     /// Narrow deterministic original-capture seam. Offline replay never calls it.
+     test_consumed_hook: if (@import("builtin").is_test) ?struct { context: *anyopaque, call: *const fn (*anyopaque, OfflineCheckpoint) void } else void = if (@import("builtin").is_test) null else {},
+     test_readiness_hook: if (@import("builtin").is_test) ?readiness_observation.ReadHook else void = if (@import("builtin").is_test) null else {},
+@@ -1594,6 +1605,8 @@ pub const Service = struct {
+         if (comptime @import("builtin").is_test) if (self.test_worker_clock_hook) |hook|
+             hook.observe(hook.context, stage, job, sample);
+         self.workerFact(.{ .clock = .{ .stage = stage, .job = job, .value = sample.value, .available = sample.available, .error_code = sample.error_code } });
++        if (comptime @import("builtin").is_test) if (self.test_worker_clock_observer) |observer|
++            observer.observe(observer.context, stage, job, sample);
+         return sample.value;
+     }
+     /// Original raw acquisition, including availability and failure semantics.
+@@ -2380,7 +2393,7 @@ pub const Service = struct {
+             self.observation_sequence.load(.acquire) != 0 or self.observation_frame.load(.acquire) != 0)
+             return error.InvalidState;
+         if (comptime @import("builtin").is_test) {
+-            if (self.test_checkpoint_hook != null or self.test_worker_clock_hook != null or
++            if (self.test_checkpoint_hook != null or self.test_worker_clock_hook != null or self.test_worker_clock_observer != null or
+                 self.test_consumed_hook != null or self.test_readiness_hook != null or
+                 self.test_availability_hook != null or self.test_supply_hook != null or self.test_supply_return_hook != null or
+                 self.test_frontier_hook != null or self.test_worker_hook != null or
+diff --git a/tests/sme/author_live_default_chronology_test.zig b/tests/sme/author_live_default_chronology_test.zig
+index 7f23046..bde2e41 100644
+--- a/tests/sme/author_live_default_chronology_test.zig
++++ b/tests/sme/author_live_default_chronology_test.zig
+@@ -301,6 +301,7 @@ const NativeDiagnostics = struct {
+         // Supply/tick entries use the current Control position, not a claimed
+         // operation-local accepted frame. Public inputs retain their own position.
+         position: Position,
++        observed_clock: ?stream.OfflineClockSample = null,
+         value: union(enum) {
+             supply: Supply,
+             supply_return: stream.TestSupplyReturn,
+@@ -310,7 +311,29 @@ const NativeDiagnostics = struct {
+             tick: f.music.MusicRuntime.LiveControlTickOutcomeV1,
+         },
+     };
+-    const WorkerEvent = struct { kind: enum { running, completed }, job: u64, identity: ?JobIdentity = null };
++    const WorkerTiming = struct {
++        job: ?u64 = null,
++        begin: ?stream.OfflineClockSample = null,
++        end: ?stream.OfflineClockSample = null,
++        pair_invalid: bool = false,
++        nonmonotonic: bool = false,
++    };
++    const WorkerEvent = struct { kind: enum { running, completed }, job: u64, identity: ?JobIdentity = null, timing: ?WorkerTiming = null };
++    // Exact pre-timing field layouts, used only to report added diagnostic
++    // storage including array alignment rather than claiming nominal bytes.
++    const LegacyControlEvent = struct { position: Position, value: @FieldType(ControlEvent, "value") };
++    const LegacyWorkerEvent = struct { kind: @FieldType(WorkerEvent, "kind"), job: u64, identity: ?JobIdentity = null };
++    const LegacyDiagnostics = struct {
++        owner: ?*f.music.MusicRuntime,
++        service: ?*f.rt.streaming.Service,
++        installed: bool,
++        setup_failed: bool,
++        worker_identity_missing: u64,
++        control: DiagnosticTail(LegacyControlEvent, control_capacity),
++        worker: DiagnosticTail(LegacyWorkerEvent, worker_capacity),
++        first_control_failure: @FieldType(NativeDiagnostics, "first_control_failure"),
++        control_after_failure_omitted: u64,
++    };
+     const ControlTail = DiagnosticTail(ControlEvent, control_capacity);
+     const WorkerTail = DiagnosticTail(WorkerEvent, worker_capacity);
+     // Set on Control before worker_ready, then immutable. Service is installed
+@@ -320,6 +343,11 @@ const NativeDiagnostics = struct {
+     installed: bool = false, // Worker only until joins.
+     setup_failed: bool = false, // Worker only until joins.
+     worker_identity_missing: u64 = 0,
++    // Copied once by load Worker before load.completed release, immutable for
++    // Control thereafter. Same Clock/frequency/domain as native Worker samples.
++    diagnostic_clock: ?trace.metrics.Clock = null,
++    worker_timing: WorkerTiming = .{}, // Worker owned until genuine join.
++    worker_timing_orphans: u64 = 0,
+     control: ControlTail = .{},
+     worker: WorkerTail = .{},
+     first_control_failure: ?struct { next_ordinal: u64, position: Position, failure: anyerror } = null,
+@@ -345,7 +373,13 @@ const NativeDiagnostics = struct {
+             self.setup_failed = true;
+             return;
+         }
++        if (service.test_worker_clock_hook != null or service.offline_causal_replay != null or service.live_semantic_hooks != null) {
++            self.setup_failed = true;
++            return;
++        }
+         self.service = service;
++        self.diagnostic_clock = service.clock;
++        service.test_worker_clock_observer = .{ .context = self, .observe = workerClock };
+         service.test_supply_hook = .{ .context = self, .call = supply };
+         service.test_supply_return_hook = .{ .context = self, .call = supplyReturn };
+         service.test_worker_hook = .{ .context = self, .call = running };
+@@ -368,6 +402,7 @@ const NativeDiagnostics = struct {
+     }
+     fn supply(raw: *anyopaque, point: stream.TestSupplyPoint) void {
+         const self: *NativeDiagnostics = @ptrCast(@alignCast(raw));
++        const observed_clock = if (point.stage == .request_queued) self.controlClock() else null;
+         const service = self.service.?;
+         // get(handle) succeeded before the hook; these fields are Control-owned.
+         const slot = &service.slots[point.handle.index];
+@@ -379,7 +414,7 @@ const NativeDiagnostics = struct {
+             // fields; this sole Control cannot retire/reuse while in the hook.
+             value.queued = .{ .slot = index, .handle = job.handle, .descriptor = job.descriptor, .ordinal = job.ordinal, .count = job.count };
+         }
+-        self.appendControl(.{ .position = self.position(), .value = .{ .supply = value } });
++        self.appendControl(.{ .position = self.position(), .observed_clock = observed_clock, .value = .{ .supply = value } });
+     }
+     fn supplyReturn(raw: *anyopaque, value: stream.TestSupplyReturn) void {
+         const self: *NativeDiagnostics = @ptrCast(@alignCast(raw));
+@@ -389,6 +424,7 @@ const NativeDiagnostics = struct {
+     }
+     fn running(raw: *anyopaque, id: u64) void {
+         const self: *NativeDiagnostics = @ptrCast(@alignCast(raw));
++        self.worker_timing = .{ .job = id };
+         var value: WorkerEvent = .{ .kind = .running, .job = id };
+         // Only inspect the one running job while this Worker owns its claim.
+         // Never read free/completed descriptors or Control's diagnostic lane.
+@@ -407,7 +443,40 @@ const NativeDiagnostics = struct {
+         const self: *NativeDiagnostics = @ptrCast(@alignCast(raw));
+         if (stage != .after_completed) return;
+         // The released slot may already be reused. Only the argument is safe.
+-        self.worker.append(.{ .kind = .completed, .job = id });
++        var timing = self.worker_timing;
++        if (timing.job != id or timing.begin == null or timing.end == null) timing.pair_invalid = true;
++        if (timing.begin) |begin| if (timing.end) |end| {
++            timing.nonmonotonic = begin.available and end.available and begin.error_code == 0 and end.error_code == 0 and end.value < begin.value;
++        };
++        self.worker.append(.{ .kind = .completed, .job = id, .timing = timing });
++        self.worker_timing = .{};
++    }
++    fn controlClock(self: *const NativeDiagnostics) stream.OfflineClockSample {
++        const clock = self.diagnostic_clock orelse return .{ .value = 0, .available = false, .error_code = 0 };
++        const value = clock.now() catch return .{ .value = 0, .available = true, .error_code = @intFromEnum(stream.WorkerExternalError.clock_failure) };
++        return .{ .value = value, .available = true, .error_code = 0 };
++    }
++    fn workerClock(raw: *anyopaque, stage: stream.WorkerClockStage, job: u64, sample: stream.OfflineClockSample) void {
++        const self: *NativeDiagnostics = @ptrCast(@alignCast(raw));
++        // No clock acquisition here. These are the Service's already obtained
++        // native samples, not timestamps of running/completed release stores.
++        if (self.worker_timing.job != job) {
++            self.worker_timing.pair_invalid = true;
++            self.worker_timing_orphans +|= 1;
++            return;
++        }
++        switch (stage) {
++            .begin => {
++                if (self.worker_timing.begin != null or self.worker_timing.end != null) self.worker_timing.pair_invalid = true;
++                if (self.worker_timing.begin == null) self.worker_timing.begin = sample;
++            },
++            .end => {
++                if (self.worker_timing.begin == null or self.worker_timing.end != null) self.worker_timing.pair_invalid = true;
++                if (self.worker_timing.end == null) self.worker_timing.end = sample;
++            },
++        }
++        // Preserve nonmonotonic samples verbatim. No subtraction/clamping and
++        // no inference of CPU duration or atomic-store linearization time.
+     }
+     fn attemptSummary(attempt: *const stream.LiveAcceptanceAttemptV1, frame: u64, finished: bool) Acceptance {
+         const evidence = &attempt.evidence;
+@@ -449,7 +518,8 @@ const NativeDiagnostics = struct {
+     }
+     fn acceptance(raw: *anyopaque, attempt: *const stream.LiveAcceptanceAttemptV1, frame: u64, finished: bool) void {
+         const self: *NativeDiagnostics = @ptrCast(@alignCast(raw));
+-        self.appendControl(.{ .position = attempt.incoming, .value = .{ .acceptance = attemptSummary(attempt, frame, finished) } });
++        const observed_clock = if (attempt.evidence.selected != null) self.controlClock() else null;
++        self.appendControl(.{ .position = attempt.incoming, .observed_clock = observed_clock, .value = .{ .acceptance = attemptSummary(attempt, frame, finished) } });
+     }
+     fn publicInputs(self: *NativeDiagnostics, inputs: []const trace.Input) void {
+         for (inputs) |input| switch (input.payload) {
+@@ -461,6 +531,7 @@ const NativeDiagnostics = struct {
+     fn writeControlEvent(writer: *std.Io.Writer, entry: ControlTail.Entry) std.Io.Writer.Error!void {
+         try writer.print("DEFAULT_HOST_CONTROL_EVENT schema=1 ordinal={d}", .{entry.ordinal});
+         try FlatDiagnostic.fields(writer, "position", entry.value.position);
++        try FlatDiagnostic.fields(writer, "observed_clock", entry.value.observed_clock);
+         try FlatDiagnostic.fields(writer, "event", entry.value.value);
+         try writer.writeByte('\n');
+     }
+@@ -470,8 +541,30 @@ const NativeDiagnostics = struct {
+         try writer.writeByte('\n');
+     }
+     fn writeAfterJoin(self: *const NativeDiagnostics, writer: *std.Io.Writer) std.Io.Writer.Error!void {
++        // Event-tail coverage only; not a timing completeness certificate.
+         const incomplete = !self.installed or self.setup_failed or self.worker_identity_missing != 0 or self.control.overwritten != 0 or self.worker.overwritten != 0 or self.control.counter_exhausted or self.worker.counter_exhausted or self.control_after_failure_omitted != 0;
+         try writer.print("DEFAULT_HOST_EVENT_TAIL schema=1 selected_hooks_only=true global_order=false replay_certificate=false supply_return_observer=true reached_locals_only=true null_availability_not_zero=true worker_lookup_max_slots=256 acceptance_states_coherent=false acceptance_states_encoding=hex_u8_0free_1queued_2running_3completed_255unobserved acceptance_states_capacity=256 timing_perturbation=true incomplete={} storage_bytes={d} installed={} setup_failed={} worker_identity_missing={d} control_capacity={d} control_retained={d} control_next={d} control_overwritten={d} control_counter_exhausted={} control_after_failure_omitted={d} worker_capacity={d} worker_retained={d} worker_next={d} worker_overwritten={d} worker_counter_exhausted={}\n", .{ incomplete, @sizeOf(NativeDiagnostics), self.installed, self.setup_failed, self.worker_identity_missing, control_capacity, self.control.len, self.control.next, self.control.overwritten, self.control.counter_exhausted, self.control_after_failure_omitted, worker_capacity, self.worker.len, self.worker.next, self.worker.overwritten, self.worker.counter_exhausted });
++        try FlatDiagnostic.line(writer, "DEFAULT_HOST_TIMING", "timing", .{
++            .units = @as(enum { ns }, .ns),
++            .domain = @as(enum { linux_monotonic, windows_qpc_scaled, unsupported }, switch (@import("builtin").os.tag) {
++                .linux => .linux_monotonic,
++                .windows => .windows_qpc_scaled,
++                else => .unsupported,
++            }),
++            .clock_available = self.diagnostic_clock != null,
++            .completeness_asserted = false,
++            .post_store_observation_not_store = true,
++            .worker_sample_interval_not_cpu_time = true,
++            .worker_begin_may_precede_queued_observation = true,
++            .no_completion_has_no_clock_sample = true,
++            .worker_timing_orphans = self.worker_timing_orphans,
++            .pending_worker_timing = self.worker_timing,
++            .storage_before_bytes = @sizeOf(LegacyDiagnostics),
++            .storage_after_bytes = @sizeOf(NativeDiagnostics),
++            .storage_added_bytes = @sizeOf(NativeDiagnostics) - @sizeOf(LegacyDiagnostics),
++            .control_tail_added_bytes = @sizeOf(ControlTail) - @sizeOf(DiagnosticTail(LegacyControlEvent, control_capacity)),
++            .worker_tail_added_bytes = @sizeOf(WorkerTail) - @sizeOf(DiagnosticTail(LegacyWorkerEvent, worker_capacity)),
++        });
+         try FlatDiagnostic.line(writer, "DEFAULT_HOST_EVENT_FAILURE", "failure", self.first_control_failure);
+         for (0..self.control.len) |i| try writeControlEvent(writer, self.control.at(i));
+         for (0..self.worker.len) |i| try writeWorkerEvent(writer, self.worker.at(i));
+@@ -1054,7 +1147,7 @@ test "flat role output preserves every event kind and deep causal identity witho
+     try NativeDiagnostics.writeWorkerEvent(&writer, .{ .ordinal = 4, .value = .{ .kind = .running, .job = 101, .identity = FlatFixture.identity } });
+     try NativeDiagnostics.writeWorkerEvent(&writer, .{ .ordinal = 5, .value = .{ .kind = .completed, .job = 101 } });
+     try FlatFixture.tokens(writer.buffered(), &.{
+-        "DEFAULT_HOST_CONTROL_EVENT schema=1 ordinal=0 position.accepted_control_frame=12288 position.control_tick=43 position.input_order=7 event.tag=supply",
++        "DEFAULT_HOST_CONTROL_EVENT schema=1 ordinal=0 position.accepted_control_frame=12288 position.control_tick=43 position.input_order=7 observed_clock.present=false observed_clock=null event.tag=supply",
+         "event.supply.point.stage=request_queued",
+         "event.supply.point.handle.generation=9",
+         "event.supply.queued.present=true",
+@@ -1230,3 +1323,108 @@ test "acceptance scan projection and flat bytes distinguish unobserved partial a
+         try FlatFixture.tokens(output, &.{expected_metadata});
+     }
+ }
++
++// Detached samples exercise passive copy/pairing and the actual post-join
++// writer. They are never installed as clock inputs in a native engine.
++test "passive diagnostic timing preserves raw samples missing errors ordering and exact output bytes" {
++    const diagnostics = try a.create(NativeDiagnostics);
++    defer a.destroy(diagnostics);
++    diagnostics.* = .{};
++    try t.expectEqual(@as(usize, 256), NativeDiagnostics.control_capacity);
++    try t.expectEqual(@as(usize, 128), NativeDiagnostics.worker_capacity);
++    diagnostics.worker_timing = .{ .job = 41 };
++    NativeDiagnostics.workerClock(diagnostics, .begin, 41, .{ .value = 0, .available = true });
++    NativeDiagnostics.workerClock(diagnostics, .end, 41, .{ .value = 17, .available = true });
++    NativeDiagnostics.workerStage(diagnostics, .after_completed, 41);
++    const zero = diagnostics.worker.at(0).value;
++    try t.expectEqual(@as(u64, 0), zero.timing.?.begin.?.value);
++    try t.expect(zero.timing.?.begin.?.available and !zero.timing.?.pair_invalid);
++    diagnostics.worker_timing = .{ .job = 42 };
++    NativeDiagnostics.workerClock(diagnostics, .begin, 42, .{ .value = 100, .available = true });
++    NativeDiagnostics.workerClock(diagnostics, .end, 42, .{ .value = 90, .available = true });
++    NativeDiagnostics.workerStage(diagnostics, .after_completed, 42);
++    try t.expect(diagnostics.worker.at(1).value.timing.?.nonmonotonic);
++    diagnostics.worker_timing = .{ .job = 43 };
++    NativeDiagnostics.workerClock(diagnostics, .begin, 43, .{ .value = 0, .available = false });
++    NativeDiagnostics.workerClock(diagnostics, .end, 43, .{ .value = 0, .available = true, .error_code = 1 });
++    NativeDiagnostics.workerStage(diagnostics, .after_completed, 43);
++    diagnostics.worker_timing = .{ .job = 44 };
++    NativeDiagnostics.workerClock(diagnostics, .begin, 45, .{ .value = 999, .available = true });
++    NativeDiagnostics.workerStage(diagnostics, .after_completed, 44);
++    try t.expectEqual(@as(u64, 1), diagnostics.worker_timing_orphans);
++    try t.expect(diagnostics.worker.at(3).value.timing.?.pair_invalid);
++    try t.expect(diagnostics.worker.at(3).value.timing.?.begin == null);
++    var output: [16384]u8 = undefined;
++    var writer: std.Io.Writer = .fixed(&output);
++    try diagnostics.writeAfterJoin(&writer);
++    try FlatFixture.tokens(writer.buffered(), &.{
++        "timing.completeness_asserted=false",
++        "timing.units=ns",
++        "timing.post_store_observation_not_store=true",
++        "timing.worker_sample_interval_not_cpu_time=true",
++        "event.job=41",
++        "event.timing.begin.present=true event.timing.begin.value=0 event.timing.begin.available=true event.timing.begin.error_code=0",
++        "event.timing.end.value=90",
++        "event.timing.nonmonotonic=true",
++        "event.timing.begin.value=0 event.timing.begin.available=false",
++        "event.timing.end.value=0 event.timing.end.available=true event.timing.end.error_code=1",
++        "event.timing.begin.present=false event.timing.begin=null",
++        "event.timing.pair_invalid=true",
++    });
++    const Parser = struct {
++        fn token(line: []const u8, key: []const u8) ![]const u8 {
++            var words = std.mem.tokenizeScalar(u8, line, ' ');
++            while (words.next()) |word| {
++                if (word.len > key.len and std.mem.startsWith(u8, word, key) and word[key.len] == '=') return word[key.len + 1 ..];
++            }
++            return error.MissingTimingField;
++        }
++        fn number(line: []const u8, key: []const u8) !u64 {
++            return std.fmt.parseInt(u64, try token(line, key), 10);
++        }
++        fn boolean(line: []const u8, key: []const u8) !bool {
++            const value = try token(line, key);
++            if (std.mem.eql(u8, value, "true")) return true;
++            if (std.mem.eql(u8, value, "false")) return false;
++            return error.InvalidTimingBoolean;
++        }
++        fn sample(line: []const u8, comptime key: []const u8) !?stream.OfflineClockSample {
++            if (!try boolean(line, key ++ ".present")) {
++                try t.expectEqualStrings("null", try token(line, key));
++                return null;
++            }
++            return .{ .value = try number(line, key ++ ".value"), .available = try boolean(line, key ++ ".available"), .error_code = @intCast(try number(line, key ++ ".error_code")) };
++        }
++    };
++    var lines = std.mem.splitScalar(u8, writer.buffered(), '\n');
++    var parsed_workers: usize = 0;
++    while (lines.next()) |line| {
++        if (!std.mem.startsWith(u8, line, "DEFAULT_HOST_WORKER_EVENT ")) continue;
++        const expected = diagnostics.worker.at(parsed_workers).value;
++        try t.expectEqual(expected.job, try Parser.number(line, "event.job"));
++        try t.expectEqualDeep(expected.timing.?.begin, try Parser.sample(line, "event.timing.begin"));
++        try t.expectEqualDeep(expected.timing.?.end, try Parser.sample(line, "event.timing.end"));
++        try t.expectEqual(expected.timing.?.pair_invalid, try Parser.boolean(line, "event.timing.pair_invalid"));
++        try t.expectEqual(expected.timing.?.nonmonotonic, try Parser.boolean(line, "event.timing.nonmonotonic"));
++        parsed_workers += 1;
++    }
++    try t.expectEqual(@as(usize, 4), parsed_workers);
++    // Parse actual writer scalar, including padding/layout in the size delta.
++    const key = " timing.storage_added_bytes=";
++    const start = (std.mem.indexOf(u8, writer.buffered(), key) orelse return error.MissingTimingSize) + key.len;
++    const stop = std.mem.indexOfScalarPos(u8, writer.buffered(), start, ' ') orelse return error.MissingTimingSizeEnd;
++    const size = try std.fmt.parseInt(usize, writer.buffered()[start..stop], 10);
++    try t.expectEqual(@sizeOf(NativeDiagnostics) - @sizeOf(NativeDiagnostics.LegacyDiagnostics), size);
++    std.debug.print("DEFAULT_HOST_TIMING_STORAGE before={d} after={d} added={d} control_capacity=256 worker_capacity=128\n", .{ @sizeOf(NativeDiagnostics.LegacyDiagnostics), @sizeOf(NativeDiagnostics), size });
++    writer = .fixed(&output);
++    const value: NativeDiagnostics.ControlEvent = .{ .position = FlatFixture.position, .observed_clock = .{ .value = 123, .available = true }, .value = .{ .acceptance = FlatFixture.acceptance() } };
++    try NativeDiagnostics.writeControlEvent(&writer, .{ .ordinal = 7, .value = value });
++    try FlatFixture.tokens(writer.buffered(), &.{ "observed_clock.present=true observed_clock.value=123 observed_clock.available=true observed_clock.error_code=0", "event.tag=acceptance" });
++    const control_line = std.mem.trimEnd(u8, writer.buffered(), "\n");
++    try t.expectEqualDeep(value.observed_clock, try Parser.sample(control_line, "observed_clock"));
++    var attempt: stream.LiveAcceptanceAttemptV1 = .{ .incoming = FlatFixture.position };
++    NativeDiagnostics.acceptance(diagnostics, &attempt, 0, false);
++    try t.expect(diagnostics.control.at(0).value.observed_clock == null);
++    const unavailable = diagnostics.controlClock();
++    try t.expect(!unavailable.available and unavailable.error_code == 0);
++}
