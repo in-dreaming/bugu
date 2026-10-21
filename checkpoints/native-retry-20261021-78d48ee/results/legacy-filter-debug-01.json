@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "compile": {
+    "exit": 0,
+    "timed_out": false,
+    "stop_reason": null,
+    "elapsed_seconds": 57.74093796000034
+  },
+  "tests": {
+    "exit": 0,
+    "timed_out": false,
+    "stop_reason": null,
+    "elapsed_seconds": 17.121181364999757
+  },
+  "passed": true,
+  "initial_free_bytes": 27132788736,
+  "elf_sha256": "1f5fbf8ae17a3274424aa302a162a53ecd02ef22a46735514a7f56ff3aa1c950",
+  "both_named_tests_reported": true,
+  "exact_two_tests_passed_marker": true,
+  "elapsed_process_seconds": 75.04520575999959,
+  "minimum_free_bytes": 26889949184,
+  "source_after": {
+    "head": "94d77ca413ef1e99207aed79ec57948bf06df610",
+    "tree": "78d48eed7e7fabf242a7a0572a944e2c13f2a656",
+    "status": "",
+    "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "source_guard_equal": true,
+  "classification": "TWO_ORIGINAL_FILTERED_LEGACY_TESTS_PASS",
+  "tests_passed": 2,
+  "argv_provenance": "Derived from same module graph response file, not original live_tick argv",
+  "test_log_sha256": "424346333dfae9a07a346db8985fc932c52cd1782f36c4b13b7c97b59e5becc7",
+  "compile_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "limitations": [
+    "Whole live_tick suite not run; only two original exact-name tests.",
+    "Debug only; no Windows run."
+  ]
+}
