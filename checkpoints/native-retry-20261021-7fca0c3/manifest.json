@@ -1,0 +1,100 @@
+{
+  "stage": "UNVERIFIED corrected retry callback parameter",
+  "original_source": "e15de1243d23fa67449674ab75fcebe735e9840d",
+  "base_tree": "7331b0b3ca7771308ed777f87bef477a7bc6ec77",
+  "synthetic_base": "36d4e6c97cd9cc6a099ae273b7655a1fd3a335d1",
+  "source_commit": "f13e0e3821c6e273564a2a59882a2d056bf12ee7",
+  "source_tree": "7fca0c35d3686a18c122d2ff9be9de6a6793eb9f",
+  "timeout_seconds": 900,
+  "resource_bounds": {
+    "parallel_build_jobs": 1,
+    "start_disk_min_bytes": 3355443200,
+    "runtime_disk_floor_bytes": 2281701376,
+    "test_barrier_seconds": 5
+  },
+  "expected_baseline": "Expected controlled_retry report and sealed history with native retry pair. Production compile and negative option/cancel tests must pass. Fresh process strict replay not claimed until separate same-ELF stage.",
+  "files": {
+    "src/music/resident_runtime.zig": "67fc65a19f1fcac1afc45b0f626fc0b12e52d9cadd351d1e691530131865fcf9",
+    "src/runtime/runtime.zig": "5a9c02497d29ec6e0c39932148421d8d45186b9c0e0c187aa6184c70a43920d4",
+    "src/streaming/music_stream.zig": "c7190bdbee70c3c267c074808b687de0506182d96313286e5eedeede13e568b0",
+    "tests/sme/semantic_live_process_test.zig": "613a89b6c1c028e30b33f5d118232aa19cf86601507e75575ca731f60bc35013",
+    "tools/sme_authoring/core/live_owner.zig": "021d2df20ff3b1490dfd965d5b07f5ab88e8ea56a1572e9f38894b2c6ce28822"
+  },
+  "checkpoint_files": {
+    "source.patch": "81cd500f9e23f14f899602083e22ca6a5ed8b3ec3bd865c1d707e82200517450",
+    "run_guarded.py reused": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+  },
+  "base_commit": "3ef2fd8d66006725650052b143a5c64f80ebce9a",
+  "corrections": "Only rename testRetryWorkload parameter event->workload_event to avoid existing Service.event declaration. Prior compile failure preserved; still no native workload result.",
+  "command_template": [
+    "python",
+    "${CHECKPOINT_DIR}/run_guarded.py",
+    "--repo",
+    "${SOURCE_REPO}",
+    "--out",
+    "${OUTPUT_DIR}",
+    "--seconds",
+    "900",
+    "--",
+    "env",
+    "SME_LIVE_SEMANTIC_MODE=record",
+    "SME_LIVE_SEMANTIC_DIR=${TAPE_DIR}",
+    "SME_LIVE_SEMANTIC_WRITER=stream",
+    "SME_LIVE_SEMANTIC_WORKLOAD=retry",
+    "${ZIG_BIN}",
+    "build",
+    "sme-live-semantic-process-test",
+    "sme-author-live-production-check",
+    "-j1",
+    "-Doptimize=Debug",
+    "--summary",
+    "all"
+  ],
+  "status": "UNVERIFIED_PLANNED_NOT_RUN",
+  "cwd_template": "${SOURCE_REPO}",
+  "result_policy": {
+    "source_snapshot_is_not_validation": true,
+    "failed_baseline_assertions_remain_failed": "Confirming an expected baseline defect requires the specific retained runtime evidence, not merely a nonzero exit.",
+    "timeout_or_external_interruption": "unknown",
+    "missing_final_result": "unknown",
+    "source_changed_during_run": "invalid qualification",
+    "before_start": "not_run",
+    "raw_logs_and_private_environment_paths": "Do not publish; retain public technical summaries and evidence hashes only."
+  },
+  "runner_source": {
+    "delivery_commit": "93813b70910692c105d1ebf3d4754e6626fdf8a3",
+    "path": "checkpoints/baseline-retry-20261021-6327086/run_guarded.py",
+    "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a"
+  },
+  "path_parameters": {
+    "CHECKPOINT_DIR": "Directory containing the unchanged runner retrieved from runner_source. Not necessarily this increment's directory.",
+    "SOURCE_REPO": "Restored and patched repository at the exact source_tree above.",
+    "OUTPUT_DIR": "New, nonexistent per-run output directory.",
+    "ZIG_BIN": "Verified Zig 0.16.0 Linux x86_64 binary pinned by the recovery manifest.",
+    "TAPE_DIR": "New, dedicated native recording directory retained locally for separately planned fresh-process replay. Raw tape and bank bytes are not published here."
+  },
+  "single_attempt_only": true,
+  "long_workload_failure_retained": {
+    "delivery_commit": "e5c3165d851aab7d9c14d6b563013bde7a93c384",
+    "path": "checkpoints/runtime-retry-20261021-2816395/results/native-record-debug-01.json"
+  },
+  "validation_scope": "Separate short controlled retry workload, not replacement for the failed long recording, natural timing or Windows acceptance.",
+  "provenance": {
+    "local_run_manifest_sha256": "771fb79185d99a880e22205f6e00d5b8bc03b946c525ab41ef66db57acf7a94a",
+    "public_manifest_transformation": "Absolute execution locations are parameterized and explanatory metadata is added; public command is a template, not the byte-identical local argv. Zig arguments and resource bounds are unchanged."
+  },
+  "parent_checkpoint": {
+    "delivery_commit": "97f7564c83d190cd04920cdcca867dccfe167f4a",
+    "path": "checkpoints/native-retry-20261021-7331b0b/manifest.json"
+  },
+  "inspection_tools": {
+    "delivery_commit": "97f7564c83d190cd04920cdcca867dccfe167f4a",
+    "path": "checkpoints/native-retry-20261021-7331b0b",
+    "note": "Only the callback parameter name changed; canonical Acceptance schema unchanged. Inspector source/schema hashes are pinned by the parent checkpoint."
+  },
+  "previous_result": {
+    "delivery_commit": "999949466d693370659ba8b4227c0fec34cd6783",
+    "path": "checkpoints/native-retry-20261021-7331b0b/results/record-debug-01.json",
+    "classification": "COMPILE_FAILED_ZERO_TESTS"
+  }
+}

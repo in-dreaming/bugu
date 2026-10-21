@@ -1,0 +1,17 @@
+diff --git a/src/streaming/music_stream.zig b/src/streaming/music_stream.zig
+index c350c6b..4c6f0f9 100644
+--- a/src/streaming/music_stream.zig
++++ b/src/streaming/music_stream.zig
+@@ -2291,10 +2291,10 @@ pub const Service = struct {
+         try self.attachLiveSemanticBindingQuiescent(hooks);
+     }
+     /// No scheduling state is read from the engine by this callback path.
+-    pub fn testRetryWorkload(self: *Service, event: TestRetryWorkloadEvent) void {
++    pub fn testRetryWorkload(self: *Service, workload_event: TestRetryWorkloadEvent) void {
+         if (@import("builtin").is_test) {
+             if (self.live_semantic_hooks) |hooks| if (hooks.test_retry_workload) |workload|
+-                workload.call(workload.context, event);
++                workload.call(workload.context, workload_event);
+         }
+     }
+     fn attachLiveSemanticBindingQuiescent(self: *Service, hooks: LiveSemanticHooks) Error!void {
