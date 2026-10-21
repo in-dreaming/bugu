@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "mutation": "selected.content_hash comparison byte xor1 only; record payload and footer digest recomputed",
+  "source": "${ORIGINAL_TAPE_DIR}/history.bin",
+  "destination": "${NEGATIVE_DIR}/history.bin",
+  "source_sha256": "3bee2242a969397bdea02e21b38f76f9cf538387471ccfb15102a908582cc6eb",
+  "mutant_sha256": "76a54ecb32e340f922c2e03f34562e1dfc51296355df1ce7c762a3133db805f6",
+  "script_sha256": "c87dfeeb9b774c5fc84bfe845b4668a61a8c4b078acdee1a56005f20323bea0d",
+  "inspector_sha256": "b5b0285d37d7f1c2b25e14e78b207d28a66c66949695069445a050fa5cb8f09b",
+  "occurrence": 52291,
+  "record_offset": 2960688,
+  "record_length": 1201,
+  "selected_pcm_hash_offset": 2960975,
+  "byte_before": 41,
+  "byte_after": 40,
+  "changed_records": [
+    {
+      "record_offset": 2960688,
+      "role": 0,
+      "class": 1,
+      "family": 110,
+      "ordinal": 10929
+    }
+  ],
+  "changed_byte_count": 65,
+  "all_input_and_schedule_records_identical": true,
+  "role_ordinals_counts_identical": true,
+  "envelope_and_acceptance_decoder_verified": true,
+  "native_replay_executed": false,
+  "expected_not_proven": "Zig preflight admits; native comparison fails exactly at the target occurrence and genuine cleanup completes. Python does not establish that result.",
+  "provenance": {
+    "original_local_manifest_sha256": "c01f5dc0fb31446d8e3bc62f72b0b0568640ef40c16729169f0c68182e6ebaf1",
+    "transformation": "Only source/destination absolute paths are parameterized and this provenance note is added. Native replay is not established by this prepared mutation."
+  }
+}
