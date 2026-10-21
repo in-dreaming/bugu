@@ -1,0 +1,45 @@
+{
+  "stage": "UNVERIFIED pure read-only parser self-test and actual one-run stderr association",
+  "source_commit": "9e0ccb49f39ed5eeebe4b8d030880726e7810721",
+  "source_tree": "088da407ad1d556f4c831778fe16742ef1a182fd",
+  "script_sha256": "adde6e15ce383e5ba1ecda9339fb292c71ea57d4be1e7458cd0fed9878648c6f",
+  "commands": [
+    [
+      "timeout",
+      "60",
+      "python",
+      "${RECOVERY_ROOT}/qualification/passive-timing-checkpoint/inspect_timing_output.py",
+      "--self-test"
+    ],
+    [
+      "timeout",
+      "60",
+      "python",
+      "${RECOVERY_ROOT}/qualification/passive-timing-checkpoint/inspect_timing_output.py",
+      "${RECOVERY_ROOT}/qualification/passive-timing-debug-01/raw.log"
+    ]
+  ],
+  "output_files": [
+    "${RECOVERY_ROOT}/qualification/passive-timing-debug-01/parser-self-test.json",
+    "${RECOVERY_ROOT}/qualification/passive-timing-debug-01/timing-report.json"
+  ],
+  "maximum_input_bytes": 67108864,
+  "expected": "Parse actual flat output and correlate retained same-job queue/running/completed/accepted immutable identities; retain errors, missing coverage, signed timing boundaries without causal attribution. At least one usable complete retained chain is desired coverage, not permission to rerun if missing.",
+  "limits": [
+    "No engine/native execution, source edits, state injection, retries or recording.",
+    "Only timing and association fields validated, not full unrelated payload semantic schema.",
+    "Original Windows fault cause remains unknown; changed diagnostics may perturb timing."
+  ],
+  "publication": {
+    "status": "UNVERIFIED",
+    "local_manifest_sha256": "4ec7672eba9c2d4f09449ca6bfb35337ec0ac33a9aa1e1478b8ec6942cddf44d",
+    "source_checkpoint_commit": "4fcb7e6cbe78017d9a4d261748b9af0630c47d39",
+    "path_binding": "Resolve ${RECOVERY_ROOT} to the recovered tree's parent directory. Public commands are parameterized and not byte-identical to the local absolute commands. Place the byte-identical inspector at qualification/passive-timing-checkpoint/inspect_timing_output.py.",
+    "execution_requirements": [
+      "Run only after the frozen single cloud stage has produced its terminal result and log; preserve failures without retry.",
+      "Each Python command has a 60-second bound. Capture outputs in the named new files without overwriting prior results.",
+      "A missing terminal result is UNKNOWN, not pass. Parser self-tests are synthetic, not engine execution.",
+      "No raw logs or binary artifacts are included in this Git checkpoint."
+    ]
+  }
+}
