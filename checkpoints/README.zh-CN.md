@@ -39,3 +39,9 @@ manifest 的 UNVERIFIED 是计划保存时的状态，保持不改写；后续�
 - [指定第二次 attempt 的 reference 单字节负例](https://github.com/in-dreaming/bugu/blob/a6db250d0db577d168a6db5cb15359a26381d552/checkpoints/native-retry-20261021-78d48ee/results/reference-negative-debug-01.json)：preflight 准入后，在 occurrence 52291、payload byte 223 精确 ReplayMismatch，真实清理归零。exit 1、9 通过和 1 预期失败原样保留，不冒称全部测试通过。
 
 这些都是对应源码树、单次短受控场景的证据。前述 Debug 53/53 属于较早的 2816395 内容树，不能混称为最终树的完整回归。ReleaseSafe default 有[独立计划](https://github.com/in-dreaming/bugu/blob/ac68c2f6aaa64ad5fdfbf2368eedce3f9b7bcd29/checkpoints/native-retry-20261021-78d48ee/plans/default-releasesafe-01.json)，只有其另行追加的终态结果才能证明执行情况。Windows、持续吞吐和全部故障根因仍不能据此判定通过。
+
+## 最终交付入口
+
+[合并后的单份补丁与中文说明](../patches/sme-bounded-retry-94d77ca/README-zh.txt) 可从精确 e15de12 基线直接更新至上述94d77ca / 78d48ee源码树；补丁71799字节，不能与七步增量链重复应用，也不能直接在远端main应用。交付Git提交与来源源码提交不同。
+
+最终树的 [ReleaseSafe default11/11](https://github.com/in-dreaming/bugu/blob/4d008f10c31d6b242837196deb3e07ca281bfc50/checkpoints/native-retry-20261021-78d48ee/results/default-releasesafe-01.json) 与 [两条原legacy Debug2/2](https://github.com/in-dreaming/bugu/blob/2b3ae3b1c4c4796a19cbcb48f01cd4bea7469086/checkpoints/native-retry-20261021-78d48ee/results/legacy-filter-debug-01.json) 已分别实际执行并追加终态结果。未运行完整历史矩阵、完整live_tick套件或本候选Windows验收；前述long录制失败保持有效，不被这些结果覆盖。

@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "delivery_kind": "Consolidated text patch, not source history. Delivery commit is not target source_commit.",
+  "baseline": {
+    "original_source_commit": "e15de1243d23fa67449674ab75fcebe735e9840d",
+    "tree": "9c726fe11f07af1936f365a6b9b505153be93709"
+  },
+  "target": {
+    "source_commit": "94d77ca413ef1e99207aed79ec57948bf06df610",
+    "tree": "78d48eed7e7fabf242a7a0572a944e2c13f2a656"
+  },
+  "patch": {
+    "file": "e15-to-94d77ca.patch",
+    "bytes": 71799,
+    "sha256": "c53f2c09da22be36e0c193af9586f989136c83863992d1cb4c9850ec3fd115e8",
+    "changed_files": 8,
+    "insertions": 785,
+    "deletions": 8
+  },
+  "readme": {
+    "file": "README-zh.txt",
+    "sha256": "06f79bda986c9ab5b79952d223134786892c316ded791a6bf8ff7108e6a4d1ec"
+  },
+  "scope": {
+    "production": "At most one extra odd_sequence/sequence_changed attempt within original completion_capacity budget; +15/-1 behavior change.",
+    "remaining_changes": "Reconstructed tests, task registration, explicit test-only capture hooks/workload, bounded diagnostics and tests. Original long workload and recorder bounds unchanged."
+  },
+  "integrity": {
+    "consolidated_patch_equals_baseline_to_target_git_diff": true,
+    "independent_index_reconstruction_tree": "78d48eed7e7fabf242a7a0572a944e2c13f2a656",
+    "final_worktree_clean": true,
+    "original_history_restored_or_pushed": false
+  },
+  "results": [
+    {
+      "delivery_commit": "5075d29b3eb3b1f5a34510a1383e78bbfe266d00",
+      "path": "checkpoints/runtime-retry-20261021-2816395/results/debug-attempt-01.json",
+      "scope": "Earlier tree2816395: Debug3 controlled real-Render +50 codec passes. Not rerun as53/53 on final tree."
+    },
+    {
+      "delivery_commit": "53987eeaa6b14be02872d6464695a5ca2c4bec73",
+      "path": "checkpoints/native-retry-20261021-78d48ee/results/record-debug-01.json",
+      "scope": "Final tree:10/10 short controlled native capture and production compile;three actual same-incoming retry pairs."
+    },
+    {
+      "delivery_commit": "4f34ad1293d51616f942574d02686427dd3f2326",
+      "path": "checkpoints/native-retry-20261021-78d48ee/results/fresh-replay-debug-01.json",
+      "scope": "Final tree:same-ELF fresh strict replay10/10;outputs,EOF,teardown and unchanged artifacts."
+    },
+    {
+      "delivery_commit": "a6db250d0db577d168a6db5cb15359a26381d552",
+      "path": "checkpoints/native-retry-20261021-78d48ee/results/reference-negative-debug-01.json",
+      "scope": "Final tree:target reference negative admitted then rejected atocc52291 payload223;9pass1expectedfail,exit1,real cleanup retained."
+    },
+    {
+      "delivery_commit": "4d008f10c31d6b242837196deb3e07ca281bfc50",
+      "path": "checkpoints/native-retry-20261021-78d48ee/results/default-releasesafe-01.json",
+      "scope": "Final tree:ReleaseSafe default chronology8+mode3 passes;existing cross-frame pause,no new retry workload."
+    },
+    {
+      "delivery_commit": "2b3ae3b1c4c4796a19cbcb48f01cd4bea7469086",
+      "path": "checkpoints/native-retry-20261021-78d48ee/results/legacy-filter-debug-01.json",
+      "scope": "Final tree:two original exact-name Debug legacy tests pass;derived same-graph argv,not full live_tick suite."
+    },
+    {
+      "delivery_commit": "e5c3165d851aab7d9c14d6b563013bde7a93c384",
+      "path": "checkpoints/runtime-retry-20261021-2816395/results/native-record-debug-01.json",
+      "scope": "Earlier candidate long Debug recording rejected for control-lane overflow;failure retained,no sealed tape."
+    }
+  ],
+  "application_policy": [
+    "Apply only to exact baseline tree,never remote main.",
+    "Do not apply if already updated through the incremental source chain.",
+    "Verify patch hash and resulting tree;stop on mismatch.",
+    "Source trees are content identities;delivery commits identify published text artifacts."
+  ],
+  "limits": [
+    "Current candidate has not received Windows acceptance; earlier Windows failures remain.",
+    "Short controlled native results are not sustained real-time throughput qualification.",
+    "No full historical matrix or complete live_tick suite rerun.",
+    "Git contains source,plans,tools and summaries,not exact ELF,bank or tape originals. Hashes cannot restore lost bytes;rebuild then record/replay anew."
+  ],
+  "recovery_chain": {
+    "delivery_commit": "0b9a9edf918592bf20c47de97c874617c08c7ebf",
+    "path": "checkpoints/source-chain-78d48ee.json"
+  }
+}
