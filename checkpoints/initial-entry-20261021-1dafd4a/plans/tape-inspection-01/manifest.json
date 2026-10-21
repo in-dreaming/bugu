@@ -1,0 +1,74 @@
+{
+  "stage": "UNVERIFIED read-only current tape witness inspection; not native replay",
+  "source_commit": "5dc8a31344e391142c6a0403c3bd49e9aca88840",
+  "source_tree": "1dafd4a23dc8da1f1a400ddac020751a79e8552c",
+  "tape": {
+    "path": "${RECOVERY_ROOT}/qualification/initial-entry-native-tape/history.bin",
+    "bytes": 7679698,
+    "sha256": "1091d2b55f62b7e9a4d7e9ba080d7216d57f6cac425f44c1e4585c357ff738a6"
+  },
+  "setup": {
+    "exclusive_output_directory": "${RECOVERY_ROOT}/qualification/initial-entry-native-inspection"
+  },
+  "runs": [
+    {
+      "argv": [
+        "python",
+        "${RECOVERY_ROOT}/qualification/recovered-replay-tools/inspect_initial_entry_sites.py",
+        "--self-test"
+      ],
+      "stdout": "${RECOVERY_ROOT}/qualification/initial-entry-native-inspection/parser-self-test.json"
+    },
+    {
+      "argv": [
+        "python",
+        "${RECOVERY_ROOT}/qualification/recovered-replay-tools/inspect_initial_entry_sites.py",
+        "${RECOVERY_ROOT}/qualification/initial-entry-native-tape/history.bin"
+      ],
+      "stdout": "${RECOVERY_ROOT}/qualification/initial-entry-native-inspection/initial-sites.json"
+    },
+    {
+      "argv": [
+        "python",
+        "${RECOVERY_ROOT}/qualification/recovered-replay-tools/inspect_retry_tape.py",
+        "${RECOVERY_ROOT}/qualification/initial-entry-native-tape/history.bin"
+      ],
+      "stdout": "${RECOVERY_ROOT}/qualification/initial-entry-native-inspection/retry-witness.json"
+    }
+  ],
+  "each_timeout_seconds": 60,
+  "environment": {
+    "unset": [
+      "PYTHONOPTIMIZE"
+    ]
+  },
+  "checks": [
+    "Verify tape hash before and after; do not modify native evidence.",
+    "Require successful parser self-test and actual new 0x7A/0x7B paired_count>0, real consumed reference zero and independent Input/Reference coordinates.",
+    "Count canonical Input108/Schedule109 references without claiming their semantic equality before fresh replay.",
+    "Require actual retry same-incoming successful witness from existing parser; selected job kept actual."
+  ],
+  "files": {
+    "inspect_initial_entry_sites.py": "2213408e6b003250c88d973385828d6485032adc13c6543f34f3d7bfd9d0cf76",
+    "inspect_retry_tape.py": "b5b0285d37d7f1c2b25e14e78b207d28a66c66949695069445a050fa5cb8f09b"
+  },
+  "limits": [
+    "Synthetic parser self-tests are not an engine test.",
+    "Full semantic admission remains authoritative Zig validation; these are narrow read-only witness checks."
+  ],
+  "publication": {
+    "status": "UNVERIFIED",
+    "local_manifest_sha256": "a637ca29dd87e7e7eb2b245e2b488ee23109086fa71630a628bad9f96010b8b1",
+    "path_binding": "Resolve ${RECOVERY_ROOT} to the recovered tree's parent directory; copy the two exact adjacent Python scripts to qualification/recovered-replay-tools. Public paths are parameterized, not the original absolute argv.",
+    "reused_inspector": {
+      "commit": "041ce50bc361959b6b5014d9a0afc679f6903942",
+      "path": "checkpoints/native-retry-20261021-78d48ee/plans/reference-negative-debug-01/inspect_retry_tape.py",
+      "byte_identical": true
+    },
+    "execution_requirements": [
+      "Use ordinary Python without -O/PYTHONOPTIMIZE; self-tests use assert.",
+      "No mutation of original native evidence; verify tape hash before and after.",
+      "These bounded reads do not run the engine or establish native replay."
+    ]
+  }
+}
