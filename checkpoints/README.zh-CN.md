@@ -29,3 +29,13 @@ manifest 的 UNVERIFIED 是计划保存时的状态，保持不改写；后续�
 - [既有 long native 录制因控制 lane 溢出而拒绝，没有 sealed tape，不能 fresh replay](https://github.com/in-dreaming/bugu/blob/e5c3165d851aab7d9c14d6b563013bde7a93c384/checkpoints/runtime-retry-20261021-2816395/results/native-record-debug-01.json)。
 
 以上固定记录不被后续短测试或新检查点覆盖；新增的窄范围测试不能替代失败的 long 录制。此索引不宣称所有 Windows 故障根因已经消除。
+
+## 后续受控 native 验证与完整增量链
+
+新增 [完整七步源码链](source-chain-78d48ee.json)，从相同 e15de12 基线复原至源码提交 94d77ca413ef1e99207aed79ec57948bf06df610、内容树 78d48eed7e7fabf242a7a0572a944e2c13f2a656。后面三步只增加或修正显式测试 workload、测试门控回调与诊断；原 long 录制时长及容量不改。生产有限重试仍是之前的 +15/-1 改动。
+
+- [短受控 native 录制 10/10 与 production compile](https://github.com/in-dreaming/bugu/blob/53987eeaa6b14be02872d6464695a5ca2c4bec73/checkpoints/native-retry-20261021-78d48ee/results/record-debug-01.json)：形成完整 sealed tape，文件中三组真实 same-incoming / same-selected 的失败后成功，其中一组由明确的测试握手控制。
+- [同一 ELF、新 OS 进程 strict replay 10/10](https://github.com/in-dreaming/bugu/blob/4f34ad1293d51616f942574d02686427dd3f2326/checkpoints/native-retry-20261021-78d48ee/results/fresh-replay-debug-01.json)：逐条四角色、PCM、命令和 EOF 匹配，真实 Host join/destroy，ELF/bank/tape 前后哈希一致。
+- [指定第二次 attempt 的 reference 单字节负例](https://github.com/in-dreaming/bugu/blob/a6db250d0db577d168a6db5cb15359a26381d552/checkpoints/native-retry-20261021-78d48ee/results/reference-negative-debug-01.json)：preflight 准入后，在 occurrence 52291、payload byte 223 精确 ReplayMismatch，真实清理归零。exit 1、9 通过和 1 预期失败原样保留，不冒称全部测试通过。
+
+这些都是对应源码树、单次短受控场景的证据。前述 Debug 53/53 属于较早的 2816395 内容树，不能混称为最终树的完整回归。ReleaseSafe default 有[独立计划](https://github.com/in-dreaming/bugu/blob/ac68c2f6aaa64ad5fdfbf2368eedce3f9b7bcd29/checkpoints/native-retry-20261021-78d48ee/plans/default-releasesafe-01.json)，只有其另行追加的终态结果才能证明执行情况。Windows、持续吞吐和全部故障根因仍不能据此判定通过。

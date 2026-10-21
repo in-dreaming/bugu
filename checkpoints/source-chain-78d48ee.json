@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "scope": "Exact cumulative source reconstruction through the test-only native retry workload and diagnostics; source integrity is not a qualification result.",
+  "base": {
+    "source_commit": "e15de1243d23fa67449674ab75fcebe735e9840d",
+    "tree": "9c726fe11f07af1936f365a6b9b505153be93709",
+    "recipe_delivery_commit": "a935b164d696e6c93da6195e2ade6d6ed20a0cd5",
+    "recipe_path": "recovery/e15de12-20261021/README.md"
+  },
+  "increments": [
+    {
+      "delivery_commit": "93813b70910692c105d1ebf3d4754e6626fdf8a3",
+      "path": "checkpoints/baseline-retry-20261021-6327086/source.patch",
+      "bytes": 20296,
+      "sha256": "b185a816e17d146409b3e5708fb21315f6d2a630fda5efd88abe488f8683edbb",
+      "base_tree": "9c726fe11f07af1936f365a6b9b505153be93709",
+      "result_tree": "632708665ccf17511865d44f696ce9df67bca415",
+      "change_scope": "Reconstructed tests and task registration; production unchanged."
+    },
+    {
+      "delivery_commit": "a28b62c74d82d7d225af17f99ff30301e46934c4",
+      "path": "checkpoints/baseline-retry-20261021-c0529a1/source.patch",
+      "bytes": 3387,
+      "sha256": "db71f7499a6cc7ffaa56e349398db8f038dedb0d22926d4f63cc7455c4860b9c",
+      "base_tree": "632708665ccf17511865d44f696ce9df67bca415",
+      "result_tree": "c0529a1fbab405ec38083cbd9c9d69d1b51866a3",
+      "change_scope": "Test-only compilation corrections and joined receipt observation."
+    },
+    {
+      "delivery_commit": "cd1c5df9d43ab6d24dc3f0f4c848d9e869516b3c",
+      "path": "checkpoints/baseline-retry-20261021-aa0726b/source.patch",
+      "bytes": 1423,
+      "sha256": "2c88c095b21632a80fedb441b302ef9ddb85ab14b154eac9f4e9a1fc27a05d67",
+      "base_tree": "c0529a1fbab405ec38083cbd9c9d69d1b51866a3",
+      "result_tree": "aa0726beb9d86db5075ac6e413ac37914810f21d",
+      "change_scope": "Test fixture uses direct real Render consistently; production unchanged."
+    },
+    {
+      "delivery_commit": "4990e039d6364da023f14fa9971784e11787d9b7",
+      "path": "checkpoints/runtime-retry-20261021-2816395/source.patch",
+      "bytes": 2026,
+      "sha256": "1cd60254d16235eb175cfd4326d82ccbfe8f42b4ae4119ce6a3d489aa59d4517",
+      "base_tree": "aa0726beb9d86db5075ac6e413ac37914810f21d",
+      "result_tree": "28163955b35b0fc304055574b2ea069c9615f378",
+      "change_scope": "Runtime +15/-1; one typed odd/changed retry within original total attempt budget."
+    },
+    {
+      "delivery_commit": "97f7564c83d190cd04920cdcca867dccfe167f4a",
+      "path": "checkpoints/native-retry-20261021-7331b0b/source.patch",
+      "bytes": 38993,
+      "sha256": "92b709928046ffa465ce363b9411fcf511db0f9b6ca66bb051a99fcb8ee1f241",
+      "base_tree": "28163955b35b0fc304055574b2ea069c9615f378",
+      "result_tree": "7331b0b3ca7771308ed777f87bef477a7bc6ec77",
+      "change_scope": "Explicit capture-only test workload and test-gated hooks. Prior long workload and recorder bounds unchanged."
+    },
+    {
+      "delivery_commit": "d5fc85645455f13c4854638bfafe228d52276fef",
+      "path": "checkpoints/native-retry-20261021-7fca0c3/source.patch",
+      "bytes": 930,
+      "sha256": "81cd500f9e23f14f899602083e22ca6a5ed8b3ec3bd865c1d707e82200517450",
+      "base_tree": "7331b0b3ca7771308ed777f87bef477a7bc6ec77",
+      "result_tree": "7fca0c35d3686a18c122d2ff9be9de6a6793eb9f",
+      "change_scope": "Callback parameter rename only; +2/-2."
+    },
+    {
+      "delivery_commit": "8708bfa48d6f12b4e9160cace6913a3d9b340c23",
+      "path": "checkpoints/native-retry-20261021-78d48ee/source.patch",
+      "bytes": 22312,
+      "sha256": "87cc128366c99f06af48184eb76ad27876309d4bedae2a40ba125abf8422acc2",
+      "base_tree": "7fca0c35d3686a18c122d2ff9be9de6a6793eb9f",
+      "result_tree": "78d48eed7e7fabf242a7a0572a944e2c13f2a656",
+      "change_scope": "Test-only bounded even handshake and actual attempt diagnostics; production behavior unchanged from preceding candidate."
+    }
+  ],
+  "final_tree": "78d48eed7e7fabf242a7a0572a944e2c13f2a656",
+  "application_policy": [
+    "Never apply this chain directly to remote main or an unmatched tree.",
+    "Verify each patch size/hash, base tree and resulting tree; stop on mismatch.",
+    "Do not additionally apply the original preserved runtime-retry.patch; the fourth increment already contains it.",
+    "Delivery commits identify text artifacts, not the candidate source commits.",
+    "Subsequent checkpoints may extend this final tree; use their own exact manifests and separate results."
+  ],
+  "final_source_commit": "94d77ca413ef1e99207aed79ec57948bf06df610"
+}
