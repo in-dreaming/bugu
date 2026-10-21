@@ -1,0 +1,12 @@
+{
+  "exit": 1,
+  "stop_reason": null,
+  "elapsed_seconds": 16.149915281000176,
+  "source_guard_equal": true,
+  "minimum_free_bytes": 28111986688,
+  "stage": "native-retry-20261021-7331b0b",
+  "classification": "COMPILE_FAILED_ZERO_TESTS",
+  "cause": "Service.testRetryWorkload parameter event shadows existing Service.event; both test and production compilation reject. No recording executed.",
+  "log_sha256": "44954eeb02a192b32b0f59146e187ae08c43458852fe51c66f57c12d19237b8d",
+  "next_action": "Rename only callback argument, checkpoint corrected source and same bounded plan before run."
+}
