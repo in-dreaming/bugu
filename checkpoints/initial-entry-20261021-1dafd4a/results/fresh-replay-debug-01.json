@@ -1,0 +1,168 @@
+{
+  "classification": "FRESH_STRICT_REPLAY_FAILED_REAL_WORKER_SCAN_PUBLICATION_OVERLAP",
+  "source_commit": "5dc8a31344e391142c6a0403c3bd49e9aca88840",
+  "source_tree": "1dafd4a23dc8da1f1a400ddac020751a79e8552c",
+  "result": {
+    "exit": 1,
+    "stop_reason": null,
+    "elapsed_seconds": 6.144202203000532,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 27849150464
+  },
+  "tests": {
+    "pass": 9,
+    "fail": 1,
+    "crash": 0
+  },
+  "preflight_admitted": true,
+  "failure": {
+    "reason": "ReplayMismatch",
+    "role": "worker",
+    "occurrence": 52704,
+    "family": "cut_fact",
+    "byte_offset": 49,
+    "recorded_site": "service_worker_scan",
+    "slot": 3,
+    "reference_queued_predicate": 0
+  },
+  "matched_by_role": [
+    19638,
+    20577,
+    11510,
+    920
+  ],
+  "pcm_samples": [
+    10240,
+    0,
+    0
+  ],
+  "commands": {
+    "submitted": 1,
+    "accepted": 1,
+    "terminal": 1,
+    "acked": 1,
+    "play_executed": true,
+    "stop_executed": false
+  },
+  "cleanup": {
+    "host_joined": true,
+    "host_destroyed": true,
+    "retained": false,
+    "provider_opened": 16,
+    "provider_closed": 16,
+    "provider_live": 0,
+    "sample_leases": 0,
+    "live_instances": 0,
+    "cleanup_error": null
+  },
+  "eof": false,
+  "input_files_unchanged": true,
+  "overlap_cuts": [
+    {
+      "record_offset": 2998568,
+      "family": 11,
+      "occurrence": 52702,
+      "role": 0,
+      "site": 83,
+      "edge": 0,
+      "index": 3,
+      "generation": 30,
+      "publication_prefix": 0,
+      "payload_relative_offset": 204
+    },
+    {
+      "record_offset": 2998568,
+      "family": 11,
+      "occurrence": 52705,
+      "role": 0,
+      "site": 83,
+      "edge": 1,
+      "index": 3,
+      "generation": 30,
+      "publication_prefix": 0,
+      "payload_relative_offset": 213
+    },
+    {
+      "record_offset": 2999630,
+      "family": 115,
+      "occurrence": 52702,
+      "role": 0,
+      "site": 83,
+      "edge": 0,
+      "index": 3,
+      "generation": 30,
+      "publication_prefix": 0,
+      "payload_relative_offset": 258,
+      "value": 1
+    },
+    {
+      "record_offset": 2999630,
+      "family": 115,
+      "occurrence": 52705,
+      "role": 0,
+      "site": 83,
+      "edge": 1,
+      "index": 3,
+      "generation": 30,
+      "publication_prefix": 0,
+      "payload_relative_offset": 269,
+      "value": 1
+    },
+    {
+      "record_offset": 3198584,
+      "family": 11,
+      "occurrence": 52703,
+      "role": 1,
+      "site": 79,
+      "edge": 0,
+      "index": 3,
+      "generation": 0,
+      "publication_prefix": 0,
+      "payload_relative_offset": 56
+    },
+    {
+      "record_offset": 3198584,
+      "family": 11,
+      "occurrence": 52704,
+      "role": 1,
+      "site": 79,
+      "edge": 1,
+      "index": 3,
+      "generation": 0,
+      "publication_prefix": 0,
+      "payload_relative_offset": 65
+    },
+    {
+      "record_offset": 3199659,
+      "family": 115,
+      "occurrence": 52703,
+      "role": 1,
+      "site": 79,
+      "edge": 0,
+      "index": 3,
+      "generation": 0,
+      "publication_prefix": 0,
+      "payload_relative_offset": 68,
+      "value": null
+    },
+    {
+      "record_offset": 3199659,
+      "family": 115,
+      "occurrence": 52704,
+      "role": 1,
+      "site": 79,
+      "edge": 1,
+      "index": 3,
+      "generation": 0,
+      "publication_prefix": 0,
+      "payload_relative_offset": 79,
+      "value": 0
+    }
+  ],
+  "limits": [
+    "No retry or rerecording. Exact failing source/ELF/tape retained.",
+    "Recorded queued-publication interval surrounds worker-read markers. Marker order alone does not locate actual atomic store relative to actual acquire.",
+    "No initial-entry-site mismatch reported; overall strict replay nonetheless failed.",
+    "Later negative/default tests paused pending bounded design review."
+  ]
+}
