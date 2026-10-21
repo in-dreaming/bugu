@@ -1,0 +1,48 @@
+{
+  "stage": "UNVERIFIED read-only actual Host wait boundary output inspection",
+  "source_commit": "e09b38df925020f5877e0ed637d75fad5ea3e681",
+  "source_tree": "8ba69a82caabe29ed9a6a55566d90969497b110a",
+  "files": {
+    "inspect_wait_output.py": "b13518b376157962d0c87847a40247176a1134081ae27531f6e2ffc779a08648",
+    "inspect_timing_output.py": "adde6e15ce383e5ba1ecda9339fb292c71ea57d4be1e7458cd0fed9878648c6f"
+  },
+  "commands": [
+    [
+      "timeout",
+      "60",
+      "python",
+      "${RECOVERY_ROOT}/qualification/host-wait-checkpoint/inspect_wait_output.py",
+      "--self-test"
+    ],
+    [
+      "timeout",
+      "60",
+      "python",
+      "${RECOVERY_ROOT}/qualification/host-wait-checkpoint/inspect_wait_output.py",
+      "${RECOVERY_ROOT}/qualification/host-wait-debug-01/raw.log"
+    ]
+  ],
+  "output_files": [
+    "${RECOVERY_ROOT}/qualification/host-wait-debug-01/parser-self-test.json",
+    "${RECOVERY_ROOT}/qualification/host-wait-debug-01/wait-report.json"
+  ],
+  "expected": "Validate fixed role-private pair coverage and exact fields, actual wait observation intervals and retained same-role overlap with Worker job gaps or Control end-to-accept observations. Keep missing/error/nonmonotonic flags and coverage; positive overlap does not prove OS timer cause or pure sleep time.",
+  "limits": [
+    "Only after the single native run has terminated; no native replay/recording/execution in this parser.",
+    "If native fails or coverage missing preserve result, no timing rerun.",
+    "Only bounded diagnostic timing/association schema validated, not all unrelated payload semantics."
+  ],
+  "publication": {
+    "status": "UNVERIFIED",
+    "local_manifest_sha256": "a2dd22d8443cf9781a24758ec30f2b9fbea64aebd1c46db2b23ae0c6f9384504",
+    "source_checkpoint_commit": "07f88415ad9157c28402622dad5770831295ed19",
+    "path_binding": "Resolve ${RECOVERY_ROOT} to the recovered tree's parent directory. Public commands are parameterized and not byte-identical to the local absolute commands. Restore both byte-identical Python files adjacent to one another under qualification/host-wait-checkpoint.",
+    "execution_requirements": [
+      "Run only after the frozen single cloud stage has terminated and preserved its result.",
+      "Each command has a 60-second bound. Preserve failures or missing coverage without retrying the native run.",
+      "Capture the two outputs in the named new files without overwriting prior results.",
+      "A missing terminal result is UNKNOWN, not pass. Synthetic parser checks are not native validation.",
+      "No raw logs or binary artifacts are included in this checkpoint."
+    ]
+  }
+}
