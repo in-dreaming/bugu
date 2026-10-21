@@ -1,0 +1,42 @@
+{
+  "source_commit": "e09b38df925020f5877e0ed637d75fad5ea3e681",
+  "source_tree": "8ba69a82caabe29ed9a6a55566d90969497b110a",
+  "classification": "PASS_SINGLE_CLOUD_HOST_WAIT_DIAGNOSTIC_NOT_POLICY_FIX",
+  "guard": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 17.161615601999074,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 26997706752
+  },
+  "tests": {
+    "passed": 12,
+    "failed": 0,
+    "production_compile": "pass"
+  },
+  "seed": "0xa4378054",
+  "actual_output": {
+    "pcm_frames": 36352,
+    "audible_frames": 33280,
+    "all_four_stems": true,
+    "commands_executed": 2,
+    "cross_frame_first": 3072,
+    "cross_frame_later": 3840
+  },
+  "cleanup_assertions_passed": {
+    "sources_opened": 16,
+    "sources_closed": 16,
+    "live_sources": 0,
+    "sample_leases": 0,
+    "live_instances": 0,
+    "worker_joined": true,
+    "first_error": null,
+    "cleanup_error": null
+  },
+  "raw_log_sha256": "4fac4e6ccf2b1238cb37f5ee65ac71fc363dc8a215055973a0b4fed99a0a839a",
+  "limits": [
+    "Original sleeps, loop limits, production supply policy and engine assertions unchanged.",
+    "No Windows test, retry, recorder or fresh replay.",
+    "Different-platform timing measurements do not establish earlier Windows cause."
+  ]
+}
