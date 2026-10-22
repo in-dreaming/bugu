@@ -1,0 +1,54 @@
+{
+  "schema": "bugu.isolated-job-planner.result/v1",
+  "status": "PASS_ISOLATED_PURE_MODEL",
+  "source_commit": "ff0c1c404f2fb69e692c8235cfdf0ebe7bfd8166",
+  "source_tree": "d12a4160a40403b82f31a6b86d93761287c273fe",
+  "plan_sha256": "a118b4387d7f140f62be31088c4f8a3a6c2cd640383eb6a45ad5569a9d8f9d01",
+  "command": [
+    "zig",
+    "build",
+    "sme-live-semantic-job-schedule-check",
+    "-j1",
+    "-Doptimize=Debug",
+    "--summary",
+    "all"
+  ],
+  "guard": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 4.096635669999159,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 26520109056
+  },
+  "build_steps_passed": 3,
+  "build_steps_total": 3,
+  "tests_passed": 7,
+  "tests_failed": 0,
+  "tests_skipped": 0,
+  "oracle": {
+    "cases": 4551834,
+    "feasible_prefix": 43539,
+    "complete": 8881
+  },
+  "reported_resources": {
+    "test_time_seconds_rounded": 2,
+    "test_max_rss_mib_rounded": 6,
+    "compile_time_ms_rounded": 456,
+    "compile_max_rss_mib_rounded": 146
+  },
+  "diagnostics": "The expected ORACLE statistics were emitted to stderr. Zig rendered a warning/failed-command diagnostic line for that stderr, but its actual final summary was 3/3 successful steps and 7/7 passed tests, with child exit 0.",
+  "covered": [
+    "Both scan predicates and booleans, bracket shapes, nonflipping stores, cross-slot deadline constraints and legal schedules requiring non-earliest write order.",
+    "Malformed operations, role-local ordering, job identity/reuse, initially-free/finally-free completion and counter overflow.",
+    "65537 reads with fixed two heads and 48 slots, no per-read accumulation.",
+    "Independent bounded DFS and independent replay of each returned witness; all actual case counts recorded."
+  ],
+  "limits": [
+    "Pure model only: no production, wire, capture, replay, native gate or Host invocation.",
+    "Global occurrence uniqueness remains an upstream full-source-validation precondition.",
+    "Exhaustive scope is one slot with at most three operations per role and two slots with at most two operations per role; not a proof of arbitrary histories.",
+    "Explicitly supports 1..48 configured slots, rejecting larger Service configurations.",
+    "Original long CrossedScan and Debug capture overflow remain unresolved in production. Stage 2 remains incomplete and stage 3 has not started.",
+    "The prior zero-test compile failure remains separately preserved."
+  ]
+}
