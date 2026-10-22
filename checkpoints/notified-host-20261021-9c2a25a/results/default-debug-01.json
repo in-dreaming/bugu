@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "stage": "ordinary notified Host Debug first and only invocation",
+  "status": "PASS",
+  "source_commit": "4f2710c7a3db88649c3a495b5d7fe7950633788f",
+  "source_tree": "9c2a25a4a9750e098e93a6949749ee717640aae8",
+  "synthetic_recovery_commit": "7ef3c2e2f5b07b0e9cdb8c7313891eb60281f0a2",
+  "plan_git_commit": "9f322445f22ceb002bf56cf20e3542bb117c2a35",
+  "manifest_sha256": "366cc24f0bd288e6108cc505926420e28a0381550511b381d7622b8b239f4cbe",
+  "guard_result": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 97.22166682399984,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 28740599808
+  },
+  "build_steps": {
+    "passed": 9,
+    "total": 9
+  },
+  "tests": {
+    "passed": 23,
+    "failed": 0,
+    "snapshot_boundary": {
+      "passed": 11,
+      "total": 11
+    },
+    "default_chronology": {
+      "passed": 12,
+      "total": 12
+    }
+  },
+  "production_compile": "Debug native success",
+  "observed_lines": [
+    "DEFAULT_HOST_PACING schema=1 mode=notified_v1 ordinary=true",
+    "DEFAULT_HOST_EVENT_FAILURE schema=1 failure.present=false failure=null",
+    "DEFAULT_HOST_CHRONOLOGY tick=44 first=2816 later=3328 callbacks=11->13 inputs=1052 schedule=16 request_matches=2 executed=2 legacy_diagnostic_incomplete=746 capture=unavailable",
+    "DEFAULT_HOST_PCM frames=35840 audible=33280 nonzero=33266 ramp=32 silence_after=352 all_four_stems=true"
+  ],
+  "cleanup_evidence": "Successful native fixture asserts phase closed, null first/cleanup errors, worker joined, Play and Stop executed, 16 opened and closed sources, zero live sources, sample leases and instances. Counts are assertion evidence, not separately printed final counters.",
+  "raw_log_note": "Raw log retained locally and not published. Zig emits a literal failed command label adjacent to test stderr despite overall exit 0 and both test targets success; the authoritative guard exit and build summary are recorded above.",
+  "limitations": [
+    "One Linux native Debug run, not Windows acceptance and not a reproduction of the earlier Windows wait intervals.",
+    "Semantic capture/replay and private capture remain legacy_poll. New notification recording/replay is unsupported and unqualified.",
+    "Fixed diagnostic tails report incomplete histories; no completeness or global-order claim.",
+    "Standalone output parser and separate claim/recovery lifecycle stages are not yet run.",
+    "No timing retries, capacity increases, source changes or Windows actions."
+  ],
+  "post_run_tree": "9c2a25a4a9750e098e93a6949749ee717640aae8",
+  "post_run_clean": true
+}
