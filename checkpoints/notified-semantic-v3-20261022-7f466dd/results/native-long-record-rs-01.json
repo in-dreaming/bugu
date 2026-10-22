@@ -1,0 +1,59 @@
+{
+  "schema": "bugu.notified-semantic-v3.long-record-result/v1",
+  "status": "STRICT_ADMISSION_REJECTED_CROSSED_SCAN",
+  "source_commit": "a8ef20b9028290650b6ba7cc10187618813dd9b0",
+  "source_tree": "7f466dd56d0f154647c764eab619f5226d3ff45e",
+  "plan_commit": "f06eae4277c4648be2b9e2befde9ad3b59f7cabb",
+  "plan_sha256": "6993dfbe6e5fbe41e157a66cb6262596f54a680cb31a17ba53373dcab43a67de",
+  "execution": {
+    "exit": 1,
+    "stop_reason": null,
+    "elapsed_seconds": 4.064332474999901,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 26536091648
+  },
+  "tests_passed": 9,
+  "tests_failed": 1,
+  "integration_error": "CrossedScan",
+  "actual_pacing": "notified_v1",
+  "admission_policy": "ordered_job_scans",
+  "workload": "long",
+  "submitted_samples": 69120,
+  "submitted_frames": 34560,
+  "nonzero_submitted_samples": 66624,
+  "public_inputs": 800,
+  "schedules": 16,
+  "framing_preflight_passed": true,
+  "semantic_admission_passed": false,
+  "published_history_bin": false,
+  "fresh_replay_started": false,
+  "cleanup_basis": "Before format/admission, integration completed closeActual and asserted worker_joined/phase closed/provider live zero/opened equal closed/zero leases/zero instances. Long command witness requires actual Play/Stop executed, accepted and terminal; seal stats require both ACKs and >=32768 frames. These gates passed before printed coverage and CrossedScan. Exact resource counters and cleanup_error were not separately printed; no fabricated values.",
+  "artifacts": {
+    "bank.bin": {
+      "bytes": 1283976,
+      "sha256": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+    },
+    "history.incomplete.bin": {
+      "bytes": 50481003,
+      "sha256": "33b7d6d99f4cdbe385c4df9bcd80cd2c5377bdad7feb9239d322d81f336cd62f"
+    }
+  },
+  "input_verification": {
+    "exit": 0,
+    "elapsed_seconds": 0.058063008000317495,
+    "output": {
+      "scope": "authored-input-source-only",
+      "verified_files": 16,
+      "generated_files": 0,
+      "bytes": 12288704
+    }
+  },
+  "limits": [
+    "One original long execution, no reroll or capacity changes.",
+    "Framing-sealed temporary file is not an admitted replay tape; history.bin was not published.",
+    "No fresh replay for rejected input.",
+    "Precise overlap and source cause not yet inspected.",
+    "Short RS record/fresh/negative results do not qualify this long history or repair the prior Debug lane overflow.",
+    "Stage 2 remains incomplete for original long qualification; Stage 3 not started."
+  ]
+}
