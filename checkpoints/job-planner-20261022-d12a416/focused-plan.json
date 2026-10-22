@@ -1,0 +1,118 @@
+{
+  "schema": "bugu.isolated-job-planner.plan/v1",
+  "status": "FROZEN_NOT_RUN",
+  "base_remote_commit": "47bdb3ca280b5ca9d29b1d418f4bed99ac9f7b9f",
+  "base_tree": "861e86ef1f89abdf881255f0472281785327aa4e",
+  "target_tree": "d12a4160a40403b82f31a6b86d93761287c273fe",
+  "patch_sha256": "80895041fcd87828e01f6fe0c2468a144b115dc47da871c3aad405921f2c00a9",
+  "source_files": [
+    {
+      "path": "build_support/sme_tasks/task-027.zon",
+      "mode": "100644",
+      "bytes": 372,
+      "sha256": "f17418521894ab947432cd4556d08fa57a7472848a9b0a381cdca8d5752f70e4",
+      "git_blob": "72fce6d5732e363c4a2fe3e8b62d540d18ab907d"
+    },
+    {
+      "path": "tools/sme_authoring/core/live_semantic_job_schedule.zig",
+      "mode": "100644",
+      "bytes": 34106,
+      "sha256": "aa9e689a93f3aae273ffa4e80ac2e8c2132f0b596c44632ef31602f7d16a48a7",
+      "git_blob": "5a773e18a42ab1d4dd0d74494619e5d39a1a8ace"
+    }
+  ],
+  "scope": "Only an isolated pure planner module and its standalone test registration. No production, format, recording, replay, or strict admission integration.",
+  "parameters": {
+    "REPO": "Exact frozen source checkout; existing fixed build-graph dependencies available",
+    "ZIG": "Verified official Zig 0.16.0 Linux x86_64",
+    "RUN_GUARDED": "Original 2862-byte guarded runner, SHA256 04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+    "OUTPUT": "Fresh local output directory outside source"
+  },
+  "environment": {
+    "location": "Cloud Linux x86_64 only",
+    "unset_prefixes": [
+      "SME_"
+    ],
+    "unset_exact": [
+      "PYTHONOPTIMIZE"
+    ],
+    "set": {
+      "NO_COLOR": "1"
+    },
+    "python": "Ordinary Python 3, no -O"
+  },
+  "preconditions": [
+    "Exact target tree and clean tracked/untracked source verified before and after execution.",
+    "Independent static review complete; two recursive test generator error sets made explicit before freeze.",
+    "Source and this plan must be independently stored and read back from Git before execution.",
+    "Original long rejected tape and all historical results remain unchanged; this test does not read or modify them."
+  ],
+  "sequence": [
+    {
+      "id": "pure-planner-debug-01",
+      "argv": [
+        "<ZIG>",
+        "build",
+        "sme-live-semantic-job-schedule-check",
+        "-j1",
+        "-Doptimize=Debug",
+        "--summary",
+        "all"
+      ],
+      "guard_argv": [
+        "python3",
+        "<RUN_GUARDED>",
+        "--repo",
+        "<REPO>",
+        "--out",
+        "<OUTPUT>",
+        "--seconds",
+        "900",
+        "--",
+        "<ZIG>",
+        "build",
+        "sme-live-semantic-job-schedule-check",
+        "-j1",
+        "-Doptimize=Debug",
+        "--summary",
+        "all"
+      ],
+      "timeout_seconds": 900
+    }
+  ],
+  "bounds": {
+    "attempts": 1,
+    "build_jobs": 1,
+    "hard_oracle_cases": 4600000,
+    "expected_oracle_cases": 4551834,
+    "oracle_recursion_max_operations": 6,
+    "planner_slot_capacity": 48,
+    "planner_pending_heads": 2,
+    "planner_allocation": "none; state independent of read count",
+    "dedicated_read_count": 65537,
+    "disk_start_min_bytes": 3355443200,
+    "disk_runtime_floor_bytes": 2281701376,
+    "termination": "Guard terminates process group; after 10 seconds kills it if necessary. Record actual terminal and remaining-process evidence, never infer cleanup from exit code alone."
+  },
+  "oracles": [
+    "All seven inline tests must execute and pass; compilation failure or skip is not a passing test.",
+    "Independent DFS enumerates all words and distinct global endpoint shuffles for one slot with each role length at most three, and two slots with each role length at most two.",
+    "Oracle uses separate state transition code and checks returned greedy source order, predicates, state/job identity, and bracket embedding; no calls to greedy enabled/apply/selection helpers.",
+    "Normal stderr must include ORACLE cases=4551834 feasible_prefix=<actual> complete=<actual>; record both actual subset counts.",
+    "Special tests cover both predicates/booleans/bracket orders, nonflipping stores, cross-slot global marker constraints, initially-free/finally-free lifecycle, reused IDs, malformed operations, overflow, and 65537 fixed-space reads."
+  ],
+  "contract_limits": [
+    "Supports only 1..48 configured job slots and explicitly rejects 0 or larger configurations; underlying Service can support up to 256.",
+    "Global occurrence uniqueness is an upstream full-source validation precondition, not certified by this fixed-space planner.",
+    "Exhaustive tests are bounded by the stated alphabet and lengths; they are not proof of arbitrary native histories.",
+    "No native gate, thread, audio callback, wire extension, runtime policy or decoder is introduced.",
+    "No native record or fresh replay is run; original long CrossedScan remains unresolved by the production code.",
+    "Stage 2 remains incomplete and stage 3 is not started."
+  ],
+  "result_policy": [
+    "Preserve the first terminal result, including compilation/test failure or timeout. No timing rerolls.",
+    "Publish only sanitized counts, identities and necessary failure details, not raw logs, local paths, binary artifacts or tape.",
+    "Any correction requires a new frozen source and plan before another execution."
+  ],
+  "correction": "Only spell Slot{} explicitly in the fixed array initializer after preserved zero-test compilation failure. No algorithm, oracle, scope, resource, command or production change."
+}
