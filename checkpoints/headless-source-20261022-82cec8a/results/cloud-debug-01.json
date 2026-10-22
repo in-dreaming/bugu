@@ -1,0 +1,136 @@
+{
+  "schema": "bugu.headless.qualification-result/v1",
+  "status": "PASSED_BOUNDED_CLOUD_DEBUG",
+  "source": {
+    "branch": "source/sme-headless-notified-20261022",
+    "commit": "07894bd96f609218bcc2b6c785572d51dc00569f",
+    "tree": "82cec8a633cbb8376dc652f8a410c05b1684ba6c",
+    "parent_main": "c9628460a07cea3f5e432e88c09169d4385df672",
+    "foundation_commit": "c5ba070ca1e19310fbf07f879aa397646145f5fe"
+  },
+  "plan": {
+    "commit": "f5177843dcac6930b32829e14528985718f3e646",
+    "sha256": "4879cc3008d5d9f189e8985f71d25acba9a80cb42b407006ffeab8246cc57a39"
+  },
+  "environment": {
+    "location": "cloud Linux x86_64",
+    "zig": "official 0.16.0",
+    "mode": "Debug",
+    "build_concurrency": 1,
+    "unexpected_sme_environment": false,
+    "timing_injections": false
+  },
+  "stages": [
+    {
+      "stage": "prepare-authored-inputs",
+      "exit": 0,
+      "stop_reason": null,
+      "elapsed_seconds": 10.147798885000157,
+      "source_tree": "82cec8a633cbb8376dc652f8a410c05b1684ba6c",
+      "clean": true
+    },
+    {
+      "stage": "verify-authored-inputs",
+      "exit": 0,
+      "stop_reason": null,
+      "elapsed_seconds": 0.06397599999945669,
+      "source_tree": "82cec8a633cbb8376dc652f8a410c05b1684ba6c",
+      "clean": true
+    },
+    {
+      "stage": "graph",
+      "exit": 0,
+      "stop_reason": null,
+      "elapsed_seconds": 5.43847595599982,
+      "source_tree": "82cec8a633cbb8376dc652f8a410c05b1684ba6c",
+      "clean": true
+    },
+    {
+      "exit": 0,
+      "stop_reason": null,
+      "elapsed_seconds": 84.13013430200044,
+      "source_guard_equal": true,
+      "minimum_free_bytes": 28588720128,
+      "stage": "production-and-core",
+      "tests_passed": 51,
+      "tests_failed": 0,
+      "build_steps_succeeded": 10,
+      "build_steps_total": 10
+    },
+    {
+      "exit": 0,
+      "stop_reason": null,
+      "elapsed_seconds": 198.23569644000054,
+      "source_guard_equal": true,
+      "minimum_free_bytes": 28021153792,
+      "stage": "notified-lifecycle",
+      "tests_passed": 36,
+      "tests_failed": 0,
+      "build_steps_succeeded": 16,
+      "build_steps_total": 16
+    },
+    {
+      "stage": "final-input-identity",
+      "exit": 0,
+      "elapsed_seconds": 0.05050279199895158,
+      "source_tree": "82cec8a633cbb8376dc652f8a410c05b1684ba6c",
+      "clean": true,
+      "output": {
+        "scope": "authored-input-source-only",
+        "verified_files": 16,
+        "generated_files": 0,
+        "bytes": 12288704
+      }
+    }
+  ],
+  "summary": {
+    "tests_passed": 87,
+    "tests_failed": 0,
+    "source_guard_equal": true,
+    "final_source_clean": true,
+    "fixture_files": 16,
+    "fixture_bytes": 12288704,
+    "fixture_sha256_exact_before_and_after": true,
+    "registered_sme_checks": 19,
+    "registered_sme_production_targets": 2,
+    "all_registered_checks_executed": false
+  },
+  "lifecycle_test_counts": {
+    "snapshot_boundary": 11,
+    "default_chronology": 12,
+    "default_mode": 3,
+    "worker_claim": 3,
+    "recovery": 7
+  },
+  "default_chronology": {
+    "actual_pacing": "notified_v1",
+    "ordinary": true,
+    "capture": "unavailable",
+    "pcm_frames": 35328,
+    "audible_frames": 33024,
+    "nonzero_frames": 33010,
+    "ramp_frames": 32,
+    "silence_after_frames": 352,
+    "all_four_stems": true,
+    "cross_frame_first": 2304,
+    "cross_frame_later": 2816,
+    "callback_sequence_first": 9,
+    "callback_sequence_later": 11,
+    "input_count": 886,
+    "schedule_count": 16,
+    "request_matches": 2,
+    "commands_executed": 2,
+    "cleanup_evidence": "Unchanged integration assertions passed: closed phase; no first/cleanup error; worker joined; Play/Stop executed; distinct owner threads; 16 opened and closed; zero live sources, sample leases and live instances. These counts are test assertions, not a separate cleanup log."
+  },
+  "observations": [
+    "The build output contains stderr warning sections labelled failed command, including deliberate SourceCloseFailed injections; authoritative terminal summaries and child exit report all tests passed.",
+    "Production Host archive compiled and the real live-history executable printed help without opening a Host or physical device.",
+    "New pacing fields in raw diagnostic output were observed; no newly expanded dedicated parser was run. Raw logs and binaries stay local."
+  ],
+  "limits": [
+    "No Windows, ReleaseSafe, GPU author UI, physical audio or long-duration qualification in this run.",
+    "No semantic notified capture/replay claim; existing capture modes remain legacy polling pending independent stage 2.",
+    "Old fixed Opus/f32 oracle suites initial-headroom and semantic-service remain excluded as documented; production Opus support remains compiled.",
+    "Results belong only to this newly extracted exact source tree; no previous candidate pass was substituted."
+  ]
+}
