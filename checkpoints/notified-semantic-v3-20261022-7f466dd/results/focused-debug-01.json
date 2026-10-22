@@ -1,0 +1,48 @@
+{
+  "schema": "bugu.notified-semantic-v3.focused-result/v1",
+  "status": "FOCUSED_PASS_NATIVE_PENDING",
+  "source_commit": "a8ef20b9028290650b6ba7cc10187618813dd9b0",
+  "source_tree": "7f466dd56d0f154647c764eab619f5226d3ff45e",
+  "plan_commit": "930291c68c87d1730ca4141cb9ace5db6fb59129",
+  "plan_sha256": "3d8a81e08c9b70492471327274eba80c74fa4ff66e244375bc233af8fd5a54ba",
+  "execution": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 16.082240557998375,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 26735656960
+  },
+  "source_worktree_clean_after": true,
+  "build_steps": {
+    "passed": 25,
+    "total": 25
+  },
+  "tests": {
+    "passed": 123,
+    "skipped": 2,
+    "failed": 0
+  },
+  "targets": {
+    "format": "19 pass",
+    "codec": "56 pass, 1 external original-tape test skipped without its explicit input",
+    "streaming": "8 pass",
+    "cli": "20 pass",
+    "semantic_process": "9 pass, native integration intentionally skipped without explicit mode",
+    "snapshot": "11 pass",
+    "production_host_archive": "compile pass",
+    "production_cli_help": "pass"
+  },
+  "input_before_after": {
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "limits": [
+    "Focused cloud Linux Debug qualification only.",
+    "No native notified recording, independent replay or negative replay has executed.",
+    "The two skips are not treated as coverage.",
+    "Prior e4fcf6f codec compilation failure remains preserved at ced0be3f.",
+    "No runtime cleanup claim inferred solely from exit or absence of timeout.",
+    "No Windows, physical device or ReleaseSafe execution; original long >=32768 remains pending."
+  ]
+}
