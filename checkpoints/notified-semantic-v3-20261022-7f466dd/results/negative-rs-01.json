@@ -1,0 +1,98 @@
+{
+  "schema": "bugu.notified-semantic-v3.negative-result/v1",
+  "status": "BOTH_EXPECTED_REJECTIONS_VERIFIED",
+  "source_commit": "a8ef20b9028290650b6ba7cc10187618813dd9b0",
+  "source_tree": "7f466dd56d0f154647c764eab619f5226d3ff45e",
+  "plan_commit": "3e32ace1db6f910d3ade0fdf69921a6f8ec845cb",
+  "plan_sha256": "b69485d17f45e4b38ab43fbdbb6b47f294d392011534557d8bb2f64f1f5b3e71",
+  "wrong_pacing": {
+    "execution": {
+      "exit": 1,
+      "stop_reason": null,
+      "elapsed_seconds": 1.0637491309989855,
+      "source_guard_equal": true,
+      "minimum_free_bytes": 26605838336
+    },
+    "tests_passed": 9,
+    "expected_integration_failures": 1,
+    "actual_error": "WrongLaunch",
+    "preflight_admitted": true,
+    "owner_effects_started_at_preflight": false,
+    "matched": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "input_events": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "host_joined": false,
+    "host_destroyed": false,
+    "final_status": null,
+    "retained": false,
+    "interpretation": "Requested legacy_poll against notified launch rejected before Host.create. No native Host existed, so false joined/destroyed is expected, not missing cleanup."
+  },
+  "reference_mismatch": {
+    "execution": {
+      "exit": 1,
+      "stop_reason": null,
+      "elapsed_seconds": 1.0740597710009752,
+      "source_guard_equal": true,
+      "minimum_free_bytes": 26586710016
+    },
+    "tests_passed": 9,
+    "expected_integration_failures": 1,
+    "preflight_admitted": true,
+    "actual_error": "ReplayMismatch",
+    "role": "render",
+    "family": "pcm",
+    "occurrence": 33301,
+    "payload_byte_offset": 1063,
+    "matches_mutated_location": true,
+    "actual_cleanup": {
+      "host_joined": true,
+      "host_destroyed": true,
+      "retained": false,
+      "phase": "closed",
+      "first_error": null,
+      "cleanup_error": null,
+      "worker_joined": true,
+      "provider_opened": 16,
+      "provider_closed": 16,
+      "provider_live": 0,
+      "sample_leases": 0,
+      "live_instances": 0
+    },
+    "eof": false,
+    "interpretation": "Real output differs from reference; no execution-input modification. Failure teardown verified; not a successful full transcript replay."
+  },
+  "mutation": {
+    "scope": "Only one finite submitted PCM reference sample bit changed; frame and file hashes recomputed. All INPUT frames, scheduling coordinates, bank, counts and original files unchanged.",
+    "complete_frames": 136330,
+    "mutation": {
+      "role": 2,
+      "family": 114,
+      "class_code": 1,
+      "occurrence": 33301,
+      "frame_offset": 1827151,
+      "payload_byte": 1063,
+      "sample_index": 256,
+      "before_bits": 3117646697,
+      "after_bits": 3117646696
+    },
+    "history_bytes": 17716416,
+    "history_sha256": "83fd45df12a2b9becbd116ac70a00364cc1895bed3b7614ac3c4452aa2eb7b56",
+    "bank_sha256": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+  },
+  "original_identity_postcheck": "ELF, bank and original history size/SHA match frozen identities; original positive report retained. Source guard equal in both runs; 16 authored inputs verified unchanged.",
+  "limits": [
+    "Two expected nonzero exits are negative-test success, not ordinary positive test passes.",
+    "Exactly one execution per negative. No new recording or source changes.",
+    "Debug capture overflow and long>=32768 pending remain unchanged.",
+    "No Windows/physical device/raw/binary upload."
+  ]
+}
