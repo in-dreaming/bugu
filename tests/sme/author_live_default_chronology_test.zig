@@ -1066,6 +1066,8 @@ test "default Host without capture accepts cross-frame completions and preserves
         }
     }
     try t.expect(host.options.semantic == null and host.options.test_capture == null);
+    try t.expectEqual(live.PacingMode.notified_v1, host.pacingMode());
+    std.debug.print("DEFAULT_HOST_PACING schema=1 mode={s} ordinary=true\n", .{@tagName(host.pacingMode())});
     var receipts: Receipts = .{};
     receipts.ids[0] = (try host.submit(host.identity(), .play)).id;
     const play = try receipts.await(host, probe, 0);
@@ -1627,6 +1629,7 @@ test "Host passive wait diagnostics preserve raw pairs unavailable errors mismat
                 try t.expectEqual(value.sample.clock.available, try boolean(line, key ++ ".sample.clock.available"));
                 try t.expectEqual(value.sample.clock.error_code, try number(line, key ++ ".sample.clock.error_code"));
                 try t.expectEqualStrings(@tagName(value.point.reason), try token(line, key ++ ".point.reason"));
+                try t.expectEqualStrings(@tagName(value.point.mode), try token(line, key ++ ".point.mode"));
                 try t.expectEqual(value.point.requested_ms, try number(line, key ++ ".point.requested_ms"));
                 try t.expectEqual(value.point.calls, try number(line, key ++ ".point.calls"));
                 try t.expectEqual(value.point.worked, try number(line, key ++ ".point.worked"));

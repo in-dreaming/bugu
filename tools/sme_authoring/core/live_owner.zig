@@ -30,7 +30,36 @@ pub const TestTickOutcome = struct { context: *anyopaque, call: *const fn (*anyo
 /// Passive test observation of one existing wait invocation. Role-local pair
 /// and burst identifiers belong to the test collector, with explicit overflow.
 /// An after edge reports return from the existing catch, not successful sleep.
+pub const PacingMode = enum { legacy_poll, notified_v1 };
+/// One consumer resets before checking real work; any producer may notify.
+/// A notification is a persistent hint, never an engine readiness result.
+pub const WakeSignal = struct {
+    event: std.Io.Event = .unset,
+    pub fn beginTurn(self: *WakeSignal) void {
+        // std.Event.reset is a monotonic store. Consume any earlier release
+        // notification and keep subsequent real work checks after this clear.
+        // Only the sole consumer calls this, with no wait still in flight.
+        _ = @atomicRmw(std.Io.Event, &self.event, .Xchg, .unset, .acquire);
+    }
+    pub fn notify(self: *WakeSignal, io: std.Io) void {
+        self.event.set(io);
+    }
+    pub fn wait(self: *WakeSignal, io: std.Io, milliseconds: u8) void {
+        // Do not reset here: work-to-wait notifications must remain pending.
+        self.event.waitTimeout(io, .{ .duration = .{ .raw = .fromMilliseconds(milliseconds), .clock = .awake } }) catch |err| switch (err) {
+            error.Timeout => {},
+            error.Canceled => {
+                // Preserve bounded pacing under cancellation, then allow the
+                // consumer's normal lifecycle checks to decide its next step.
+                const previous = io.swapCancelProtection(.blocked);
+                defer _ = io.swapCancelProtection(previous);
+                std.Io.sleep(io, .fromMilliseconds(milliseconds), .awake) catch {};
+            },
+        };
+    }
+};
 pub const TestWaitPoint = struct {
+    mode: PacingMode = .legacy_poll,
     role: enum { control, worker },
     edge: enum { before, after },
     reason: enum { startup, burst_budget, claim_deferred, park, gate_error, control_turn },
@@ -63,7 +92,7 @@ const WaitProgress = struct {
 };
 pub const Options = struct {
     /// Borrowed thread-safe Io; must outlive both actual thread joins. Used only
-    /// for synchronous sleeps, never async work or device callback execution.
+    /// for synchronous waits, never async work or device callback execution.
     io: std.Io,
     /// Explicit production observer. Borrowed final storage and immutable config
     /// must outlive Host.destroy, including both real native producer joins.
@@ -146,6 +175,9 @@ pub const Host = struct {
     control_thread: ?std.Thread = null,
     worker_thread: ?std.Thread = null,
     finished: std.atomic.Value(bool) = .init(false),
+    // Single-consumer persistent hints. Storage survives both actual joins.
+    control_wake: WakeSignal = .{},
+    worker_wake: WakeSignal = .{},
     worker_ready: std.atomic.Value(bool) = .init(false),
     startup_abort: std.atomic.Value(bool) = .init(false),
     worker_error: std.atomic.Value(u32) = .init(0),
@@ -237,6 +269,33 @@ pub const Host = struct {
         self.control_thread = try std.Thread.spawn(.{}, controlMain, .{self});
         return self;
     }
+    /// Recording and replay retain the original polling schedule. Notification
+    /// pacing is currently supported only by the ordinary, non-recording Host.
+    pub fn pacingMode(self: *const Host) PacingMode {
+        if (self.options.semantic != null) return .legacy_poll;
+        if (@import("builtin").is_test) if (self.options.test_capture != null) return .legacy_poll;
+        return .notified_v1;
+    }
+    fn notifyControl(self: *Host) void {
+        if (self.pacingMode() == .notified_v1) self.control_wake.notify(self.options.io);
+    }
+    fn notifyWorker(self: *Host) void {
+        if (self.pacingMode() == .notified_v1) self.worker_wake.notify(self.options.io);
+    }
+    fn abortStartupWorker(self: *Host) void {
+        self.startup_abort.store(true, .release);
+        self.notifyWorker();
+    }
+    fn workerCompletedNotification(self: *Host, worked: bool) void {
+        if (worked) self.notifyControl();
+    }
+    fn workerError(self: *Host, err: anyerror) void {
+        // Worker is the sole writer. Preserve the original last-error store;
+        // only the first error wakes Control, preventing persistent-error pingpong.
+        const first = self.worker_error.load(.acquire) == 0;
+        self.worker_error.store(@intFromError(err), .release);
+        if (first) self.notifyControl();
+    }
     pub fn identity(self: *const Host) Identity {
         return self.launch_identity;
     }
@@ -248,6 +307,7 @@ pub const Host = struct {
             return err;
         };
         if (call_id) |seq| session.?.endUi(seq, .{ .submit = semanticCommand(command) });
+        self.notifyControl();
         return command;
     }
     /// UI reads only copied status; Control revalidates at admission.
@@ -261,7 +321,9 @@ pub const Host = struct {
         if (snapshot.value.phase != .waiting_for_recovery or !snapshot.value.loss_accepted) return error.InvalidState;
         if (self.recovery_requested.cmpxchgStrong(false, true, .acq_rel, .acquire) != null) return error.ProgressPending;
         errdefer self.recovery_requested.store(false, .release);
-        return self.channel.submitRecovery(id, device_epoch);
+        const command = try self.channel.submitRecovery(id, device_epoch);
+        self.notifyControl();
+        return command;
     }
     /// UI-safe test injection. Only Control ever accesses the backend.
     pub fn testRequestLoss(self: *Host) !void {
@@ -271,6 +333,7 @@ pub const Host = struct {
             if (self.options.semantic) |session| session.poison();
             if (self.channel.closeRequested()) return error.AdmissionClosed;
             self.test_loss_requested.store(true, .release);
+            self.notifyControl();
         } else return error.TestOnly;
     }
     pub fn requestClose(self: *Host, epoch: u64) !void {
@@ -281,12 +344,14 @@ pub const Host = struct {
             return err;
         };
         if (call_id) |seq| session.?.endUi(seq, .{ .request_close = {} });
+        self.notifyControl();
     }
     pub fn popEvent(self: *Host) ?Mailbox.Event {
         const session = self.options.semantic;
         const call_id = if (session) |value| value.beginUi(.pop_event) else null;
         const event = self.channel.popEvent();
         if (call_id) |seq| session.?.endUi(seq, .{ .pop_event = if (event) |value| semanticUiEvent(value) else null });
+        if (event != null) self.notifyControl();
         return event;
     }
     pub fn acknowledgeTerminal(self: *Host, id: u64) !void {
@@ -297,6 +362,7 @@ pub const Host = struct {
             return err;
         };
         if (call_id) |seq| session.?.endUi(seq, .{ .acknowledge_terminal = {} });
+        self.notifyControl();
     }
     pub fn readStatus(self: *Host) ?mailbox.StatusCell(Status).Versioned {
         return self.channel.status.read();
@@ -313,11 +379,29 @@ pub const Host = struct {
         pub fn initProbe(host: *Host, epoch: u64) !void {
             host.* = undefined;
             host.launch_identity.epoch = epoch;
-            host.options.semantic = null;
+            host.options = .{ .io = std.testing.io };
+            host.control_wake = .{};
+            host.worker_wake = .{};
+            host.worker_error = .init(0);
+            host.startup_abort = .init(false);
+            host.worker_ready = .init(false);
+            host.worker_id = .init(0);
             host.park_sequence = null;
             host.gate = try mailbox.WorkerGate.init(epoch);
             host.status.phase = .closing;
             host.status.cleanup_error = null;
+        }
+        pub fn startupWorker(host: *Host) void {
+            host.workerMain();
+        }
+        pub fn abortStartup(host: *Host) void {
+            host.abortStartupWorker();
+        }
+        pub fn completedNotification(host: *Host, worked: bool) void {
+            host.workerCompletedNotification(worked);
+        }
+        pub fn errorNotification(host: *Host, err: anyerror) void {
+            host.workerError(err);
         }
         pub fn inspect(host: *Host, comptime callback: fn (*Host) anyerror!bool) !void {
             return host.withParkedSnapshot(callback);
@@ -395,12 +479,14 @@ pub const Host = struct {
         }
         self.construct() catch |err| self.fail(err);
         while (true) {
+            if (self.pacingMode() == .notified_v1) self.control_wake.beginTurn();
             self.turn() catch |err| {
                 self.status.cleanup_error = err;
                 self.finishRecovery(.failed) catch {};
                 self.fail(err);
             };
             const published = self.publish();
+            self.notifyWorker();
             if (self.status.phase == .closed and published) break;
             self.waitTurn();
         }
@@ -545,6 +631,7 @@ pub const Host = struct {
             self.bindSemantic(session);
         }
         self.worker_ready.store(true, .release);
+        self.notifyWorker();
         if (self.options.semantic) |session| session.emitControl(.{ .ready = .{ .attached = session.live_attached and session.audio_attached } });
         self.operation = .load_submit;
         self.load_ticket = try self.captureCall(captureArgs(.load, .{ .source_hash = self.launch_identity.artifact_hash, .source_bytes = self.bytes.len }), music.MusicRuntime.loadBankWithSources, .{ self.owner.?, self.bytes, self.provider.?.provider() });
@@ -594,7 +681,9 @@ pub const Host = struct {
         self.worker_id.store(@intCast(std.Thread.getCurrentId()), .release);
         if (self.options.semantic) |session| session.emitWorker(.{ .started = @intCast(std.Thread.getCurrentId()) });
         defer if (self.options.semantic) |session| session.emitWorker(.returned);
-        while (!self.worker_ready.load(.acquire)) {
+        while (true) {
+            if (self.pacingMode() == .notified_v1) self.worker_wake.beginTurn();
+            if (self.worker_ready.load(.acquire)) break;
             if (self.startup_abort.load(.acquire)) {
                 if (self.options.semantic) |session| session.emitWorker(.startup_aborted);
                 return;
@@ -611,13 +700,14 @@ pub const Host = struct {
             capture.config.worker.emit(capture.config.worker.context, .{ .ready_acquired = .{ .committed = capture.committed } });
         var acknowledged: u64 = 0;
         while (true) {
+            if (self.pacingMode() == .notified_v1) self.worker_wake.beginTurn();
             var wait_progress: WaitProgress = .{};
             for (0..4) |_| {
                 if (self.options.semantic) |session| session.emitWorker(.gate_poll);
                 const action = self.gate.workerAction(self.launch_identity.epoch) catch |err| {
                     if (@import("builtin").is_test) if (self.options.test_capture) |capture| capture.workerGate(.{ .action = err });
                     if (self.options.semantic) |session| session.emitWorker(.{ .gate = .{ .action = err } });
-                    self.worker_error.store(@intFromError(err), .release);
+                    self.workerError(err);
                     wait_progress.reason(.gate_error);
                     break;
                 };
@@ -637,13 +727,16 @@ pub const Host = struct {
                             if (self.options.semantic) |session| session.emitWorker(.{ .gate = .{ .acknowledgment_begin = seq } });
                             self.gate.acknowledgePark(self.launch_identity.epoch, seq) catch |err| {
                                 failure = err;
-                                self.worker_error.store(@intFromError(err), .release);
+                                self.workerError(err);
                             };
                             // ACK may allow Control to free the engine now;
                             // this callback touches only retained role storage.
                             if (@import("builtin").is_test) if (self.options.test_capture) |capture| capture.workerGate(.{ .acknowledgment = .{ .sequence = seq, .failure = failure } });
                             if (self.options.semantic) |session| session.emitWorker(.{ .gate = .{ .acknowledgment = .{ .sequence = seq, .failure = failure } } });
-                            if (failure == null) acknowledged = seq;
+                            if (failure == null) {
+                                acknowledged = seq;
+                                self.notifyControl();
+                            }
                         }
                         break;
                     },
@@ -655,7 +748,7 @@ pub const Host = struct {
                                 std.debug.print("live Worker first error: {s}\n", .{@errorName(err)});
                                 if (@errorReturnTrace()) |trace| std.debug.dumpErrorReturnTrace(trace);
                             }
-                            self.worker_error.store(@intFromError(err), .release);
+                            self.workerError(err);
                             break :blk false;
                         };
                         wait_progress.completed(worked, deferred);
@@ -665,15 +758,18 @@ pub const Host = struct {
                         if (deferred) {
                             self.gate.workerDeferred(self.launch_identity.epoch) catch |err| {
                                 completion_failure = err;
-                                self.worker_error.store(@intFromError(err), .release);
+                                self.workerError(err);
                             };
                         } else self.gate.workerCompleted(self.launch_identity.epoch) catch |err| {
                             completion_failure = err;
-                            self.worker_error.store(@intFromError(err), .release);
+                            self.workerError(err);
                         };
                         if (@import("builtin").is_test) if (self.options.test_capture) |capture|
                             capture.workerGate(if (deferred) .{ .deferred = completion_failure } else .{ .completed = completion_failure });
                         if (self.options.semantic) |session| session.emitWorker(.{ .gate = .{ .completed = .{ .call_id = session.worker_calls, .deferred = deferred, .failure = completion_failure } } });
+                        // Publish both the real work result and its gate progress
+                        // before waking Control, still once per actual call.
+                        self.workerCompletedNotification(worked);
                         // A failed initial Service claim did no job work. End
                         // this actual call before yielding to the usual sleep;
                         // don't spend the rest of this burst retrying its CAS.
@@ -718,20 +814,29 @@ pub const Host = struct {
         if (comptime @import("builtin").is_test) {
             var point = progress.value;
             point.requested_ms = milliseconds;
+            point.mode = self.pacingMode();
             self.observeWait(point);
         }
-        std.Io.sleep(self.options.io, .fromMilliseconds(milliseconds), .awake) catch {};
+        self.waitPaced(&self.worker_wake, milliseconds);
         if (comptime @import("builtin").is_test) {
             var point = progress.value;
             point.requested_ms = milliseconds;
+            point.mode = self.pacingMode();
             point.edge = .after;
             self.observeWait(point);
         }
     }
     fn waitTurn(self: *Host) void {
-        if (comptime @import("builtin").is_test) self.observeWait(.{ .role = .control, .edge = .before, .reason = .control_turn, .requested_ms = 1 });
-        std.Io.sleep(self.options.io, .fromMilliseconds(1), .awake) catch {};
-        if (comptime @import("builtin").is_test) self.observeWait(.{ .role = .control, .edge = .after, .reason = .control_turn, .requested_ms = 1 });
+        if (comptime @import("builtin").is_test) self.observeWait(.{ .mode = self.pacingMode(), .role = .control, .edge = .before, .reason = .control_turn, .requested_ms = 1 });
+        self.waitPaced(&self.control_wake, 1);
+        if (comptime @import("builtin").is_test) self.observeWait(.{ .mode = self.pacingMode(), .role = .control, .edge = .after, .reason = .control_turn, .requested_ms = 1 });
+    }
+    fn waitPaced(self: *Host, signal: *WakeSignal, milliseconds: u8) void {
+        if (self.pacingMode() == .legacy_poll) {
+            std.Io.sleep(self.options.io, .fromMilliseconds(milliseconds), .awake) catch {};
+            return;
+        }
+        signal.wait(self.options.io, milliseconds);
     }
     fn replayFailed(self: *const Host) bool {
         const session = self.options.semantic orelse return false;
@@ -1287,6 +1392,7 @@ pub const Host = struct {
             };
             if (self.options.semantic) |session| session.emitControl(.{ .gate = .{ .request = value } });
             self.park_sequence = value;
+            self.notifyWorker();
             break :blk value;
         };
         if (self.options.semantic) |session| session.emitControl(.{ .gate = .{ .poll_begin = seq } });
@@ -1304,6 +1410,7 @@ pub const Host = struct {
         };
         if (self.options.semantic) |session| session.emitControl(.{ .gate = .{ .resume_return = .{ .sequence = seq, .failure = null } } });
         self.park_sequence = null;
+        self.notifyWorker();
     }
     fn destroyTurn(self: *Host) !void {
         if (@import("builtin").is_test) if (self.options.test_capture) |capture| if (capture.committed)
@@ -1353,6 +1460,7 @@ pub const Host = struct {
         };
         if (self.options.semantic) |session| session.emitControl(.{ .gate = .{ .stop_return = .{ .sequence = seq, .failure = null } } });
         self.terminal_stop_sent = true;
+        self.notifyWorker();
         if (self.options.semantic) |session| session.emitControl(.worker_join_begin);
         self.worker_thread.?.join();
         if (self.options.semantic) |session| session.emitControl(.worker_joined);
@@ -1367,7 +1475,7 @@ pub const Host = struct {
         // waiting Worker sees startup_abort and never acquires an owner pointer.
         if (self.worker_thread) |thread| {
             if (self.worker_ready.load(.acquire) and !self.terminal_stop_sent) return error.WorkerStopPending;
-            self.startup_abort.store(true, .release);
+            self.abortStartupWorker();
             if (self.options.semantic) |session| session.emitControl(.worker_join_begin);
             thread.join();
             if (self.options.semantic) |session| session.emitControl(.worker_joined);
