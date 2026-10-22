@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "status": "PASS",
+  "stage": "Existing ordinary Host worker-claim and recovery lifecycle regressions, one invocation",
+  "source_commit": "4f2710c7a3db88649c3a495b5d7fe7950633788f",
+  "source_tree": "9c2a25a4a9750e098e93a6949749ee717640aae8",
+  "plan_git_commit": "c5db2e05441fbb21e481579994d6bd28370c66ab",
+  "plan_sha256": "72c91aa36ce01d74e4bc89a1a53a353c9a50b3db66f0692fabded91e1f91ae60",
+  "guard_result": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 140.27048521100005,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 28381601792
+  },
+  "build_steps": {
+    "passed": 7,
+    "total": 7
+  },
+  "tests": {
+    "passed": 10,
+    "failed": 0,
+    "worker_claim": {
+      "passed": 3,
+      "total": 3
+    },
+    "recovery": {
+      "passed": 7,
+      "total": 7
+    }
+  },
+  "pacing_evidence": "Both existing fixtures use ordinary Host options, with semantic and private test_capture absent; current dispatch therefore selects notified_v1. These fixtures do not independently print the pacing mode. The separate initial default Host fixture directly asserted and printed notified_v1.",
+  "coverage": [
+    "Real initial Worker claim defer followed by Stop, Close while deferred, and later provider retirement error.",
+    "Explicit null-device recovery and legal bar PCM/epochs; Close with retained credits and during recovery; callback start failure; second loss or Close; readiness/supply cuts; genuinely cancelled source failure."
+  ],
+  "source_post_run_clean": true,
+  "source_post_run_tree": "9c2a25a4a9750e098e93a6949749ee717640aae8",
+  "process_check": "No related test, build or guard processes remained after normal exit.",
+  "stderr_note": "Expected fault-injection diagnostics include SourceCloseFailed and recovery source error stacks. Zig prints literal failed command labels adjacent to stderr; authoritative child exit is 0 and both targets explicitly report success. Raw logs remain local and are not published.",
+  "limitations": [
+    "No source changes or timing retries; first 23/23 result remains separate.",
+    "This is Linux Debug lifecycle qualification, not Windows acceptance or universal real-time scheduling assurance.",
+    "Notification capture/replay remains unsupported; semantic/private capture retain legacy polling.",
+    "Standalone output parser inspection has not yet run."
+  ]
+}
