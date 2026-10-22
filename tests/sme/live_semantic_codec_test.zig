@@ -833,6 +833,8 @@ fn launchDescriptorFixture() codec.LaunchDescriptor {
 }
 
 test "v3 launch pacing roundtrips both canonical INPUT and independent started reference" {
+    try t.expectEqual(@as(u16, 3), codec.schema_version);
+    try t.expectEqual(f.wire_version, codec.schema_version);
     try t.expectEqual(codec.semantic.PacingMode.legacy_poll, launchDescriptorFixture().pacing);
     inline for (.{ codec.semantic.PacingMode.legacy_poll, codec.semantic.PacingMode.notified_v1 }) |pacing| {
         const started: @FieldType(codec.semantic.ControlEvent, "started") = .{ .thread = 1234, .identity = uiIdentity(), .config = .{}, .device = .{ .backend = .null_backend }, .pacing = pacing };
@@ -854,7 +856,15 @@ test "v3 launch pacing roundtrips both canonical INPUT and independent started r
         var reference_roundtrip: [4096]u8 = undefined;
         const reference = try codec.encode(observed, .reference, &reference_bytes);
         try codec.validateReference(.{ .role = .control, .ordinal = 1, .family = @intFromEnum(codec.Family.control_event), .bytes = reference });
-        const reference_decoded = try codec.decode(codec.Native(codec.semantic.ControlEvent), reference);
+        // Decode only the known started payload, not ControlEvent's other
+        // error-valued arms: those remain forbidden to execution decoders.
+        var reference_decoder: codec.Decoder = .{ .wire = .{ .bytes = reference } };
+        const occurrence = try reference_decoder.get(u64);
+        const tag = try reference_decoder.get(std.meta.Tag(codec.semantic.ControlEvent));
+        try t.expectEqual(std.meta.Tag(codec.semantic.ControlEvent).started, tag);
+        const decoded_started = try reference_decoder.get(@FieldType(codec.semantic.ControlEvent, "started"));
+        try reference_decoder.wire.finish();
+        const reference_decoded: codec.Native(codec.semantic.ControlEvent) = .{ .occurrence = occurrence, .value = .{ .started = decoded_started } };
         try t.expectEqualDeep(observed, reference_decoded);
         try t.expectEqual(pacing, reference_decoded.value.started.pacing);
         try t.expectEqualSlices(u8, reference, try codec.encode(reference_decoded, .reference, &reference_roundtrip));
