@@ -1,0 +1,226 @@
+{
+  "schema": "bugu.notified-semantic-v3.overlap-inspection-result/v1",
+  "status": "CROSSED_SCAN_DIAGNOSTIC",
+  "source_commit": "a8ef20b9028290650b6ba7cc10187618813dd9b0",
+  "source_tree": "7f466dd56d0f154647c764eab619f5226d3ff45e",
+  "plan_commit": "19d61b58565b0336196c55aa3ba6c769566c40de",
+  "execution": {
+    "exit": 0,
+    "timeout": false,
+    "elapsed_seconds": 14.213206231001095,
+    "original_hash_unchanged": true,
+    "source_clean": true
+  },
+  "original": {
+    "bytes": 50481003,
+    "sha256": "33b7d6d99f4cdbe385c4df9bcd80cd2c5377bdad7feb9239d322d81f336cd62f"
+  },
+  "framing": {
+    "declared_byte_cap": 536870912,
+    "families": {
+      "102": 28905,
+      "103": 11842,
+      "104": 34604,
+      "105": 840,
+      "106": 686,
+      "107": 392,
+      "108": 800,
+      "109": 16,
+      "11": 33776,
+      "110": 1169,
+      "111": 9108,
+      "112": 1656,
+      "113": 406,
+      "114": 136,
+      "115": 33776,
+      "116": 9334,
+      "117": 16042,
+      "119": 5000,
+      "12": 4667,
+      "13": 16042,
+      "14": 1,
+      "15": 4945,
+      "17": 5000,
+      "2": 28226,
+      "3": 676,
+      "4": 1704,
+      "7": 4937,
+      "8": 135,
+      "9": 116612
+    },
+    "frames": 371433,
+    "identities": {
+      "bank": "fc408c1f1af52ffa424a58e26c35b8742b9ce999899bfc1bf698143c0d0e5585",
+      "build": "2c6b17fb2e6e9452e14118dfc881ab373bcb478e6585aa819faeecaac0059d8e",
+      "config": "81898fc8b199eb9812d68b949833bd2f67a3f4770dcd8ba4b8acf3feb611d94c",
+      "source": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+    },
+    "identity_scope": "Authenticated by the pinned original file SHA256; not independently rebuilt.",
+    "inputs": [
+      58979,
+      118258,
+      6799,
+      32685
+    ],
+    "passed": true,
+    "references": [
+      44200,
+      87348,
+      4488,
+      18676
+    ],
+    "roles": [
+      103179,
+      205606,
+      11287,
+      51361
+    ]
+  },
+  "input_order": {
+    "decoded_input_points": 813152,
+    "decoded_reference_points": 813831,
+    "families": [
+      1,
+      2,
+      11
+    ],
+    "last_selected_occurrence": 924366,
+    "merged_selected_points": 813152,
+    "scope": "Strictly increasing true INPUT occurrence stamps, not frame order, reference values, or invented atomic order; unrelated event-marker completeness is not checked."
+  },
+  "counts": {
+    "scalar:service_acceptance_scan:completed": 1,
+    "scalar:service_worker_scan:queued": 2
+  },
+  "first_hard_conflict_under_native_attempt_scan_policy": null,
+  "exact_crossings": [
+    {
+      "category": "scalar",
+      "publication_kind": "queued",
+      "read": {
+        "after": {
+          "occurrence": 111021,
+          "role": "worker",
+          "site": "service_worker_scan",
+          "index": 1,
+          "generation": 0,
+          "recorded_reference_value": 1
+        },
+        "before": {
+          "occurrence": 111019,
+          "role": "worker",
+          "site": "service_worker_scan",
+          "index": 1,
+          "generation": 0,
+          "recorded_reference_value": null
+        }
+      },
+      "write": {
+        "after": {
+          "occurrence": 111020,
+          "role": "control",
+          "site": "service_job_queued",
+          "index": 1,
+          "generation": 52,
+          "recorded_reference_value": 1
+        },
+        "before": {
+          "occurrence": 111018,
+          "role": "control",
+          "site": "service_job_queued",
+          "index": 1,
+          "generation": 52,
+          "recorded_reference_value": 1
+        }
+      }
+    },
+    {
+      "category": "scalar",
+      "publication_kind": "completed",
+      "read": {
+        "after": {
+          "occurrence": 226459,
+          "role": "control",
+          "site": "service_acceptance_scan",
+          "index": 2,
+          "generation": 0,
+          "recorded_reference_value": 1
+        },
+        "before": {
+          "occurrence": 226457,
+          "role": "control",
+          "site": "service_acceptance_scan",
+          "index": 2,
+          "generation": 0,
+          "recorded_reference_value": null
+        }
+      },
+      "write": {
+        "after": {
+          "occurrence": 226458,
+          "role": "worker",
+          "site": "service_worker_completed",
+          "index": 2,
+          "generation": 90,
+          "recorded_reference_value": 3
+        },
+        "before": {
+          "occurrence": 226456,
+          "role": "worker",
+          "site": "service_worker_completed",
+          "index": 2,
+          "generation": 90,
+          "recorded_reference_value": 3
+        }
+      }
+    },
+    {
+      "category": "scalar",
+      "publication_kind": "queued",
+      "read": {
+        "after": {
+          "occurrence": 412966,
+          "role": "worker",
+          "site": "service_worker_scan",
+          "index": 2,
+          "generation": 0,
+          "recorded_reference_value": 1
+        },
+        "before": {
+          "occurrence": 412964,
+          "role": "worker",
+          "site": "service_worker_scan",
+          "index": 2,
+          "generation": 0,
+          "recorded_reference_value": null
+        }
+      },
+      "write": {
+        "after": {
+          "occurrence": 412965,
+          "role": "control",
+          "site": "service_job_queued",
+          "index": 2,
+          "generation": 169,
+          "recorded_reference_value": 1
+        },
+        "before": {
+          "occurrence": 412963,
+          "role": "control",
+          "site": "service_job_queued",
+          "index": 2,
+          "generation": 169,
+          "recorded_reference_value": 1
+        }
+      }
+    }
+  ],
+  "limits": [
+    "Source-pinned read-only mirror of ScanIntervals, not complete Zig semantic admission or replay.",
+    "All reference predicates are comparison facts only; they do not establish an executed atomic reads-from timestamp or authorize replay input reconstruction.",
+    "Three counts include explicitly diagnostic continuation after the first strict rejection; original validator stopped at first CrossedScan.",
+    "No Scheduler/guard conflict found by this finite scan pass, not a claim all other protocol contracts pass.",
+    "Original long remains strict-rejected; no new history published or replay attempted.",
+    "Existing Debug capture overflow remains unresolved; no capacity/source/test-oracle changes."
+  ]
+}
