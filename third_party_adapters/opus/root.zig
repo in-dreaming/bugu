@@ -1,0 +1,29 @@
+//! Pinned libopus/libogg isolation. Worker/compiler only; no render dependency.
+pub const types = @import("types.zig");
+pub const Error = types.Error;
+pub const OpusStreamInfo = types.OpusStreamInfo;
+pub const Layout = types.Layout;
+pub const DecodeResult = types.DecodeResult;
+pub const musicError = types.musicError;
+pub const profile = @import("profile.zig");
+pub const container = @import("container.zig");
+pub const inspect = container.inspect;
+pub const Scan = container.Scan;
+const decoder = @import("decoder.zig");
+pub const Decoder = decoder.Decoder;
+pub const PacketReader = decoder.PacketReader;
+pub const ReadResult = decoder.ReadResult;
+pub const Recovery = decoder.Recovery;
+pub const scanReader = decoder.scanReader;
+pub const recoveryFor = decoder.recoveryFor;
+pub const preroll_frames = decoder.preroll_frames;
+pub const max_native_state_bytes = decoder.max_native_state_bytes;
+const encoder = @import("encoder.zig");
+pub const Encoder = encoder.Encoder;
+pub const Encoded = encoder.Encoded;
+const packet_source = @import("packet_source.zig");
+pub const ByteSource = packet_source.ByteSource;
+pub const BoundedPacketSource = packet_source.BoundedPacketSource;
+pub const max_page_bytes = packet_source.max_page_bytes;
+/// Internal mapping seam for native failure diagnostics; no C type escapes.
+pub const nativeFailure = @import("native_errors.zig").classify;

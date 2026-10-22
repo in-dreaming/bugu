@@ -1,0 +1,11 @@
+.{
+    .schema_version = 1,
+    .task_id = "TASK-007",
+    .modules = .{
+        .{ .name = "sme-clock", .root_source_file = "src/music/clock.zig", .imports = .{.{ .name = "sme-bank", .module = "sme-bank" }} },
+        .{ .name = "sme-tempo", .root_source_file = "tools/sme_compiler/tempo.zig", .imports = .{ .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-clock", .module = "sme-clock" }, .{ .name = "sme-compiler", .module = "sme-compiler" } } },
+    },
+    .music_imports = .{
+        .{ .name = "sme-clock", .module = "sme-clock" },
+    },
+}

@@ -374,3 +374,26 @@ fn appendEntry(
 test "import generated wavs into bank and load entries" {
     _ = Bank;
 }
+
+/// Explicit routing only. No detection, upgrade, fallback, or legacy semantic change.
+pub const BankInput = union(enum) {
+    legacy_sfx: struct { manifest_path: []const u8, blob_path: []const u8 },
+    compiled_music: []const u8,
+};
+pub const LoadedBank = union(enum) {
+    legacy_sfx: Bank,
+    compiled_music: @import("sme-bank").MusicBank,
+    pub fn deinit(self: *LoadedBank) void {
+        switch (self.*) {
+            .legacy_sfx => |*bank| bank.deinit(),
+            .compiled_music => |*bank| bank.deinit(),
+        }
+        self.* = undefined;
+    }
+};
+pub fn loadExplicit(io: std.Io, allocator: std.mem.Allocator, input: BankInput) !LoadedBank {
+    return switch (input) {
+        .legacy_sfx => |paths| .{ .legacy_sfx = try loadBank(io, allocator, paths.manifest_path, paths.blob_path) },
+        .compiled_music => |bytes| .{ .compiled_music = try @import("sme-bank").MusicBank.load(allocator, bytes) },
+    };
+}

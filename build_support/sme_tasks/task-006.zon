@@ -1,0 +1,10 @@
+.{
+    .schema_version = 1,
+    .task_id = "TASK-006",
+    .modules = .{
+        .{ .name = "sme-virtual-voice", .root_source_file = "src/mixer/virtual_voice.zig", .imports = .{.{ .name = "sme-bank", .module = "sme-bank" }} },
+    },
+    .audio_imports = .{
+        .{ .name = "sme-virtual-voice", .module = "sme-virtual-voice" },
+    },
+}

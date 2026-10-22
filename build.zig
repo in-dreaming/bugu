@@ -24,6 +24,12 @@ pub fn build(b: *std.Build) void {
     const run_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_tests.step);
+    // The production core has its own unchanged test artifact. This focused
+    // entry point does not replace or remove any SME gate from `test`.
+    const runtime_unit_step = b.step("runtime-unit-test", "Run production audio/runtime unit tests only");
+    runtime_unit_step.dependOn(&run_tests.step);
+
+    @import("build_support/sme_steps.zig").addSmeSteps(b, target, optimize, bugu_audio, test_step);
 
     const tone_exe = b.addExecutable(.{
         .name = "bugu-tone",
@@ -272,6 +278,7 @@ fn addAcousticVisualizerSteps(
         .target = viz_target,
         .optimize = viz_optimize,
     });
+    @import("build_support/sme_steps.zig").configureMusicModule(b, viz_target, viz_optimize, viz_bugu);
     addMiniaudio(viz_bugu, viz_target.result);
     viz_bugu.sanitize_c = .off;
 

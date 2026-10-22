@@ -1,0 +1,24 @@
+.{
+    .schema_version = 1,
+    .task_id = "TASK-014",
+    .modules = .{
+        .{ .name = "sme-runtime-crossfade-contract", .root_source_file = "src/music/runtime_crossfade_contract.zig" },
+        .{ .name = "sme-runtime-crossfade-projection", .root_source_file = "src/music/runtime_crossfade_projection.zig", .imports = .{
+            .{ .name = "sme-planner", .module = "sme-planner" },
+            .{ .name = "music", .module = "music" },
+            .{ .name = "sme-bank", .module = "sme-bank" },
+            .{ .name = "sme-runtime-crossfade-contract", .module = "sme-runtime-crossfade-contract" },
+        } },
+        .{ .name = "sme-runtime-v1-fixture", .root_source_file = "tests/fixtures/sme/runtime-v1/fixture.zig", .imports = .{ .{ .name = "bugu_audio", .module = "bugu_audio" }, .{ .name = "sme-early-bank-fixture", .module = "sme-early-bank-fixture" } } },
+    },
+    .music_imports = .{
+        .{ .name = "sme-runtime-crossfade-projection", .module = "sme-runtime-crossfade-projection" },
+        .{ .name = "sme-runtime-crossfade-contract", .module = "sme-runtime-crossfade-contract" },
+        .{ .name = "sme-layers", .module = "sme-layers" },
+        .{ .name = "sme-layer-curves", .module = "sme-layer-curves" },
+        .{ .name = "sme-layer-contract", .module = "sme-layer-contract" },
+        .{ .name = "sme-policy-runtime", .module = "sme-policy-runtime" },
+        .{ .name = "sme-streaming", .module = "sme-streaming" },
+        .{ .name = "sme-opus", .module = "sme-opus" },
+    },
+}

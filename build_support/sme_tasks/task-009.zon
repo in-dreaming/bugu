@@ -1,0 +1,8 @@
+.{
+    .schema_version = 1,
+    .task_id = "TASK-009",
+    .modules = .{
+        .{ .name = "sme-planner", .root_source_file = "src/music/planner.zig", .imports = .{ .{ .name = "music", .module = "music" }, .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-clock", .module = "sme-clock" }, .{ .name = "sme-director", .module = "sme-director" }, .{ .name = "sme-selector", .module = "sme-selector" }, .{ .name = "sme-streaming", .module = "sme-streaming" }, .{ .name = "sme-trace", .module = "sme-trace" } } },
+        .{ .name = "sme-transition-compiler", .root_source_file = "tools/sme_compiler/transitions.zig", .imports = .{ .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-compiler", .module = "sme-compiler" } } },
+    },
+}

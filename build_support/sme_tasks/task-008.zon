@@ -1,0 +1,16 @@
+.{
+    .schema_version = 1,
+    .task_id = "TASK-008",
+    .modules = .{
+        .{ .name = "sme-director", .root_source_file = "src/music/director.zig", .imports = .{ .{ .name = "sme-resident-migration", .module = "sme-resident-migration" }, .{ .name = "music", .module = "music" }, .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-logic", .module = "sme-logic" }, .{ .name = "sme-selector", .module = "sme-selector" }, .{ .name = "sme-trace", .module = "sme-trace" }, .{ .name = "sme-clock", .module = "sme-clock" } } },
+        .{ .name = "sme-logic", .root_source_file = "src/music/logic.zig", .imports = .{ .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-trace", .module = "sme-trace" } } },
+        .{ .name = "sme-logic-compiler", .root_source_file = "tools/sme_compiler/logic.zig", .imports = .{ .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-logic", .module = "sme-logic" }, .{ .name = "sme-trace", .module = "sme-trace" }, .{ .name = "sme-compiler", .module = "sme-compiler" } } },
+        .{ .name = "sme-selection-compiler", .root_source_file = "tools/sme_compiler/selection.zig", .imports = .{ .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-logic-compiler", .module = "sme-logic-compiler" }, .{ .name = "sme-compiler", .module = "sme-compiler" } } },
+        .{ .name = "sme-selector", .root_source_file = "src/music/selector.zig", .imports = .{ .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-logic", .module = "sme-logic" }, .{ .name = "sme-trace", .module = "sme-trace" } } },
+    },
+    .music_imports = .{
+        .{ .name = "sme-logic", .module = "sme-logic" },
+        .{ .name = "sme-selector", .module = "sme-selector" },
+        .{ .name = "sme-director", .module = "sme-director" },
+    },
+}

@@ -4,3 +4,11 @@
 [submodule "third_party/in_dreaming_gpu"]
 	path = third_party/in_dreaming_gpu
 	url = https://github.com/in-dreaming/gpu.git
+
+[submodule "third_party/ogg"]
+	path = third_party/ogg
+	url = https://github.com/xiph/ogg.git
+
+[submodule "third_party/opus"]
+	path = third_party/opus
+	url = https://github.com/xiph/opus.git

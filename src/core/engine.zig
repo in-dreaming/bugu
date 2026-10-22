@@ -9,12 +9,18 @@ pub const BuguError = error{
     DeviceStopFailed,
     FileWriteFailed,
     NoVoiceAvailable,
+    UnsupportedChannelLayout,
+    ArithmeticOverflow,
+    VoiceBudgetExceeded,
+    MisalignedStems,
+    StaleAssetGeneration,
 };
 
 pub const EngineConfig = struct {
     sample_rate: u32 = 48_000,
     quantum_frames: u32 = 256,
     channels: u16 = 2,
+    output_layout: ?mixer.channel_layout.ChannelLayout = null,
     frequency_hz: f32 = 440.0,
     amplitude: f32 = 0.20,
 };
@@ -70,31 +76,22 @@ pub const TelemetryCounters = struct {
         };
     }
 
+    /// Callback telemetry is single-writer in each Engine/RuntimeRenderer.
+    /// One strong CAS is exact for that contract and has no retry loop. If an
+    /// unsupported concurrent writer races, this sample is best-effort only;
+    /// it cannot overwrite a newer maximum with a smaller value.
     pub fn recordPeak(self: *TelemetryCounters, peak: f32) void {
-        var current_bits = self.peak_abs_bits.load(.monotonic);
-        while (true) {
-            const current: f32 = @bitCast(current_bits);
-            if (peak <= current) return;
-            const new_bits: u32 = @bitCast(peak);
-            current_bits = self.peak_abs_bits.cmpxchgWeak(
-                current_bits,
-                new_bits,
-                .monotonic,
-                .monotonic,
-            ) orelse return;
-        }
+        if (!std.math.isFinite(peak) or peak < 0) return;
+        const current_bits = self.peak_abs_bits.load(.monotonic);
+        const current: f32 = @bitCast(current_bits);
+        if (peak <= current) return;
+        _ = self.peak_abs_bits.cmpxchgStrong(current_bits, @bitCast(peak), .monotonic, .monotonic);
     }
 
     pub fn recordCallbackNanos(self: *TelemetryCounters, nanos: u64) void {
-        var current = self.max_callback_nanos.load(.monotonic);
-        while (nanos > current) {
-            current = self.max_callback_nanos.cmpxchgWeak(
-                current,
-                nanos,
-                .monotonic,
-                .monotonic,
-            ) orelse return;
-        }
+        const current = self.max_callback_nanos.load(.monotonic);
+        if (nanos <= current) return;
+        _ = self.max_callback_nanos.cmpxchgStrong(current, nanos, .monotonic, .monotonic);
     }
 
     pub fn storeRms(self: *TelemetryCounters, rms: f32) void {
@@ -106,19 +103,30 @@ pub const Engine = struct {
     config: EngineConfig,
     mixer: mixer.Mixer,
     telemetry: TelemetryCounters = .{},
+    group_storage: [mixer.music_group.max_groups]mixer.music_group.Prepared = undefined,
 
     pub fn init(config: EngineConfig) BuguError!Engine {
-        if (config.sample_rate == 0 or config.quantum_frames == 0 or config.quantum_frames > 1024 or config.channels != 2) {
+        if (config.sample_rate == 0 or config.quantum_frames == 0 or config.quantum_frames > 1024 or config.channels == 0 or config.channels > 8) {
             return BuguError.InvalidArgument;
         }
-        return .{
-            .config = config,
-            .mixer = mixer.Mixer.init(config.sample_rate),
-        };
+        const layout = config.output_layout orelse try mixer.channel_layout.ChannelLayout.fromCount(config.channels);
+        if (layout.count != config.channels) return error.UnsupportedChannelLayout;
+        return .{ .config = config, .mixer = try mixer.Mixer.initWithLayout(config.sample_rate, layout) };
     }
 
     pub fn render(self: *Engine, output: []f32, frame_count: u32) void {
         self.mixer.render(output, frame_count, self.config.channels, &self.telemetry);
+    }
+
+    pub fn startMusicGroup(self: *Engine, desc: mixer.music_group.MusicGroupDesc) BuguError!mixer.music_group.Handle {
+        const index = for (self.mixer.groups, 0..) |group, i| {
+            if (group.state == .free or group.state == .finished) break i;
+        } else return error.VoiceBudgetExceeded;
+        const prepared = try mixer.music_group.Prepared.prepare(desc, self.mixer.output_layout, self.config.sample_rate);
+        if (!self.mixer.canStartGroup(&prepared)) return error.VoiceBudgetExceeded;
+        self.mixer.group_generation = std.math.add(u64, self.mixer.group_generation, 1) catch return error.InvalidState;
+        self.group_storage[index] = prepared;
+        return self.mixer.startMusicGroupReserved(&self.group_storage[index], self.telemetry.rendered_frames.load(.monotonic), self.mixer.group_generation).group;
     }
 
     pub fn startTestVoice(self: *Engine, desc: mixer.TestVoiceDesc) BuguError!void {
@@ -177,4 +185,20 @@ test "engine renders nonzero stereo samples" {
     try std.testing.expectEqual(@as(u32, 1), telemetry.active_voices);
     try std.testing.expect(telemetry.peak_abs > 0.0);
     try std.testing.expect(telemetry.rms > 0.0);
+}
+
+test "TASK-025 callback telemetry maxima are bounded and reject invalid peaks" {
+    var counters: TelemetryCounters = .{};
+    counters.recordPeak(0.25);
+    counters.recordPeak(0.1);
+    counters.recordPeak(std.math.nan(f32));
+    counters.recordPeak(std.math.inf(f32));
+    counters.recordPeak(-1);
+    try std.testing.expectEqual(@as(f32, 0.25), counters.snapshot().peak_abs);
+    counters.recordPeak(0.5);
+    counters.recordCallbackNanos(10);
+    counters.recordCallbackNanos(5);
+    counters.recordCallbackNanos(20);
+    try std.testing.expectEqual(@as(f32, 0.5), counters.snapshot().peak_abs);
+    try std.testing.expectEqual(@as(u64, 20), counters.snapshot().max_callback_nanos);
 }

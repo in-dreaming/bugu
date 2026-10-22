@@ -1,0 +1,20 @@
+.{
+    .schema_version = 1,
+    .task_id = "TASK-012",
+    .modules = .{
+        .{ .name = "sme-graph-clock-runtime", .root_source_file = "src/runtime/graph_clock_runtime.zig", .imports = .{.{ .name = "sme-layer-graph-clock", .module = "sme-layer-graph-clock" }} },
+        .{ .name = "sme-layer-contract", .root_source_file = "src/music/layer_contract.zig" },
+        .{ .name = "sme-layer-curves", .root_source_file = "src/music/layer_curves.zig", .imports = .{.{ .name = "sme-bank", .module = "sme-bank" }} },
+        .{ .name = "sme-layer-graph-clock", .root_source_file = "src/music/layer_graph_clock.zig", .imports = .{ .{ .name = "sme-layer-spans", .module = "sme-layer-spans" }, .{ .name = "sme-layer-span-compile", .module = "sme-layer-span-compile" }, .{ .name = "sme-clock", .module = "sme-clock" }, .{ .name = "sme-bus-graph", .module = "sme-bus-graph" }, .{ .name = "sme-layer-contract", .module = "sme-layer-contract" } } },
+        .{ .name = "sme-layer-runtime", .root_source_file = "src/runtime/layer_runtime.zig", .imports = .{.{ .name = "sme-layer-spans", .module = "sme-layer-spans" }} },
+        .{ .name = "sme-layer-span-compile", .root_source_file = "src/music/layer_span_compile.zig", .imports = .{ .{ .name = "sme-layer-spans", .module = "sme-layer-spans" }, .{ .name = "sme-layer-contract", .module = "sme-layer-contract" }, .{ .name = "sme-clock", .module = "sme-clock" } } },
+        .{ .name = "sme-layer-spans", .root_source_file = "src/music/layer_spans.zig", .imports = .{.{ .name = "sme-layer-contract", .module = "sme-layer-contract" }} },
+        .{ .name = "sme-layer-timeline", .root_source_file = "src/music/layer_timeline.zig", .imports = .{ .{ .name = "sme-clock", .module = "sme-clock" }, .{ .name = "sme-layer-contract", .module = "sme-layer-contract" } } },
+        .{ .name = "sme-layers", .root_source_file = "src/music/layers.zig", .imports = .{ .{ .name = "bugu_audio", .module = "bugu_audio" }, .{ .name = "sme-scheduler", .module = "sme-scheduler" }, .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-layer-contract", .module = "sme-layer-contract" }, .{ .name = "sme-layer-timeline", .module = "sme-layer-timeline" }, .{ .name = "sme-layer-curves", .module = "sme-layer-curves" }, .{ .name = "sme-layer-spans", .module = "sme-layer-spans" }, .{ .name = "sme-layer-span-compile", .module = "sme-layer-span-compile" }, .{ .name = "sme-clock", .module = "sme-clock" } } },
+    },
+    .audio_imports = .{
+        .{ .name = "sme-graph-clock-runtime", .module = "sme-graph-clock-runtime" },
+        .{ .name = "sme-layer-spans", .module = "sme-layer-spans" },
+        .{ .name = "sme-layer-runtime", .module = "sme-layer-runtime" },
+    },
+}

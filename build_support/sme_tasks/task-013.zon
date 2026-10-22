@@ -1,0 +1,13 @@
+.{
+    .schema_version = 1,
+    .task_id = "TASK-013",
+    .modules = .{
+        .{ .name = "sme-bus-graph", .root_source_file = "src/mixer/bus_graph.zig", .imports = .{ .{ .name = "sme-channels", .module = "sme-channels" }, .{ .name = "sme-sidechain", .module = "sme-sidechain" } } },
+        .{ .name = "sme-bus-runtime", .root_source_file = "src/runtime/bus_runtime.zig", .imports = .{ .{ .name = "sme-duck-runtime", .module = "sme-duck-runtime" }, .{ .name = "sme-layer-graph-clock", .module = "sme-layer-graph-clock" }, .{ .name = "sme-bus-graph", .module = "sme-bus-graph" }, .{ .name = "sme-sidechain", .module = "sme-sidechain" }, .{ .name = "sme-channels", .module = "sme-channels" } } },
+        .{ .name = "sme-sidechain", .root_source_file = "src/mixer/sidechain.zig", .imports = .{ .{ .name = "sme-duck-lifetime", .module = "sme-duck-lifetime" }, .{ .name = "sme-channels", .module = "sme-channels" } } },
+    },
+    .audio_imports = .{
+        .{ .name = "sme-bus-graph", .module = "sme-bus-graph" },
+        .{ .name = "sme-bus-runtime", .module = "sme-bus-runtime" },
+    },
+}

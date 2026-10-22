@@ -1,5 +1,7 @@
 const std = @import("std");
 
+pub const music = @import("music");
+
 pub const core = @import("core/engine.zig");
 pub const device = @import("device/device.zig");
 pub const mixer = @import("mixer/mixer.zig");

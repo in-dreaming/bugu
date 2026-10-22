@@ -1,0 +1,14 @@
+.{
+    .schema_version = 1,
+    .task_id = "TASK-003",
+    .modules = .{
+        .{ .name = "sme-bank", .root_source_file = "src/assets/music_bank.zig", .imports = .{ .{ .name = "music", .module = "music" }, .{ .name = "sme-channels", .module = "sme-channels" }, .{ .name = "sme-bus-graph", .module = "sme-bus-graph" }, .{ .name = "sme-sidechain", .module = "sme-sidechain" }, .{ .name = "sme-policy-types", .module = "sme-policy-types" } } },
+        .{ .name = "sme-compiler", .root_source_file = "tools/sme_compiler/schema.zig", .imports = .{ .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-music-policy-source", .module = "sme-music-policy-source" } } },
+    },
+    .music_imports = .{
+        .{ .name = "sme-bank", .module = "sme-bank" },
+    },
+    .audio_imports = .{
+        .{ .name = "sme-bank", .module = "sme-bank" },
+    },
+}

@@ -1,0 +1,10 @@
+.{
+    .schema_version = 1,
+    .task_id = "TASK-004",
+    .modules = .{
+        .{ .name = "sme-trace", .root_source_file = "src/music/trace.zig", .imports = .{ .{ .name = "sme-live-semantic", .module = "sme-live-semantic" }, .{ .name = "sme-capture-order", .module = "sme-capture-order" }, .{ .name = "music", .module = "music" } } },
+    },
+    .music_imports = .{
+        .{ .name = "sme-trace", .module = "sme-trace" },
+    },
+}

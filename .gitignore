@@ -6,3 +6,5 @@ build/
 *.blob
 *-bank.toml
 .specstory/
+# Locally regenerated authored test inputs; never recorded runtime output.
+/tests/fixtures/sme/readiness_causal/four_stem/audio/

@@ -165,3 +165,7 @@ The next recommended work is:
 ## Status
 
 As of 2026-07-09, tasks T001-T019 are complete. The current baseline has real CPU/offline validation, a real GPU spike, and an interactive GPU acoustic ray visualizer, but it should still be treated as an engine prototype moving toward product readiness.
+
+## Headless SME
+
+See [SME headless source scope and fixture preparation](docs/SME-headless.md). This source subset does not include the GPU authoring application.

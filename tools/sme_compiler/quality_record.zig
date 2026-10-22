@@ -1,0 +1,101 @@
+//! Lossless scanner-to-bank boundary. No invented measurements or diagnostics.
+const bank = @import("sme-bank");
+const s = bank.schema;
+const q = @import("sme-audio-quality");
+
+pub fn fromReport(report: q.Report) bank.BankError!s.AudioQualityReportV1 {
+    report.requirePassed() catch |err| return q.bankError(err);
+    var record: s.AudioQualityReportV1 = .{
+        .version = report.version,
+        .algorithm_version = report.algorithm_version,
+        .source_hash = report.source_hash,
+        .encoded_hash_present = @intFromBool(report.encoded_hash != null),
+        .encoded_hash = report.encoded_hash orelse s.zero_hash,
+        .audio_hash = report.audio_hash,
+        .policy_hash = report.policy_hash,
+        .effective_policy_hash = report.effective_policy_hash,
+        .profile_hash = report.profile_hash,
+        .stage = report.stage,
+        .sample_rate_hz = report.sample_rate_hz,
+        .layout = report.layout,
+        .channel_mask = report.channel_mask,
+        .channels = report.channels,
+        .measurement_frames = report.frames,
+        .completed_measurements = report.completed_measurements,
+        .policy = .{
+            .version = report.policy.version,
+            .dc_absolute_maximum = report.policy.dc_absolute_maximum,
+            .dc_severity = report.policy.dc_severity,
+            .normalized_true_peak_maximum_dbtp = report.policy.normalized_true_peak_maximum_dbtp,
+            .normalized_true_peak_severity = report.policy.normalized_true_peak_severity,
+            .loop_window_frames = report.policy.loop_window_frames,
+            .loop_seam_excess_maximum = report.policy.loop_seam_excess_maximum,
+            .loop_slope_excess_maximum = report.policy.loop_slope_excess_maximum,
+            .loop_dc_difference_maximum = report.policy.loop_dc_difference_maximum,
+            .loop_severity = report.policy.loop_severity,
+            .require_loop = @intFromBool(report.policy.require_loop),
+            .lufs_range_present = @intFromBool(report.policy.lufs_range != null),
+            .lufs_range = if (report.policy.lufs_range) |r| .{ .minimum = r.minimum, .maximum = r.maximum } else .{},
+            .lufs_severity = report.policy.lufs_severity,
+            .require_lufs_range = @intFromBool(report.policy.require_lufs_range),
+            .required_measurements = report.policy.required_measurements,
+        },
+        .sample_peak = report.sample_peak,
+        .sample_peak_dbfs = report.sample_peak_dbfs,
+        .true_peak = report.true_peak,
+        .true_peak_dbtp = report.true_peak_dbtp,
+        .peak_silence = @intFromBool(report.peak_silence),
+        .rms = report.rms,
+        .integrated_lufs = report.integrated_lufs,
+        .loudness_state = report.loudness_state,
+        .loudness_window_frames = report.loudness_window_frames,
+        .loudness_hop_frames = report.loudness_hop_frames,
+        .absolute_gate_lufs = report.absolute_gate_lufs,
+        .relative_gate_lu = report.relative_gate_lu,
+        .measured_relative_gate_lufs = report.measured_relative_gate_lufs,
+        .loudness_blocks = report.loudness_blocks,
+        .absolute_gated_blocks = report.absolute_gated_blocks,
+        .relative_gated_blocks = report.relative_gated_blocks,
+        .true_peak_oversample = report.true_peak_oversample,
+        .loop_minimum_support_frames = report.loop_minimum_support_frames,
+        .loop_present = @intFromBool(report.loop != null),
+        .loop = if (report.loop) |r| .{ .start = r.start, .end = r.end } else .{},
+        .warnings = report.warnings,
+        .failures = report.failures,
+        .verdict = report.verdict,
+    };
+    for (report.channel, &record.channel) |ch, *out| {
+        out.* = .{
+            .speaker = .{
+                .mask_bit = ch.speaker.mask_bit,
+                .azimuth_degrees = ch.speaker.azimuth_degrees,
+                .elevation_degrees = ch.speaker.elevation_degrees,
+                .lfe = @intFromBool(ch.speaker.lfe),
+                .loudness_weight = ch.speaker.loudness_weight,
+            },
+            .sample_peak = ch.sample_peak,
+            .true_peak = ch.true_peak,
+            .rms = ch.rms,
+            .dc = ch.dc,
+            .loop = .{
+                .state = @enumFromInt(@intFromEnum(ch.loop.state)),
+                .window_frames = ch.loop.window_frames,
+                .seam_delta = ch.loop.seam_delta,
+                .difference_before = ch.loop.difference_before,
+                .difference_after = ch.loop.difference_after,
+                .slope_change_before = ch.loop.slope_change_before,
+                .slope_change_after = ch.loop.slope_change_after,
+                .dc_before = ch.loop.dc_before,
+                .dc_after = ch.loop.dc_after,
+                .dc_difference = ch.loop.dc_difference,
+                .local_max_difference = ch.loop.local_max_difference,
+                .local_max_slope_change = ch.loop.local_max_slope_change,
+                .seam_excess = ch.loop.seam_excess,
+                .slope_excess = ch.loop.slope_excess,
+                .dc_anomaly = @intFromBool(ch.loop.dc_anomaly),
+            },
+        };
+    }
+    try bank.validateQualityRecord(record);
+    return record;
+}

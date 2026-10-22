@@ -395,3 +395,7 @@ test "acoustic event posts sample layer handles and updates them over time" {
     try std.testing.expect(after.rms > 0.0);
     try std.testing.expect(after.clipping_count == 0);
 }
+
+/// Explicit production-runtime adapter; legacy Engine entry points stay unchanged.
+pub const runtime_adapter = @import("runtime_adapter.zig");
+pub const RuntimeAdapterV1 = runtime_adapter.RuntimeAdapterV1;

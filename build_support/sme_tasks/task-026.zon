@@ -1,0 +1,31 @@
+.{
+    .schema_version = 1,
+    .task_id = "TASK-026",
+    .modules = .{
+        .{ .name = "sme-bus-compiler", .root_source_file = "tools/sme_compiler/buses.zig", .imports = .{ .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-compiler", .module = "sme-compiler" }, .{ .name = "sme-channels", .module = "sme-channels" } } },
+        .{ .name = "sme-capture-handoff-control", .root_source_file = "src/runtime/capture_handoff_control.zig" },
+        .{ .name = "sme-capture-order", .root_source_file = "src/runtime/capture_order.zig" },
+        .{ .name = "sme-capture-page-transport", .root_source_file = "src/runtime/capture_page_transport.zig" },
+        .{ .name = "sme-early-bank-fixture", .root_source_file = "tests/fixtures/sme/early_public/fixture.zig", .imports = .{ .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-compiler", .module = "sme-compiler" }, .{ .name = "sme-media-pipeline", .module = "sme-media-pipeline" }, .{ .name = "sme-tempo", .module = "sme-tempo" }, .{ .name = "sme-selection-compiler", .module = "sme-selection-compiler" }, .{ .name = "sme-transition-compiler", .module = "sme-transition-compiler" }, .{ .name = "sme-bus-compiler", .module = "sme-bus-compiler" } } },
+        .{ .name = "sme-live-finalization-driver", .root_source_file = "tests/fixtures/sme/live_finalization/driver.zig", .imports = .{ .{ .name = "bugu_audio", .module = "bugu_audio" }, .{ .name = "sme-author-live-mailbox", .module = "sme-author-live-mailbox" } } },
+        .{ .name = "sme-live-semantic", .root_source_file = "src/runtime/live_semantic_hooks.zig", .imports = .{.{ .name = "sme-capture-order", .module = "sme-capture-order" }} },
+        .{ .name = "sme-render-witness", .root_source_file = "src/runtime/render_witness.zig" },
+    },
+    .music_imports = .{
+        .{ .name = "sme-live-semantic", .module = "sme-live-semantic" },
+        .{ .name = "sme-capture-order", .module = "sme-capture-order" },
+        .{ .name = "sme-capture-page-transport", .module = "sme-capture-page-transport" },
+        .{ .name = "bugu_audio", .module = "bugu_audio" },
+        .{ .name = "sme-planner", .module = "sme-planner" },
+    },
+    .audio_imports = .{
+        .{ .name = "sme-live-semantic", .module = "sme-live-semantic" },
+        .{ .name = "sme-capture-order", .module = "sme-capture-order" },
+        .{ .name = "sme-render-witness", .module = "sme-render-witness" },
+        .{ .name = "sme-capture-handoff-control", .module = "sme-capture-handoff-control" },
+    },
+    .checks = .{
+        .{ .name = "sme-live-semantic-format-check", .tests = .{"tests/sme/live_semantic_format_test.zig"} },
+        .{ .name = "sme-live-semantic-scheduler-check", .tests = .{"tests/sme/live_semantic_scheduler_test.zig"} },
+    },
+}

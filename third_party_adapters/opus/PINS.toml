@@ -1,0 +1,39 @@
+profile = "bugu-opus-fixed24-cbr20-v1"
+zig_version = "0.16.0"
+source_manifest = "build_support/sme_tasks/task-010.zon"
+profile_contract = "third_party_adapters/opus/README.md"
+
+[ogg]
+url = "https://github.com/xiph/ogg.git"
+version = "1.3.6"
+commit = "be05b13e98b048f0b5a0f5fa8ce514d56db5f822"
+path = "third_party/ogg"
+license = "BSD-3-Clause"
+license_file = "third_party/ogg/COPYING"
+license_sha256 = "d2ab5758336489da61c12cc5bb757da5339c4ae9001f9bb0562b4370249af814"
+flags = ["-std=c99", "-O2", "-fno-fast-math", "-ffp-contract=off"]
+
+[opus]
+url = "https://github.com/xiph/opus.git"
+version = "1.6.1"
+commit = "22244de5a79bd1d6d623c32e72bf1954b56235be"
+path = "third_party/opus"
+license = "BSD-3-Clause"
+license_file = "third_party/opus/COPYING"
+license_sha256 = "01e1167d54a096d123cf6dfbbeb19587278845c6481d2d66d545669846079551"
+additional_notice = "third_party/opus/LICENSE_PLEASE_READ.txt"
+patent_references = ["https://datatracker.ietf.org/ipr/1524/", "https://datatracker.ietf.org/ipr/1914/", "https://datatracker.ietf.org/ipr/1602/", "https://datatracker.ietf.org/ipr/1526/"]
+flags = ["-std=c99", "-O2", "-fno-fast-math", "-ffp-contract=off", "-fwrapv", "-DFIXED_POINT=1", "-DENABLE_RES24", "-DDISABLE_FLOAT_API", "-DOPUS_BUILD", "-DVAR_ARRAYS", "-DENABLE_HARDENING", "-DDISABLE_DEBUG_FLOAT", '-DPACKAGE_VERSION="1.6.1"']
+disabled = ["runtime CPU dispatch", "architecture-specific intrinsics", "assembly", "fast math", "FMA contraction", "floating point API and tonality analysis", "deep PLC", "DRED", "OSCE", "QEXT"]
+
+[validation]
+linux = "PASS: x86_64-linux-gnu native codec tests; see docs/validation/sme/TASK-010/codec-binding.md"
+windows = "PASS compile only: x86_64-windows-gnu test PE; native execution not available"
+cross_platform_encoded_equality = "UNVERIFIED: requires native Windows execution using identical PCM fixture bytes"
+
+[seek_profile]
+minimum_rfc_preroll_frames = 3840
+default_recovery_preroll_frames = 11520
+comparison_max_abs_fs = 0.0002
+comparison_gain = "Scale tolerance by mandatory header gain factor when nonzero"
+coordinates = "Exact first-audible PCM frame; tolerance applies to reset decoder-state convergence"

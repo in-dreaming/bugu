@@ -1,0 +1,13 @@
+.{
+    .schema_version = 1,
+    .task_id = "TASK-016",
+    .modules = .{
+        .{ .name = "sme-generation-admission", .root_source_file = "src/music/generation_admission.zig", .imports = .{ .{ .name = "music", .module = "music" }, .{ .name = "sme-reload-contract", .module = "sme-reload-contract" } } },
+        .{ .name = "sme-reload-contract", .root_source_file = "src/music/reload_contract.zig", .imports = .{.{ .name = "music", .module = "music" }} },
+        .{ .name = "sme-resident-migration", .root_source_file = "src/music/resident_migration.zig", .imports = .{ .{ .name = "music", .module = "music" }, .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-selector", .module = "sme-selector" }, .{ .name = "sme-generation-admission", .module = "sme-generation-admission" } } },
+        .{ .name = "sme-stream-reload-fixture", .root_source_file = "tests/fixtures/sme/stream_reload/fixture.zig", .imports = .{ .{ .name = "sme-live-finalization-driver", .module = "sme-live-finalization-driver" }, .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-compiler", .module = "sme-compiler" }, .{ .name = "sme-media-pipeline", .module = "sme-media-pipeline" }, .{ .name = "sme-tempo", .module = "sme-tempo" }, .{ .name = "sme-selection-compiler", .module = "sme-selection-compiler" }, .{ .name = "sme-transition-compiler", .module = "sme-transition-compiler" }, .{ .name = "sme-bus-compiler", .module = "sme-bus-compiler" }, .{ .name = "sme-opus", .module = "sme-opus" }, .{ .name = "sme-runtime-v1-fixture", .module = "sme-runtime-v1-fixture" } } },
+    },
+    .music_imports = .{
+        .{ .name = "sme-generation-admission", .module = "sme-generation-admission" },
+    },
+}

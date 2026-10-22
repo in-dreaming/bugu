@@ -1,0 +1,13 @@
+.{
+    .schema_version = 1,
+    .task_id = "TASK-015",
+    .modules = .{
+        .{ .name = "sme-acoustic-policy-compiler", .root_source_file = "tools/sme_compiler/acoustic_policy.zig", .imports = .{.{ .name = "sme-policy-types", .module = "sme-policy-types" }} },
+        .{ .name = "sme-duck-lifetime", .root_source_file = "src/music/duck_lifetime.zig" },
+        .{ .name = "sme-duck-runtime", .root_source_file = "src/runtime/duck_runtime.zig", .imports = .{.{ .name = "sme-duck-lifetime", .module = "sme-duck-lifetime" }} },
+        .{ .name = "sme-music-policy-source", .root_source_file = "tools/sme_compiler/music_policy_source.zig", .imports = .{ .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-acoustic-policy-compiler", .module = "sme-acoustic-policy-compiler" } } },
+        .{ .name = "sme-policy-runtime", .root_source_file = "src/music/policy_runtime.zig", .imports = .{ .{ .name = "bugu_audio", .module = "bugu_audio" }, .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-clock", .module = "sme-clock" }, .{ .name = "sme-stinger-policy", .module = "sme-stinger-policy" }, .{ .name = "sme-trace", .module = "sme-trace" } } },
+        .{ .name = "sme-policy-types", .root_source_file = "src/music/policy_types.zig" },
+        .{ .name = "sme-stinger-policy", .root_source_file = "src/music/stinger_policy.zig", .imports = .{ .{ .name = "sme-trace", .module = "sme-trace" }, .{ .name = "sme-policy-types", .module = "sme-policy-types" } } },
+    },
+}

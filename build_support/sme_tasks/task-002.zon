@@ -1,0 +1,10 @@
+.{
+    .schema_version = 1,
+    .task_id = "TASK-002",
+    .modules = .{
+        .{ .name = "sme-scheduler", .root_source_file = "src/music/scheduler.zig", .imports = .{ .{ .name = "sme-live-semantic", .module = "sme-live-semantic" }, .{ .name = "sme-capture-order", .module = "sme-capture-order" }, .{ .name = "music", .module = "music" }, .{ .name = "sme-trace", .module = "sme-trace" } } },
+    },
+    .audio_imports = .{
+        .{ .name = "sme-scheduler", .module = "sme-scheduler" },
+    },
+}
