@@ -1,0 +1,52 @@
+{
+  "schema": "bugu.notified-semantic-v3.fresh-rs-result/v1",
+  "status": "EXACT_SHORT_FRESH_REPLAY_PASS",
+  "source_commit": "a8ef20b9028290650b6ba7cc10187618813dd9b0",
+  "source_tree": "7f466dd56d0f154647c764eab619f5226d3ff45e",
+  "plan_commit": "22846c5209b96e770c20899368b70752759ea2ed",
+  "plan_sha256": "3a9b867e912c2d429d27ccd1fcd7f307fbd21a2770a9f7da58ebbaa342d476dd",
+  "execution": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 2.0710282460004237,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 26605985792
+  },
+  "tests": {
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0
+  },
+  "replay_report": {
+    "profile": 9,
+    "wire_version": 3,
+    "pacing": "notified_v1",
+    "admission": "ordered_job_scans",
+    "fresh_replay_verified": true,
+    "matched_control": 64682,
+    "matched_worker": 179603,
+    "matched_render": 24176,
+    "matched_ui": 14920,
+    "submitted_samples": 20992,
+    "discarded_pending_samples": 0,
+    "discarded_generated_samples": 512,
+    "command_accepted": 2,
+    "command_terminal": 2,
+    "host_joined": true,
+    "host_destroyed": true,
+    "eof": true
+  },
+  "verified_reference_coverage": {
+    "public_inputs": 320,
+    "schedules": 16,
+    "nonzero_submitted_samples": 17984
+  },
+  "identity_checks": "Exact ELF/bank/history size+SHA matched plan before and after, no rebuilding or re-recording; source guard equal and 16 authored fixtures verified before/after.",
+  "cleanup_basis": "Driver success requires actual joined/destroyed, final closed, first_error and cleanup_error null, worker joined, provider live0/opened=closed, sample leases0/live instances0, and all commands terminal/ACK; role EOF and genuine output comparison completed.",
+  "limitations": [
+    "This is one ReleaseSafe short minimum loop, not original long>=32768 or general histories.",
+    "Debug capture overflow remains unresolved and preserved.",
+    "Natural cross-frame coverage absent in this tape.",
+    "Replay negative tests still pending; no Windows or physical device qualification."
+  ]
+}
