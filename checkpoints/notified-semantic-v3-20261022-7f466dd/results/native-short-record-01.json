@@ -1,0 +1,77 @@
+{
+  "schema": "bugu.notified-semantic-v3.native-result/v1",
+  "status": "REJECTED_CAPTURE_OVERFLOW_NO_SEALED_TAPE",
+  "source_commit": "a8ef20b9028290650b6ba7cc10187618813dd9b0",
+  "source_tree": "7f466dd56d0f154647c764eab619f5226d3ff45e",
+  "plan_commit": "e813942d7c1a54f23312382d29f998d423efb8ba",
+  "plan_sha256": "a43243ce1d1197acc33e04e1c80053c14a7e4341101f1b4a66198cdfb0e71a3f",
+  "execution": {
+    "exit": 1,
+    "stop_reason": null,
+    "elapsed_seconds": 13.072921007000332,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 26729521152
+  },
+  "tests": {
+    "passed": 9,
+    "failed": 1,
+    "skipped": 0
+  },
+  "actual_profile": {
+    "pacing": "notified_v1",
+    "admission_requested": "ordered_job_scans",
+    "workload": "short_play",
+    "writer": "stream",
+    "controlled_hook": false
+  },
+  "failure": {
+    "error": "Poisoned",
+    "site": "Recorder.drainStreaming -> lane.pop",
+    "healthy": false,
+    "worker_lane_poison": "overflow",
+    "worker_queued_bytes": 4188972,
+    "worker_peak_records": 14750,
+    "worker_produced": 30445,
+    "worker_consumed": 15695,
+    "control_queued_bytes": 4113724,
+    "occurrences": 181714,
+    "capture_allocation_bytes": 19302336,
+    "drained_corpus_bytes": 5972705,
+    "submitted_frames": 11776,
+    "generated_frames": 11776,
+    "submitted_pcm_samples": 23552,
+    "command_submitted": 1,
+    "command_terminal": 1,
+    "terminal_acknowledged": 1
+  },
+  "cleanup_observed": {
+    "worker_joined": true,
+    "source_open_attempts": 16,
+    "source_read_attempts": 88,
+    "source_close_attempts": 16,
+    "source_opened": 16,
+    "source_closed": 16,
+    "source_live": 0,
+    "sample_leases": 0,
+    "live_instances": 0
+  },
+  "files": {
+    "history_bin_present": false,
+    "incomplete_prefix_bytes": 5963776,
+    "incomplete_prefix_sha256": "f0e6610970579b8e9900c7f0f6ee0c9a4d450ad35871457ec40e1ba73196b12b",
+    "note": "Only retained local incomplete prefix, not a complete/admitted/replayable tape. No raw artifact uploaded."
+  },
+  "inputs_before_after": {
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "limits": [
+    "Exactly one recording attempt; no reroll.",
+    "Strict admission not reached; no independent replay or negative replay executed.",
+    "No Stop completion witness; observed command counters are only first command.",
+    "Reason for volume/collector throughput remains under read-only analysis; no OS or CPU timing cause asserted.",
+    "No buffer growth, shortened workload, output injection or production-policy changes.",
+    "Original long >=32768 still pending; stage2 incomplete."
+  ]
+}
