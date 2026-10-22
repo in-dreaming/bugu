@@ -1,0 +1,144 @@
+{
+  "schema": "bugu.headless.qualification-plan/v1",
+  "status": "FROZEN_NOT_RUN",
+  "source": {
+    "remote_parent_commit": "c9628460a07cea3f5e432e88c09169d4385df672",
+    "remote_parent_tree": "7bbc122bca6bb053ed079a589186c8737df85f04",
+    "foundation_tree": "35aee6c461b1edd82c1b7cf2916b044ce990e0ec",
+    "target_tree": "82cec8a633cbb8376dc652f8a410c05b1684ba6c",
+    "notification_patch_sha256": "f3a09f1920180cca73730f29b5c503260e7e54a2d91ff6370f39cc748384b278",
+    "qualification": "New extracted build graph; previous candidate results are not attributed to this tree."
+  },
+  "parameters": {
+    "REPO": "Isolated checkout of target_tree",
+    "ZIG": "Verified official Zig 0.16.0 executable",
+    "RUN_GUARDED": "Verified original 2862-byte bounded runner",
+    "OUTPUT": "Local output directory outside source checkout"
+  },
+  "runner": {
+    "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+    "python": "ordinary Python 3, not -O; PYTHONOPTIMIZE unset",
+    "build_timeout_seconds": 900,
+    "minimum_start_free_bytes": 3355443200,
+    "stop_below_free_bytes": 2281701376,
+    "concurrency": 1,
+    "source_guard": "exact tracked/index tree and clean workspace before/after, plus immutable generated WAV hash verification",
+    "results": "Record actual child exit, elapsed time, test counts and cleanup outcomes where truly observed; wrapper exit alone is not a pass.",
+    "argv_template": [
+      "python3",
+      "<RUN_GUARDED>",
+      "--repo",
+      "<REPO>",
+      "--out",
+      "<OUTPUT>/<stage-id>",
+      "--seconds",
+      "900",
+      "--",
+      "<stage argv>"
+    ]
+  },
+  "environment": {
+    "location": "cloud only",
+    "dependencies": "Official Zig 0.16.0 and exact gitlink miniaudio/Ogg/Opus; no GPU/font source needed for selected targets",
+    "unset_prefixes": [
+      "SME_LIVE_SEMANTIC_",
+      "SME_LIVE_ADMISSION_"
+    ],
+    "unset_exact": [
+      "SME_DEFAULT_CONTROL_DELAY_MS",
+      "SME_DEFAULT_WORKER_DELAY_MS",
+      "PYTHONOPTIMIZE"
+    ],
+    "unexpected_environment": "Stop before execution if additional SME workload or injection variables are set.",
+    "set": {
+      "NO_COLOR": "1"
+    }
+  },
+  "sequence": [
+    {
+      "id": "prepare-authored-inputs",
+      "argv": [
+        "python3",
+        "tools/sme/prepare_live_fixtures.py"
+      ],
+      "timeout_seconds": 180,
+      "expected": "16 exact lengths/SHA256; no tracked source or project metadata modified; original integer-only generator, not expected runtime output."
+    },
+    {
+      "id": "verify-authored-inputs",
+      "argv": [
+        "python3",
+        "tools/sme/prepare_live_fixtures.py",
+        "--verify-only"
+      ],
+      "timeout_seconds": 60,
+      "expected": "16 verified, zero generated; no writes."
+    },
+    {
+      "id": "graph",
+      "argv": [
+        "<ZIG>",
+        "build",
+        "--help"
+      ],
+      "timeout_seconds": 60,
+      "expected": "Registration succeeds; preserved main targets plus declared 19 SME checks and 2 production targets, excluded suites absent."
+    },
+    {
+      "id": "production-and-core",
+      "argv": [
+        "<ZIG>",
+        "build",
+        "runtime-unit-test",
+        "sme-author-live-production-check",
+        "sme-live-history",
+        "-j1",
+        "-Doptimize=Debug",
+        "--summary",
+        "all",
+        "--",
+        "--help"
+      ],
+      "guard": "<RUN_GUARDED>",
+      "timeout_seconds": 900,
+      "expected": "Actual core tests pass, production archive compiles, true CLI prints help without opening a Host or audio device."
+    },
+    {
+      "id": "notified-lifecycle",
+      "argv": [
+        "<ZIG>",
+        "build",
+        "sme-author-live-snapshot-boundary-test",
+        "sme-author-live-default-chronology-test",
+        "sme-author-live-default-mode-test",
+        "sme-author-live-worker-claim-test",
+        "sme-author-live-recovery-test",
+        "-j1",
+        "-Doptimize=Debug",
+        "--summary",
+        "all"
+      ],
+      "guard": "<RUN_GUARDED>",
+      "timeout_seconds": 900,
+      "expected": "Actual existing tests pass unchanged, including ordinary notified-mode assertion, first Play, real PCM, Stop/Close and bounded lifecycle failures."
+    },
+    {
+      "id": "final-input-identity",
+      "argv": [
+        "python3",
+        "tools/sme/prepare_live_fixtures.py",
+        "--verify-only"
+      ],
+      "timeout_seconds": 60,
+      "expected": "All original authored input hashes remain exact."
+    }
+  ],
+  "stopping_rule": "Run each stage once in sequence. On failure/timeout/source change stop dependent stages; preserve evidence, no timing retry or unplanned matrix. Any source fix requires a separate frozen tree and plan. Interruption with missing terminal evidence is UNKNOWN.",
+  "publication": "Only source/plan/sanitized results; no generated WAV, raw logs, executable, tape, local path or credentials. Main unchanged.",
+  "coverage_limits": [
+    "No Windows, ReleaseSafe, GPU/UI, physical audio or long-duration tests.",
+    "19 checks are available registrations, not a claim that all 19 execute in this bounded plan.",
+    "Old fixed Opus/f32 oracle suites initial-headroom and semantic-service are excluded, not weakened.",
+    "Ordinary notified playback only; semantic/private capture remains legacy polling. Notified capture/replay is the next independent phase."
+  ]
+}
