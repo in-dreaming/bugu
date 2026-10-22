@@ -1,0 +1,111 @@
+{
+  "schema": "bugu.notified-semantic-v3.focused-plan/v1",
+  "status": "FROZEN_NOT_RUN",
+  "base_remote_commit": "07894bd96f609218bcc2b6c785572d51dc00569f",
+  "base_tree": "82cec8a633cbb8376dc652f8a410c05b1684ba6c",
+  "target_tree": "e4fcf6f4f5de6da90b20b9c4edb6f4a2c9cd7c27",
+  "patch_sha256": "cac2dcf14259a31fb45e9bdcea6f5cd033b20402485063d93ada4393919b2506",
+  "scope": "Stage2 explicit notified recording/replay implementation and compatibility guards; not yet native qualification.",
+  "static_review": [
+    "Independent review found no blocking issue before execution.",
+    "Pacing is canonical launch INPUT and independent started comparison; caller expectation checked before Host creation.",
+    "Unchanged notification sites, finite bursts, idle blocking, actual cancellation/join lifetime, Audio, bounds and strict overlap matrix.",
+    "Old wrappers remain legacy_poll; new Reader explicitly rejects v2.",
+    "New short-play 8192-frame no-hook workload is independent, not replacement for long>=32768."
+  ],
+  "parameters": {
+    "REPO": "Isolated exact target source tree with fixed miniaudio/Ogg/Opus and prepared verified 16 authored inputs",
+    "ZIG": "Verified official Zig0.16.0",
+    "RUN_GUARDED": "Original 2862-byte runner",
+    "OUTPUT": "New local output directory outside source"
+  },
+  "environment": {
+    "location": "cloud Linux x86_64 only",
+    "unset_prefixes": [
+      "SME_"
+    ],
+    "unset_exact": [
+      "PYTHONOPTIMIZE"
+    ],
+    "set": {
+      "NO_COLOR": "1"
+    },
+    "unexpected": "Confirm no extra SME variables before execution; ordinary Python3, no -O."
+  },
+  "sequence": [
+    {
+      "id": "input-identity-before",
+      "argv": [
+        "python3",
+        "tools/sme/prepare_live_fixtures.py",
+        "--verify-only"
+      ],
+      "timeout_seconds": 60
+    },
+    {
+      "id": "focused-debug-01",
+      "argv": [
+        "<ZIG>",
+        "build",
+        "sme-live-semantic-format-check",
+        "sme-live-semantic-codec-check",
+        "sme-live-semantic-streaming-check",
+        "sme-live-history-cli-check",
+        "sme-live-semantic-process-test",
+        "sme-author-live-snapshot-boundary-test",
+        "sme-author-live-production-check",
+        "sme-live-history",
+        "-j1",
+        "-Doptimize=Debug",
+        "--summary",
+        "all",
+        "--",
+        "--help"
+      ],
+      "guard": "<RUN_GUARDED>",
+      "timeout_seconds": 900,
+      "expected": "Actual focused tests and production archive/CLI help. Process integration case intentionally skips without explicit mode; its narrow source-local regression tests execute."
+    },
+    {
+      "id": "input-identity-after",
+      "argv": [
+        "python3",
+        "tools/sme/prepare_live_fixtures.py",
+        "--verify-only"
+      ],
+      "timeout_seconds": 60
+    }
+  ],
+  "runner": {
+    "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+    "argv": [
+      "python3",
+      "<RUN_GUARDED>",
+      "--repo",
+      "<REPO>",
+      "--out",
+      "<OUTPUT>/focused-debug-01",
+      "--seconds",
+      "900",
+      "--",
+      "<stage argv>"
+    ],
+    "minimum_start_free_bytes": 3355443200,
+    "stop_below_free_bytes": 2281701376,
+    "timeout": "SIGTERM process group then 10-second grace/SIGKILL; no deadline implies completed native cleanup",
+    "source_guard": "Exact clean tree and immutable inputs before/after; guard actual child exit and stop reason, not wrapper exit alone"
+  },
+  "stop": "Single execution; on failure/timeout/source drift stop native-dependent stages and preserve result. No retries for favorable timing. New source repair needs new frozen source/plan. Missing terminal evidence is UNKNOWN.",
+  "following_separate_plans": [
+    "After focused pass, pin exact executable and single strict notified short-play recording plan before execution.",
+    "Only a complete admitted tape can proceed to identical-ELF fresh process; check all PCM, canonical Input/Schedule, UI/commands and actual joins.",
+    "Wrong expected pacing must reject before owners; malformed/overlap cases reject; reference-only negative either preflight rejects or genuinely compares unequal with real cleanup.",
+    "Original long>=32768 notified qualification remains separately required; short success alone does not complete stage2."
+  ],
+  "publication": "Source, plans and sanitized terminal summaries only; no raw log, local path, credential, audio input/output, ELF or tape. Main unchanged.",
+  "limits": [
+    "No Windows or physical device actions.",
+    "No new timing hook, buffer growth, generic atomic scheduling or expected-output injection.",
+    "No native notified replay claim until independent process qualification completes."
+  ]
+}
