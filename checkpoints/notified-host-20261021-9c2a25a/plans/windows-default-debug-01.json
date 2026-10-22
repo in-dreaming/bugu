@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "status": "PLANNED_NOT_EXECUTED",
+  "stage": "Single Windows default Host chronology acceptance for notified_v1",
+  "plan_provenance": "New Windows plan generated 2026-10-22 from the exact persisted candidate identities and approved finite scope. Not a recovered original manifest. No cloud repository reconstruction or new source implementation is required.",
+  "source": {
+    "base_commit": "e09b38df925020f5877e0ed637d75fad5ea3e681",
+    "base_tree": "8ba69a82caabe29ed9a6a55566d90969497b110a",
+    "candidate_commit": "4f2710c7a3db88649c3a495b5d7fe7950633788f",
+    "candidate_tree": "9c2a25a4a9750e098e93a6949749ee717640aae8",
+    "patch_url": "https://github.com/in-dreaming/bugu/blob/35b7eec4c29e6327ab16c7fccf6514bffa72ae32/checkpoints/notified-host-20261021-9c2a25a/source.patch",
+    "patch_bytes": 33335,
+    "patch_sha256": "f3a09f1920180cca73730f29b5c503260e7e54a2d91ff6370f39cc748384b278",
+    "identity_note": "Commit identifiers are historical provenance. Verify exact file tree, including tracked modes and gitlink pins; synthetic local recovery history must not be presented as original history."
+  },
+  "environment": {
+    "target": "Previously authorized Windows computer and original independent acceptance copy; no local path or device identifier is published.",
+    "toolchain": "Existing official Zig 0.16.0; record actual version and native target.",
+    "working_directory": "${ACCEPTANCE_COPY}",
+    "executable": "${OFFICIAL_ZIG_0_16_EXE}",
+    "device_backend": "null_backend from the unmodified existing test fixture",
+    "remove_environment_variables": [
+      "SME_LIVE_ADMISSION_TAPE",
+      "SME_LIVE_ADMISSION_IDENTITY_JSON",
+      "SME_LIVE_SEMANTIC_MODE",
+      "SME_LIVE_SEMANTIC_DIR",
+      "SME_LIVE_SEMANTIC_WORKLOAD",
+      "SME_LIVE_SEMANTIC_WRITER",
+      "SME_LIVE_SEMANTIC_FAIL_AFTER",
+      "SME_LIVE_SEMANTIC_REQUIRE_CROSS_FRAME",
+      "SME_DEFAULT_CONTROL_DELAY_MS",
+      "SME_DEFAULT_WORKER_DELAY_MS"
+    ],
+    "unexpected_environment": "If any additional SME_LIVE_SEMANTIC_* or SME_LIVE_ADMISSION_* variable is present, stop for review rather than silently inherit it. Do not introduce artificial delays or force a favorable seed."
+  },
+  "preflight": [
+    "Verify existing original working files with the established read-only protection inventory; do not alter them. Work only in the original independent acceptance copy.",
+    "Verify exact base tree and the downloaded patch bytes/SHA before applying it once. Do not apply on an unrelated tree or overwrite user edits.",
+    "After application verify exact candidate tree; leave all tests, assertions, PCM capacity, runtime buffers and dependencies unchanged.",
+    "Verify there is no related existing build or test process that would duplicate this run. Record actual environment configuration without credentials or private paths.",
+    "Do not run preparatory project tests, extra build targets or diagnostic workloads."
+  ],
+  "argv": [
+    "${OFFICIAL_ZIG_0_16_EXE}",
+    "build",
+    "sme-author-live-default-chronology-test",
+    "-j1",
+    "-Doptimize=Debug",
+    "--summary",
+    "all"
+  ],
+  "execution": {
+    "invocations": 1,
+    "timeout_seconds": 900,
+    "timeout_scope": "One total build-and-test wall-clock deadline, using the established bounded Windows acceptance runner.",
+    "timeout_behavior": "On deadline, use the established process-tree termination/cleanup procedure; preserve timeout and incomplete cleanup as such. Do not claim graceful cleanup without evidence.",
+    "retry_policy": "No timing retry, rerun to select a favorable outcome, assertion weakening, capacity increase, panel run, ReleaseSafe run or extra matrix.",
+    "no_gui": true,
+    "no_physical_audio": true
+  },
+  "evidence_required": [
+    "Record actual exit code, elapsed time, build summary, actual test totals and crashes/timeouts; expected target currently contains 12 tests, but report actual counts.",
+    "Verify the native Host fixture actually asserts/prints DEFAULT_HOST_PACING mode=notified_v1 ordinary=true. Diagnostic self-tests alone do not establish playback success.",
+    "Determine first Play execution, sustained exact PCM/four-stem oracle, Stop execution, Close/join and resource-cleanup assertions from the real run. Preserve the first failure and its phase.",
+    "On failure retain existing bounded flat diagnostics and PCM-capacity diagnostic without adding instrumentation or inferring missing fields.",
+    "Distinguish ordinary observed mode and serializer tests from a dedicated full raw-log parser qualification, which has not been performed.",
+    "Retain raw logs locally. Public summary includes only command, version/tree/hash identity, test counts and necessary failure explanation, not raw logs, binary files, credentials or local paths.",
+    "After the run check protected original files and related processes. If counts or cleanup state were not emitted or proven by completed assertions, report unknown rather than zero."
+  ],
+  "capability_limits": [
+    "Notification pacing applies only to ordinary non-recording Host. Semantic capture/replay and private capture remain legacy_poll.",
+    "This single Windows acceptance does not qualify new notification recording/replay, all histories, all devices or universal real-time deadlines.",
+    "Earlier Windows sustained-playback failures and cloud results remain independent evidence; do not replace or relabel them."
+  ],
+  "post_run": "Report the result to the user. Publish only the approved sanitized result on the existing delivery branch, as a separate result record. No main branch modification."
+}
