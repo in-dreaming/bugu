@@ -97,6 +97,8 @@ pub const Recorder = struct {
     /// Sole-consumer diagnostic. External sink bytes may be uncertain on error.
     first_output_error: ?anyerror = null,
     identity: format.Identity = undefined,
+    /// Fixed by the constructor before Session initialization and attachment.
+    pacing: semantic.PacingMode = .legacy_poll,
     occurrence: std.atomic.Value(u64) = .init(0),
     failed: std.atomic.Value(bool) = .init(false),
     callback_thread: std.atomic.Value(u64) = .init(0),
@@ -111,6 +113,9 @@ pub const Recorder = struct {
     /// Corpus, lane backing, descriptors and both fixed scratch buffers all
     /// count toward the same allocation admission cap before attachment.
     pub fn init(self: *Recorder, identity: format.Identity, corpus: []u8) Error!void {
+        return self.initWithPacing(identity, corpus, .legacy_poll);
+    }
+    pub fn initWithPacing(self: *Recorder, identity: format.Identity, corpus: []u8, pacing: semantic.PacingMode) Error!void {
         if (self.address != null) return error.InvalidState;
         const total = std.math.add(usize, @sizeOf(Recorder), corpus.len) catch return error.CaptureBudgetExceeded;
         if (total > format.max_capture_bytes) return error.CaptureBudgetExceeded;
@@ -118,12 +123,15 @@ pub const Recorder = struct {
         self.allocation_bytes = total;
         self.streaming_writer = null;
         self.first_output_error = null;
-        try self.initCommon(identity);
+        try self.initCommon(identity, pacing);
     }
     /// Non-RT only. Sink must synchronously consume borrowed bytes. Its caller
     /// declares all retained sink staging in resident_staging_bytes; the file
     /// ceiling is not a resident allocation. Sink/file lifetime stays with caller.
     pub fn initStreaming(self: *Recorder, identity: format.Identity, sink: format.StreamSink, byte_cap: u64, resident_staging_bytes: usize) !void {
+        return self.initStreamingWithPacing(identity, sink, byte_cap, resident_staging_bytes, .legacy_poll);
+    }
+    pub fn initStreamingWithPacing(self: *Recorder, identity: format.Identity, sink: format.StreamSink, byte_cap: u64, resident_staging_bytes: usize, pacing: semantic.PacingMode) !void {
         if (self.address != null) return error.InvalidState;
         const total = std.math.add(usize, @sizeOf(Recorder), resident_staging_bytes) catch return error.CaptureBudgetExceeded;
         if (total > format.max_capture_bytes) return error.CaptureBudgetExceeded;
@@ -137,10 +145,11 @@ pub const Recorder = struct {
             return err;
         };
         errdefer self.poisonOutput();
-        try self.initCommon(identity);
+        try self.initCommon(identity, pacing);
     }
-    fn initCommon(self: *Recorder, identity: format.Identity) Error!void {
+    fn initCommon(self: *Recorder, identity: format.Identity, pacing: semantic.PacingMode) Error!void {
         self.identity = identity;
+        self.pacing = pacing;
         self.occurrence = .init(0);
         self.failed = .init(false);
         self.callback_thread = .init(0);
@@ -160,6 +169,7 @@ pub const Recorder = struct {
     }
     pub fn sessionConfig(self: *Recorder) semantic.Config {
         return .{
+            .pacing = self.pacing,
             .output = .{ .context = self, .input = onInput, .schedule = onSchedule, .invalidate = invalidate },
             .service = .{
                 .cuts = .{ .context = self, .point = onPoint, .boundary = onBoundary },

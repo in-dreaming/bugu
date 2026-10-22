@@ -225,15 +225,20 @@ test "Host WakeSignal handles spurious timeout and cancellation with bounded pro
     }
 }
 
-test "Host pacing selection preserves semantic and private capture polling" {
+test "Host pacing selection uses pinned semantic mode and preserves private capture polling" {
     var host: live.Host = undefined;
     host.options = .{ .io = t.io };
     try t.expectEqual(live.PacingMode.notified_v1, host.pacingMode());
+    // Selection-function probe only, not an initialized Session or legal Host
+    // construction. Initialize every field that pacingMode actually reads.
     var session: live.semantic.Session = .{};
     host.options.semantic = &session;
     inline for (.{ @as(@FieldType(live.semantic.Session, "mode"), .capture), @as(@FieldType(live.semantic.Session, "mode"), .replay) }) |mode| {
         session.mode = mode;
-        try t.expectEqual(live.PacingMode.legacy_poll, host.pacingMode());
+        inline for (.{ live.PacingMode.legacy_poll, live.PacingMode.notified_v1 }) |pacing| {
+            session.config.pacing = pacing;
+            try t.expectEqual(pacing, host.pacingMode());
+        }
     }
     host.options.semantic = null;
     const capture = try t.allocator.create(live.TestCapture.Session);

@@ -1,5 +1,5 @@
 //! Original UI workload plus immutable-tape replay, without test dependencies.
-//! Requires profile9/v2 UI lane and generalized finite Play/Stop/Close admission.
+//! Profile9/v3 pins launch pacing and finite Play/Stop/Close admission.
 const std = @import("std");
 const live = @import("sme-author-live-owner");
 const recording = live.semantic_recording;
@@ -14,6 +14,7 @@ const Mode = enum { record, replay };
 const Options = struct {
     mode: Mode,
     admission: codec.AdmissionPolicy = .native_attempt,
+    pacing: live.PacingMode = .legacy_poll,
     bank: []const u8,
     state: u64,
     script: ?[]const u8 = null,
@@ -44,7 +45,7 @@ fn options(args: []const []const u8) !Options {
     var result: Options = .{ .mode = mode, .bank = "", .state = 0 };
     var seen: u32 = 0;
     var i: usize = 1;
-    const names = [_][]const u8{ "--bank", "--state", "--script", "--out", "--tape", "--action-cap", "--file-cap", "--capture-cap", "--deadline-ms", "--frame-limit", "--sample-rate", "--channels", "--period-frames", "--admission" };
+    const names = [_][]const u8{ "--bank", "--state", "--script", "--out", "--tape", "--action-cap", "--file-cap", "--capture-cap", "--deadline-ms", "--frame-limit", "--sample-rate", "--channels", "--period-frames", "--admission", "--pacing" };
     while (i < args.len) : (i += 2) {
         if (i + 1 >= args.len) return error.MissingArgument;
         var key: ?usize = null;
@@ -72,6 +73,7 @@ fn options(args: []const []const u8) !Options {
             11 => if (try number(u16, value) != 2) return error.UnsupportedDeviceConfiguration,
             12 => if (try number(u32, value) != 256) return error.UnsupportedDeviceConfiguration,
             13 => result.admission = std.meta.stringToEnum(codec.AdmissionPolicy, value) orelse return error.InvalidAdmissionPolicy,
+            14 => result.pacing = std.meta.stringToEnum(live.PacingMode, value) orelse return error.InvalidPacingMode,
             else => unreachable,
         }
     }
@@ -284,7 +286,7 @@ fn record(allocator: std.mem.Allocator, io: std.Io, opt: Options, launch: live.L
     recorder.session = .{};
     var recorder_owned = true;
     defer if (recorder_owned and !retained.*) allocator.destroy(recorder);
-    try recorder.initStreaming(identity, sink.binding(), opt.file_cap, staging);
+    try recorder.initStreamingWithPacing(identity, sink.binding(), opt.file_cap, staging, opt.pacing);
     const host = try live.Host.create(launch, .{ .io = io, .device = .{ .backend = .null_backend }, .semantic = &recorder.session });
     var host_alive = true;
     var cleanup_status: ?live.Status = null;
@@ -370,16 +372,16 @@ fn record(allocator: std.mem.Allocator, io: std.Io, opt: Options, launch: live.L
     _ = try codec.validateInputsWithPolicy(&reader, identity, opt.admission);
     if (bytes.len != seal.bytes) return error.InvalidLength;
     try std.Io.Dir.cwd().renamePreserve(temp, .cwd(), opt.out.?, io);
-    try output.print("{{\"recording_complete\":true,\"admission\":\"{s}\",\"replay_verified\":false,\"wire_version\":{d},\"bytes\":{d},\"capture_bytes\":{d},\"actions_executed\":{d},\"host_joined_destroyed\":true}}\n", .{ @tagName(opt.admission), format.wire_version, seal.bytes, stats.allocation_bytes, next });
+    try output.print("{{\"recording_complete\":true,\"admission\":\"{s}\",\"pacing\":\"{s}\",\"replay_verified\":false,\"wire_version\":{d},\"bytes\":{d},\"capture_bytes\":{d},\"actions_executed\":{d},\"host_joined_destroyed\":true}}\n", .{ @tagName(opt.admission), @tagName(opt.pacing), format.wire_version, seal.bytes, stats.allocation_bytes, next });
 }
 pub fn run(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, output: *std.Io.Writer) !void {
     if (args.len == 0 or (args.len == 1 and std.mem.eql(u8, args[0], "--help"))) {
-        try output.writeAll("sme-live-history record --bank FILE --state U64 --script JSON --out FILE [--action-cap 256 --file-cap BYTES --capture-cap BYTES --deadline-ms 60000 --frame-limit FRAMES --admission native_attempt|ordered_job_scans]\nsme-live-history replay --bank FILE --state U64 --tape FILE [--file-cap BYTES --admission native_attempt|ordered_job_scans]\nFixed supported null-device configuration:48000Hz, stereo,256 frames. One Host per process; replay requires the identical executable.\n");
+        try output.writeAll("sme-live-history record --bank FILE --state U64 --script JSON --out FILE [--action-cap 256 --file-cap BYTES --capture-cap BYTES --deadline-ms 60000 --frame-limit FRAMES --admission native_attempt|ordered_job_scans --pacing legacy_poll|notified_v1]\nsme-live-history replay --bank FILE --state U64 --tape FILE [--file-cap BYTES --admission native_attempt|ordered_job_scans --pacing legacy_poll|notified_v1]\nFixed supported null-device configuration:48000Hz, stereo,256 frames. One Host per process; replay requires the identical executable and explicit matching pacing (default legacy_poll). Wire v2 needs its original matching tool; this tool accepts v3 only.\n");
         return;
     }
     const opt = try options(args);
     var admission_log = std.Io.File.stderr().writerStreaming(io, &.{});
-    admission_log.interface.print("live.admission mode={s} policy={s}\n", .{ @tagName(opt.mode), @tagName(opt.admission) }) catch {};
+    admission_log.interface.print("live.admission mode={s} policy={s} pacing={s}\n", .{ @tagName(opt.mode), @tagName(opt.admission), @tagName(opt.pacing) }) catch {};
     admission_log.interface.flush() catch {};
     var retained = false;
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, opt.bank, allocator, .limited(live.admission.default_config.capacity.max_bank_bytes + 1));
@@ -400,13 +402,13 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, o
     driver.* = .{};
     defer if (!retained) allocator.destroy(driver);
     try driver.initWithPolicy(reader, identity, io, opt.admission);
-    const report = driver.run(launch, .{ .backend = .null_backend }) catch |err| {
+    const report = driver.runWithPacing(launch, .{ .backend = .null_backend }, opt.pacing) catch |err| {
         retained = driver.running and !driver.completed;
         reportReplayFailure(io, driver, err);
         return err;
     };
     if (!report.eof or !report.host_joined or !report.host_destroyed) return error.ReplayIncomplete;
-    try output.print("{{\"replay_verified\":true,\"admission\":\"{s}\",\"wire_version\":{d},\"eof\":true,\"host_joined_destroyed\":true}}\n", .{ @tagName(opt.admission), format.wire_version });
+    try output.print("{{\"replay_verified\":true,\"admission\":\"{s}\",\"pacing\":\"{s}\",\"wire_version\":{d},\"eof\":true,\"host_joined_destroyed\":true}}\n", .{ @tagName(opt.admission), @tagName(opt.pacing), format.wire_version });
 }
 
 const cli_test_record = [_][]const u8{ "record", "--bank", "unopened-bank", "--state", "7", "--script", "unopened-script", "--out", "uncreated-output" };
@@ -457,6 +459,7 @@ test "live history options reject unknown flags and every duplicate option" {
         .{ .flag = "--channels", .value = "2" },
         .{ .flag = "--period-frames", .value = "256" },
         .{ .flag = "--admission", .value = "native_attempt" },
+        .{ .flag = "--pacing", .value = "legacy_poll" },
     };
     for (entries) |entry| try t.expectError(error.DuplicateArgument, options(&.{ "record", entry.flag, entry.value, entry.flag, entry.value }));
 }
@@ -748,5 +751,17 @@ test "live history admission policy is explicit with compatible defaults" {
         }
         try t.expectError(error.InvalidAdmissionPolicy, cliTestOptions(base, &.{ "--admission", "strict" }));
         try t.expectError(error.InvalidAdmissionPolicy, cliTestOptions(base, &.{ "--admission", "" }));
+    }
+}
+
+test "live history pacing is explicit with legacy defaults and rejects unknown values" {
+    const t = std.testing;
+    inline for (.{ &cli_test_record, &cli_test_replay }) |base| {
+        try t.expectEqual(live.PacingMode.legacy_poll, (try options(base)).pacing);
+        inline for (.{ "legacy_poll", "notified_v1" }) |name| {
+            try t.expectEqual(std.meta.stringToEnum(live.PacingMode, name).?, (try cliTestOptions(base, &.{ "--pacing", name })).pacing);
+        }
+        try t.expectError(error.InvalidPacingMode, cliTestOptions(base, &.{ "--pacing", "automatic" }));
+        try t.expectError(error.InvalidPacingMode, cliTestOptions(base, &.{ "--pacing", "" }));
     }
 }

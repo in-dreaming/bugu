@@ -175,3 +175,33 @@ test "streaming Recorder observes genuine WorkerGate publication and acquired pr
     try t.expect(recorder.healthy());
     try t.expect(recorder.session.host == null);
 }
+
+test "Recorder explicit pacing is pinned before Session init and legacy wrappers remain polling" {
+    const constructors = enum { legacy_memory, explicit_memory, legacy_stream, explicit_stream };
+    inline for (.{ constructors.legacy_memory, constructors.explicit_memory, constructors.legacy_stream, constructors.explicit_stream }) |constructor| {
+        inline for (.{ live.PacingMode.legacy_poll, live.PacingMode.notified_v1 }) |requested| {
+            const recorder = try makeRecorder();
+            defer t.allocator.destroy(recorder);
+            var corpus: [4096]u8 = undefined;
+            var sink: Sink = .{};
+            switch (constructor) {
+                .legacy_memory => try recorder.init(identity(), &corpus),
+                .explicit_memory => try recorder.initWithPacing(identity(), &corpus, requested),
+                .legacy_stream => try recorder.initStreaming(identity(), sink.binding(), f.max_file_bytes, @sizeOf(Sink)),
+                .explicit_stream => try recorder.initStreamingWithPacing(identity(), sink.binding(), f.max_file_bytes, @sizeOf(Sink), requested),
+            }
+            const expected = switch (constructor) {
+                .legacy_memory, .legacy_stream => live.PacingMode.legacy_poll,
+                .explicit_memory, .explicit_stream => requested,
+            };
+            try t.expectEqual(expected, recorder.pacing);
+            try t.expectEqual(expected, recorder.session.config.pacing);
+            try t.expectEqual(expected, recorder.sessionConfig().pacing);
+            try t.expect(recorder.session.pristine());
+            try t.expect(recorder.session.host == null and !recorder.session.used);
+            try t.expect(recorder.healthy());
+            try t.expectEqual(@as(u64, 0), recorder.occurrence.load(.acquire));
+            // No owner, native clock, callback, output or lifecycle is simulated.
+        }
+    }
+}

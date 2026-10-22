@@ -371,13 +371,47 @@ const RetryWorkload = struct {
     }
 };
 
-const Workload = enum { long, short_ui, retry };
+const Workload = enum { long, short_ui, retry, short_play };
 fn workload() !Workload {
     const value = std.process.Environ.getPosix(t.environ, "SME_LIVE_SEMANTIC_WORKLOAD") orelse "long";
     if (std.mem.eql(u8, value, "long")) return .long;
     if (std.mem.eql(u8, value, "short-ui")) return .short_ui;
     if (std.mem.eql(u8, value, "retry")) return .retry;
+    if (std.mem.eql(u8, value, "short-play")) return .short_play;
     return error.UnsupportedSemanticWorkload;
+}
+fn requestedPacing() !live.PacingMode {
+    const value = std.process.Environ.getPosix(t.environ, "SME_LIVE_SEMANTIC_PACING") orelse "legacy_poll";
+    return std.meta.stringToEnum(live.PacingMode, value) orelse error.InvalidPacingMode;
+}
+fn requestedAdmission() !recording.codec.AdmissionPolicy {
+    const value = std.process.Environ.getPosix(t.environ, "SME_LIVE_SEMANTIC_ADMISSION") orelse "native_attempt";
+    return std.meta.stringToEnum(recording.codec.AdmissionPolicy, value) orelse error.InvalidAdmissionPolicy;
+}
+// Offline evidence inspection after genuine joins; never supplies runtime data.
+const ReferenceCoverage = struct { public_inputs: u64 = 0, schedules: u64 = 0, submitted_samples: u64 = 0, nonzero_submitted_samples: u64 = 0 };
+fn referenceCoverage(reader: *const format.Reader) !ReferenceCoverage {
+    var result: ReferenceCoverage = .{};
+    inline for (std.meta.fields(format.Role)) |field| {
+        var cursor = recording.codec.ComparisonCursor.init(reader, @enumFromInt(field.value));
+        while (try cursor.next()) |reference| {
+            if (reference.family == @intFromEnum(recording.codec.Family.public_input)) result.public_inputs += 1;
+            if (reference.family == @intFromEnum(recording.codec.Family.schedule)) result.schedules += 1;
+            if (reference.family == @intFromEnum(recording.codec.Family.pcm)) {
+                var d: recording.codec.Decoder = .{ .wire = .{ .bytes = reference.bytes } };
+                const pcm = try d.get(recording.codec.Native(recording.codec.Pcm));
+                for (0..pcm.value.samples) |_| {
+                    const bits = try d.wire.int(u32);
+                    if (pcm.value.disposition == .submitted) {
+                        result.submitted_samples += 1;
+                        if (bits & 0x7fffffff != 0) result.nonzero_submitted_samples += 1;
+                    }
+                }
+                try d.wire.finish();
+            }
+        }
+    }
+    return result;
 }
 const ReceiptLog = struct {
     ids: [32]u64 = @splat(0),
@@ -545,6 +579,8 @@ const FileStream = struct {
 };
 fn recordProcess(directory: std.Io.Dir) !void {
     const scenario = try workload();
+    const pacing = try requestedPacing();
+    const policy = try requestedAdmission();
     const writer_mode = std.process.Environ.getPosix(t.environ, "SME_LIVE_SEMANTIC_WRITER") orelse "memory";
     const streaming = std.mem.eql(u8, writer_mode, "stream");
     if (!streaming and !std.mem.eql(u8, writer_mode, "memory")) return error.UnsupportedSemanticWriter;
@@ -554,6 +590,7 @@ fn recordProcess(directory: std.Io.Dir) !void {
     const controlled = if (controlled_text) |text| if (std.mem.eql(u8, text, "1")) true else return error.InvalidControlledCrossFrameMode else false;
     if (controlled and (!streaming or scenario != .long or fail_text != null)) return error.UnsupportedControlledCrossFrameScope;
     if (scenario == .retry and (!streaming or controlled or fail_text != null)) return error.UnsupportedRetryWorkloadScope;
+    if (scenario == .short_play and (!streaming or controlled or fail_text != null)) return error.UnsupportedShortPlayScope;
 
     const bytes = try buildBank();
     defer allocator.free(bytes);
@@ -598,10 +635,10 @@ fn recordProcess(directory: std.Io.Dir) !void {
         };
         sink.init(file, fail_after);
         file_stream = sink;
-        try recorder.initStreaming(try identity(bytes), .{ .context = sink, .write = FileStream.write }, format.max_file_bytes, @sizeOf(FileStream) + (if (controlled) @sizeOf(ControlledCrossFrame) else @as(usize, 0)) + (if (scenario == .retry) @sizeOf(RetryWorkload) else @as(usize, 0)));
+        try recorder.initStreamingWithPacing(try identity(bytes), .{ .context = sink, .write = FileStream.write }, format.max_file_bytes, @sizeOf(FileStream) + (if (controlled) @sizeOf(ControlledCrossFrame) else @as(usize, 0)) + (if (scenario == .retry) @sizeOf(RetryWorkload) else @as(usize, 0)), pacing);
     } else {
         corpus = try allocator.alloc(u8, recording.default_corpus_bytes);
-        try recorder.init(try identity(bytes), corpus.?);
+        try recorder.initWithPacing(try identity(bytes), corpus.?, pacing);
     }
     if (controlled) {
         const context = try allocator.create(ControlledCrossFrame);
@@ -641,6 +678,8 @@ fn recordProcess(directory: std.Io.Dir) !void {
             retry_owned = false;
         }
     };
+    try t.expectEqual(pacing, host.pacingMode());
+    std.debug.print("SEMANTIC_PACING actual={s} policy={s} workload={s}\n", .{ @tagName(host.pacingMode()), @tagName(policy), @tagName(scenario) });
     if (scenario == .short_ui) {
         try shortUiWorkload(host, recorder, &receipts);
     } else {
@@ -679,6 +718,11 @@ fn recordProcess(directory: std.Io.Dir) !void {
                         // a reason to extend or retry an otherwise valid run.
                         if (scenario == .long) {
                             if (receipts.ids[1] == 0 and progress.submitted_frames >= base + 32768) receipts.ids[1] = (try host.submit(host.identity(), .stop)).id;
+                        } else if (scenario == .short_play) {
+                            // Independent minimal protocol loop. No forced timing
+                            // hooks and no substitution for long >=32768 coverage.
+                            if (receipts.ids[1] == 0 and progress.submitted_frames >= base + 8192) receipts.ids[1] = (try host.submit(host.identity(), .stop)).id;
+                            if (progress.submitted_frames > base + 16384) return error.ShortPlayFrameBound;
                         } else if (retry_context) |context| {
                             if (context.succeeded.load(.acquire) and context.admitted.load(.acquire) and retry_admitted_frames == null) retry_admitted_frames = progress.submitted_frames;
                             if (retry_admitted_frames) |admitted_at| {
@@ -721,6 +765,9 @@ fn recordProcess(directory: std.Io.Dir) !void {
         if (context.failed.load(.acquire) or !context.succeeded.load(.acquire) or !context.admitted.load(.acquire) or
             !context.worker_ready.load(.acquire) or context.nonzero_submitted_samples.load(.acquire) == 0 or
             context.even_sequence <= context.odd_sequence) return error.RetryFixtureWitnessMissing;
+    } else if (scenario == .short_play) {
+        if (!status.play_executed or !status.stop_executed or !receipts.accepted[0] or !receipts.accepted[1] or
+            !receipts.terminal[0] or !receipts.terminal[1] or !receipts.executed[0] or !receipts.executed[1]) return error.ShortPlayCommandWitnessMissing;
     } else {
         if (status.play_executed or status.stop_executed) return error.ShortFixtureUnexpectedPlayback;
         for (0..11) |index| if (!receipts.terminal[index] or !receipts.acknowledged[index]) return error.ShortFixtureTerminalWitnessMissing;
@@ -752,6 +799,8 @@ fn recordProcess(directory: std.Io.Dir) !void {
         if (stats.submitted_frames < 32768 or stats.ui_calls == 0) return error.LongFixtureDurationWitnessMissing;
     } else if (scenario == .retry) {
         if (stats.command_submitted != 2 or stats.command_terminal != 2 or stats.terminal_acknowledged != 2 or stats.submitted_frames < 8192) return error.RetryFixtureCommandWitnessMissing;
+    } else if (scenario == .short_play) {
+        if (stats.command_submitted != 2 or stats.command_terminal != 2 or stats.terminal_acknowledged != 2 or stats.submitted_frames < 8192) return error.ShortPlayCommandWitnessMissing;
     } else {
         if (stats.command_submitted != 11 or stats.command_terminal != 11 or stats.terminal_acknowledged != 11) return error.ShortFixtureCommandWitnessMissing;
         // No Play is not a promise of zero native startup/silence audio.
@@ -759,7 +808,10 @@ fn recordProcess(directory: std.Io.Dir) !void {
     }
     const readback = try format.Reader.preflight(sealed, recorder.identity, recording.codec.validate);
     try t.expect(readback.counts.total > 0);
-    const admission_result = recording.codec.validateInputs(&readback, recorder.identity);
+    const coverage = try referenceCoverage(&readback);
+    if (scenario == .short_play and (coverage.public_inputs == 0 or coverage.schedules == 0 or coverage.nonzero_submitted_samples == 0)) return error.ShortPlayOutputWitnessMissing;
+    std.debug.print("SEMANTIC_REFERENCE_COVERAGE public_inputs={d} schedules={d} submitted_samples={d} nonzero_submitted_samples={d}\n", .{ coverage.public_inputs, coverage.schedules, coverage.submitted_samples, coverage.nonzero_submitted_samples });
+    const admission_result = recording.codec.validateInputsWithPolicy(&readback, recorder.identity, policy);
     const semantic_admitted = if (admission_result) |admitted| admitted: {
         std.debug.print("SEMANTIC_ADMISSION unresolved_scalar_overlaps={d} exact_replay_verified=false\n", .{admitted.unresolved_scalar_overlaps});
         break :admitted true;
@@ -772,7 +824,7 @@ fn recordProcess(directory: std.Io.Dir) !void {
         try directory.renamePreserve("history.incomplete.bin", directory, "history.bin", t.io);
         std.debug.print("SEMANTIC_STREAM finalized=true bytes={d} resident_capture_bytes={d}\n", .{ sealed.len, stats.allocation_bytes });
     } else try writeFile(directory, "history.bin", sealed);
-    const report = try std.fmt.allocPrint(allocator, "{{\"profile\":9,\"framing_complete\":true,\"semantic_admitted\":{},\"fresh_replay_verified\":false,\"controlled_cross_frame\":{},\"submitted_frames\":{d},\"generated_frames\":{d},\"multi_frame_ticks\":{d},\"corpus_bytes\":{d},\"capture_allocation_bytes\":{d},\"occurrences\":{d},\"control_joined\":true,\"worker_joined\":true,\"control_thread\":{d},\"worker_thread\":{d},\"callback_thread\":{d},\"peak_records\":[{d},{d},{d},{d}],\"peak_bytes\":[{d},{d},{d},{d}],\"source_opened\":{d},\"source_closed\":{d}}}\n", .{ semantic_admitted, controlled, stats.submitted_frames, stats.generated_frames, stats.multi_frame_ticks, stats.corpus_bytes, stats.allocation_bytes, stats.occurrences, stats.control_thread_id, stats.worker_thread_id, stats.callback_thread_id, stats.lanes[0].peak_records, stats.lanes[1].peak_records, stats.lanes[2].peak_records, stats.lanes[3].peak_records, stats.lanes[0].peak_bytes, stats.lanes[1].peak_bytes, stats.lanes[2].peak_bytes, stats.lanes[3].peak_bytes, status.provider.opened, status.provider.closed });
+    const report = try std.fmt.allocPrint(allocator, "{{\"profile\":9,\"wire_version\":{d},\"pacing\":\"{s}\",\"admission\":\"{s}\",\"framing_complete\":true,\"semantic_admitted\":{},\"fresh_replay_verified\":false,\"controlled_cross_frame\":{},\"submitted_frames\":{d},\"generated_frames\":{d},\"multi_frame_ticks\":{d},\"corpus_bytes\":{d},\"capture_allocation_bytes\":{d},\"occurrences\":{d},\"control_joined\":true,\"worker_joined\":true,\"control_thread\":{d},\"worker_thread\":{d},\"callback_thread\":{d},\"peak_records\":[{d},{d},{d},{d}],\"peak_bytes\":[{d},{d},{d},{d}],\"source_opened\":{d},\"source_closed\":{d}}}\n", .{ format.wire_version, @tagName(pacing), @tagName(policy), semantic_admitted, controlled, stats.submitted_frames, stats.generated_frames, stats.multi_frame_ticks, stats.corpus_bytes, stats.allocation_bytes, stats.occurrences, stats.control_thread_id, stats.worker_thread_id, stats.callback_thread_id, stats.lanes[0].peak_records, stats.lanes[1].peak_records, stats.lanes[2].peak_records, stats.lanes[3].peak_records, stats.lanes[0].peak_bytes, stats.lanes[1].peak_bytes, stats.lanes[2].peak_bytes, stats.lanes[3].peak_bytes, status.provider.opened, status.provider.closed });
     defer allocator.free(report);
     try writeFile(directory, "record-result.json", report);
     std.debug.print("SEMANTIC_RECORD {s}", .{report});
@@ -785,6 +837,8 @@ fn recordProcess(directory: std.Io.Dir) !void {
 fn replayProcess(directory: std.Io.Dir) !void {
     if (std.process.Environ.getPosix(t.environ, "SME_LIVE_SEMANTIC_CONTROLLED_CROSS_FRAME") != null) return error.ControlledPauseForbiddenDuringReplay;
     const scenario = try workload();
+    const pacing = try requestedPacing();
+    const policy = try requestedAdmission();
     const bytes = try directory.readFileAlloc(t.io, "bank.bin", allocator, .limited(format.max_file_bytes));
     var retained = false;
     defer if (!retained) allocator.free(bytes);
@@ -797,9 +851,9 @@ fn replayProcess(directory: std.Io.Dir) !void {
     const driver = try allocator.create(live.semantic_replay.Driver);
     driver.* = .{};
     defer if (!retained) allocator.destroy(driver);
-    try driver.init(reader, expected_identity, t.io);
+    try driver.initWithPolicy(reader, expected_identity, t.io, policy);
     std.debug.print("SEMANTIC_PREFLIGHT admitted=true owner_effects_started=false\n", .{});
-    const result = driver.run(launch(bytes), .{ .backend = .null_backend });
+    const result = driver.runWithPacing(launch(bytes), .{ .backend = .null_backend }, pacing);
     retained = driver.running;
     if (result) |report| {
         if (scenario == .long) {
@@ -810,6 +864,16 @@ fn replayProcess(directory: std.Io.Dir) !void {
             if (report.command_submitted != 2 or report.command_accepted != 2 or report.command_terminal != 2 or report.terminal_acknowledged != 2 or
                 !report.final_status.?.play_executed or !report.final_status.?.stop_executed or
                 report.pcm_samples[@intFromEnum(live.audio.device.SemanticAudioPcmDisposition.submitted)] < 8192 * 2) return error.RetryFixtureCommandWitnessMissing;
+        } else if (scenario == .short_play) {
+            if (report.command_submitted != 2 or report.command_accepted != 2 or report.command_terminal != 2 or report.terminal_acknowledged != 2 or
+                !report.final_status.?.play_executed or !report.final_status.?.stop_executed or
+                report.pcm_samples[@intFromEnum(live.audio.device.SemanticAudioPcmDisposition.submitted)] < 8192 * 2) return error.ShortPlayCommandWitnessMissing;
+            const coverage = try referenceCoverage(reader);
+            if (coverage.public_inputs == 0 or coverage.schedules == 0 or coverage.nonzero_submitted_samples == 0) return error.ShortPlayOutputWitnessMissing;
+            // Driver compares these canonical real outputs as well as all PCM,
+            // UI outcomes and role EOF. These are not execution inputs.
+            try t.expect(report.eof and report.host_joined and report.host_destroyed);
+            std.debug.print("SEMANTIC_VERIFIED_REFERENCE_COVERAGE public_inputs={d} schedules={d} nonzero_submitted_samples={d} pacing={s}\n", .{ coverage.public_inputs, coverage.schedules, coverage.nonzero_submitted_samples, @tagName(pacing) });
         } else {
             if (report.command_submitted != 11 or report.command_accepted != 0 or report.command_terminal != 11 or report.terminal_acknowledged != 11) return error.ShortFixtureCommandWitnessMissing;
             if (report.final_status.?.play_executed or report.final_status.?.stop_executed) return error.ShortFixtureUnexpectedPlayback;
@@ -817,7 +881,7 @@ fn replayProcess(directory: std.Io.Dir) !void {
             // a synthetic zero-callback or zero-frame requirement.
         }
         try t.expect(report.ui_calls > 0 and report.matched[3] > 0);
-        const text = try std.fmt.allocPrint(allocator, "{{\"profile\":9,\"fresh_replay_verified\":true,\"matched_control\":{d},\"matched_worker\":{d},\"matched_render\":{d},\"matched_ui\":{d},\"submitted_samples\":{d},\"discarded_pending_samples\":{d},\"discarded_generated_samples\":{d},\"command_accepted\":{d},\"command_terminal\":{d},\"host_joined\":{},\"host_destroyed\":{},\"eof\":{}}}\n", .{ report.matched[0], report.matched[1], report.matched[2], report.matched[3], report.pcm_samples[0], report.pcm_samples[1], report.pcm_samples[2], report.command_accepted, report.command_terminal, report.host_joined, report.host_destroyed, report.eof });
+        const text = try std.fmt.allocPrint(allocator, "{{\"profile\":9,\"wire_version\":{d},\"pacing\":\"{s}\",\"admission\":\"{s}\",\"fresh_replay_verified\":true,\"matched_control\":{d},\"matched_worker\":{d},\"matched_render\":{d},\"matched_ui\":{d},\"submitted_samples\":{d},\"discarded_pending_samples\":{d},\"discarded_generated_samples\":{d},\"command_accepted\":{d},\"command_terminal\":{d},\"host_joined\":{},\"host_destroyed\":{},\"eof\":{}}}\n", .{ format.wire_version, @tagName(pacing), @tagName(policy), report.matched[0], report.matched[1], report.matched[2], report.matched[3], report.pcm_samples[0], report.pcm_samples[1], report.pcm_samples[2], report.command_accepted, report.command_terminal, report.host_joined, report.host_destroyed, report.eof });
         defer allocator.free(text);
         try writeFile(directory, "replay-result.json", text);
         std.debug.print("SEMANTIC_REPLAY {s}", .{text});
@@ -937,6 +1001,12 @@ test "launch argument mismatches reject before admission owner or native threads
     // Different supported backend also cannot reuse a launch descriptor.
     driver.launch_descriptor.device.backend = .system;
     try t.expectError(error.WrongLaunch, driver.run(original, device));
+    driver.launch_descriptor.device = device;
+    driver.launch_descriptor.pacing = .notified_v1;
+    try t.expectError(error.WrongLaunch, driver.run(original, device));
+    try t.expectError(error.WrongLaunch, driver.runWithPacing(original, device, .legacy_poll));
+    driver.launch_descriptor.pacing = .legacy_poll;
+    try t.expectError(error.WrongLaunch, driver.runWithPacing(original, device, .notified_v1));
     try t.expect(!driver.running and !driver.completed and !driver.report.host_joined and !driver.report.host_destroyed);
     try t.expect(driver.session.address == null);
 }

@@ -153,10 +153,11 @@ pub const Driver = struct {
         try self.initExclusionCalendar(reader);
         self.address = self;
         try self.clock.init(self, onClock);
-        try self.session.initReplay(self.config());
+        try self.session.initReplay(self.config(self.launch_descriptor.pacing));
     }
-    fn config(self: *Driver) semantic.Config {
+    fn config(self: *Driver, pacing: semantic.PacingMode) semantic.Config {
         return .{
+            .pacing = pacing,
             .output = .{ .context = self, .input = onInput, .schedule = onSchedule, .invalidate = invalidate },
             .service = .{ .cuts = .{ .context = self, .point = onPoint, .boundary = onBoundary }, .worker_facts = .{ .context = self, .emit = onWorkerFact }, .source = .{ .context = self, .emit = onSourceFact }, .clock = &self.clock, .consume = .{ .context = self, .checkpoint = onConsumed } },
             .audio = .{ .context = self, .call = onAudio, .wait_callback = awaitCallback },
@@ -1203,10 +1204,16 @@ pub const Driver = struct {
     /// If native cleanup is irrecoverably stuck the caller must keep this Driver
     /// alive (or end the isolated process); it cannot destroy retained resources.
     pub fn run(self: *Driver, launch: host.Launch, device: audio.device.DeviceConfig) !Report {
+        return self.runWithPacing(launch, device, .legacy_poll);
+    }
+    /// Pacing is authenticated launch INPUT. An explicit caller expectation is
+    /// checked before any Host/native owner exists, never borrowed from a
+    /// comparison result. The old run API retains its legacy polling contract.
+    pub fn runWithPacing(self: *Driver, launch: host.Launch, device: audio.device.DeviceConfig, pacing: semantic.PacingMode) !Report {
         if (self.address != self or self.running or self.completed or device.backend != .null_backend) return error.InvalidState;
         // Launch arguments are authenticated execution input, not a late
         // comparison against a started outcome after native owner effects.
-        const requested: codec.LaunchDescriptor = .{ .document_id = launch.document_id, .revision = launch.revision, .draft_hash = launch.draft_hash, .state = launch.state, .device = device };
+        const requested: codec.LaunchDescriptor = .{ .document_id = launch.document_id, .revision = launch.revision, .draft_hash = launch.draft_hash, .state = launch.state, .device = device, .pacing = pacing };
         try codec.validateLaunchDescriptor(requested);
         if (!std.meta.eql(self.launch_descriptor, requested)) return error.WrongLaunch;
         if (!std.mem.eql(u8, &self.identity.config, &try codec.configHash(launch.config))) return error.WrongConfig;
@@ -1394,7 +1401,7 @@ pub const UiTranscriptRegression = if (@import("builtin").is_test) struct {
     }
     fn collect(events: *Events, driver: *Driver) !void {
         const t = std.testing;
-        var config_ = driver.config();
+        var config_ = driver.config(.legacy_poll);
         config_.service.clock = null;
         config_.service.consume = null;
         config_.audio.wait_callback = null;
@@ -1469,7 +1476,7 @@ pub const UiTranscriptRegression = if (@import("builtin").is_test) struct {
         try driver.clock.init(driver, Driver.onClock);
         try driver.publication_calendar.init(0);
         try driver.publication_calendar.seal();
-        try driver.session.initReplay(driver.config());
+        try driver.session.initReplay(driver.config(.legacy_poll));
         var instance: host.Host = undefined;
         try initializeMailboxOnly(&instance, &driver.session);
         for (0..17) |_| try t.expectEqual(UiProgress.progressed, driver.serviceUi(&instance));
@@ -1503,7 +1510,7 @@ pub const UiTranscriptRegression = if (@import("builtin").is_test) struct {
         try driver.clock.init(driver, Driver.onClock);
         try driver.publication_calendar.init(0);
         try driver.publication_calendar.seal();
-        try driver.session.initReplay(driver.config());
+        try driver.session.initReplay(driver.config(.legacy_poll));
         var instance: host.Host = undefined;
         try initializeMailboxOnly(&instance, &driver.session);
         // Real native producer operations set up one cancelled terminal. No

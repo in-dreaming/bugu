@@ -41,7 +41,7 @@ fn reheader(bytes: []u8) void {
 test "live semantic profile has independent fixed identity and separate read capabilities" {
     var out: [2048]u8 = undefined;
     const bytes = try corpus(&out);
-    try t.expectEqualSlices(u8, "SMELSB01\x09\x00\x02\x00", bytes[0..12]);
+    try t.expectEqualSlices(u8, "SMELSB01\x09\x00\x03\x00", bytes[0..12]);
     const r = try f.Reader.preflight(bytes, identity(), valid);
     try t.expectEqual(@as(u64, 7), r.counts.total);
     try t.expectEqualSlices(u64, &.{ 3, 1, 1, 2 }, &r.counts.roles);
@@ -72,6 +72,19 @@ test "live semantic profile has independent fixed identity and separate read cap
     var ui_reference = r.comparison(.ui);
     try t.expectEqualSlices(u8, "submitted", (try ui_reference.next()).?.bytes);
     try ui_reference.finish();
+}
+
+test "profile9 v3 explicitly rejects a validly resealed v2 envelope without inferring pacing" {
+    var output: [2048]u8 = undefined;
+    const bytes = try corpus(&output);
+    try t.expectEqual(@as(u16, 9), f.profile_id);
+    try t.expectEqual(@as(u16, 3), f.wire_version);
+    _ = try f.Reader.preflight(bytes, identity(), valid);
+    // This is a framing-only legacy-version specimen, not a converted history.
+    // Rehash both envelopes so rejection cannot be attributed to stale digests.
+    std.mem.writeInt(u16, output[10..12], 2, .little);
+    reheader(output[0..bytes.len]);
+    try t.expectError(error.UnsupportedVersion, f.Reader.preflight(bytes, identity(), valid));
 }
 
 test "live semantic bytes are producer owned and native padding is not the wire" {
@@ -167,7 +180,7 @@ test "live semantic reader rejects legacy profile wrong version unknown family a
         try t.expectError(error.UnsupportedProfile, f.Reader.preflight(bytes, identity(), valid));
     }
     _ = try corpus(&out);
-    out[10] = 1; // Explicitly reject the preceding three-role wire version.
+    out[10] = 1; // Explicitly reject the older three-role wire version.
     reheader(out[0..bytes.len]);
     try t.expectError(error.UnsupportedVersion, f.Reader.preflight(bytes, identity(), valid));
     _ = try corpus(&out);
@@ -475,7 +488,7 @@ test "fourth UI producer must be independently drained and excluded" {
     try t.expect(!capture.lane(.ui).push(1, .input, "late", ""));
 }
 
-test "v1 empty header rejects by version before v2 trailer interpretation" {
+test "v1 empty header rejects by version before v3 trailer interpretation" {
     var bytes: [352]u8 = @splat(0); // The old minimum192+160 byte envelope.
     @memcpy(bytes[0..8], f.magic);
     std.mem.writeInt(u16, bytes[8..10], f.profile_id, .little);
@@ -483,7 +496,7 @@ test "v1 empty header rejects by version before v2 trailer interpretation" {
     try t.expectError(error.UnsupportedVersion, f.Reader.preflight(&bytes, identity(), valid));
 }
 
-test "v2 rejects three-role header mask and wrong UI counter" {
+test "v3 rejects three-role header mask and wrong UI counter" {
     var output: [2048]u8 = undefined;
     const bytes = try corpus(&output);
     std.mem.writeInt(u16, output[28..30], 3, .little);

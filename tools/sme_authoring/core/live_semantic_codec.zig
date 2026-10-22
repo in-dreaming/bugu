@@ -227,9 +227,10 @@ pub const LaunchDescriptor = struct {
     draft_hash: [32]u8,
     state: audio.music.MusicStateId,
     device: audio.device.DeviceConfig,
+    pacing: semantic.PacingMode = .legacy_poll,
 };
 pub fn launchDescriptor(value: @FieldType(semantic.ControlEvent, "started")) LaunchDescriptor {
-    return .{ .document_id = value.identity.document_id, .revision = value.identity.revision, .draft_hash = value.identity.draft_hash, .state = value.identity.state, .device = value.device };
+    return .{ .document_id = value.identity.document_id, .revision = value.identity.revision, .draft_hash = value.identity.draft_hash, .state = value.identity.state, .device = value.device, .pacing = value.pacing };
 }
 fn validateDeviceConfig(value: audio.device.DeviceConfig) Error!void {
     if (value.sample_rate != 48000 or value.channels != 2 or value.period_frames != 256 or value.output_layout_request != null) return error.UnsupportedValue;

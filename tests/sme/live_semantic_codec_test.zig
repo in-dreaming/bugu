@@ -832,6 +832,79 @@ fn launchDescriptorFixture() codec.LaunchDescriptor {
     return .{ .document_id = uiIdentity().document_id, .revision = uiIdentity().revision, .draft_hash = uiIdentity().draft_hash, .state = uiIdentity().state, .device = .{ .backend = .null_backend } };
 }
 
+test "v3 launch pacing roundtrips both canonical INPUT and independent started reference" {
+    try t.expectEqual(codec.semantic.PacingMode.legacy_poll, launchDescriptorFixture().pacing);
+    inline for (.{ codec.semantic.PacingMode.legacy_poll, codec.semantic.PacingMode.notified_v1 }) |pacing| {
+        const started: @FieldType(codec.semantic.ControlEvent, "started") = .{ .thread = 1234, .identity = uiIdentity(), .config = .{}, .device = .{ .backend = .null_backend }, .pacing = pacing };
+        const descriptor = codec.launchDescriptor(started);
+        try t.expectEqual(pacing, descriptor.pacing);
+        try codec.validateLaunchDescriptor(descriptor);
+        var input_bytes: [2048]u8 = undefined;
+        var roundtrip_bytes: [2048]u8 = undefined;
+        const native: codec.Native(codec.LaunchDescriptor) = .{ .occurrence = 1, .value = descriptor };
+        const encoded = try codec.encode(native, .input, &input_bytes);
+        // The appended closed enum uses the existing canonical u64 vocabulary.
+        try t.expectEqual(@as(u64, @intFromEnum(pacing)), std.mem.readInt(u64, encoded[encoded.len - 8 ..][0..8], .little));
+        const decoded = try codec.decodeInput(codec.LaunchDescriptor, .{ .role = .control, .ordinal = 1, .family = @intFromEnum(codec.Family.launch_descriptor), .bytes = encoded }, .launch_descriptor);
+        try t.expectEqualDeep(native, decoded);
+        try t.expectEqualSlices(u8, encoded, try codec.encode(decoded, .input, &roundtrip_bytes));
+
+        const observed = codec.canonicalNative(codec.semantic.ControlEvent, .{ .occurrence = 1, .value = .{ .started = started } });
+        var reference_bytes: [4096]u8 = undefined;
+        var reference_roundtrip: [4096]u8 = undefined;
+        const reference = try codec.encode(observed, .reference, &reference_bytes);
+        try codec.validateReference(.{ .role = .control, .ordinal = 1, .family = @intFromEnum(codec.Family.control_event), .bytes = reference });
+        const reference_decoded = try codec.decode(codec.Native(codec.semantic.ControlEvent), reference);
+        try t.expectEqualDeep(observed, reference_decoded);
+        try t.expectEqual(pacing, reference_decoded.value.started.pacing);
+        try t.expectEqualSlices(u8, reference, try codec.encode(reference_decoded, .reference, &reference_roundtrip));
+    }
+}
+
+test "v3 launch INPUT and started reference reject illegal pacing enum bytes" {
+    const started: @FieldType(codec.semantic.ControlEvent, "started") = .{ .thread = 1, .identity = uiIdentity(), .config = .{}, .device = .{ .backend = .null_backend }, .pacing = .notified_v1 };
+    inline for (.{ @as(u64, 2), std.math.maxInt(u64) }) |invalid| {
+        var input_bytes: [2048]u8 = undefined;
+        const encoded = try codec.encode(@as(codec.Native(codec.LaunchDescriptor), .{ .occurrence = 1, .value = codec.launchDescriptor(started) }), .input, &input_bytes);
+        std.mem.writeInt(u64, input_bytes[encoded.len - 8 ..][0..8], invalid, .little);
+        try t.expectError(error.InvalidEnum, codec.decodeInput(codec.LaunchDescriptor, .{ .role = .control, .ordinal = 1, .family = @intFromEnum(codec.Family.launch_descriptor), .bytes = encoded }, .launch_descriptor));
+        var reference_bytes: [4096]u8 = undefined;
+        const reference = try codec.encode(@as(codec.Native(codec.semantic.ControlEvent), .{ .occurrence = 1, .value = .{ .started = started } }), .reference, &reference_bytes);
+        std.mem.writeInt(u64, reference_bytes[reference.len - 8 ..][0..8], invalid, .little);
+        try t.expectError(error.InvalidEnum, codec.validateReference(.{ .role = .control, .ordinal = 1, .family = @intFromEnum(codec.Family.control_event), .bytes = reference }));
+    }
+}
+
+test "complete v3 preflight binds launch pacing to started in both directions" {
+    const contract = try uiSchemaIdentity();
+    inline for (.{ codec.semantic.PacingMode.legacy_poll, codec.semantic.PacingMode.notified_v1 }) |actual| {
+        inline for (.{ codec.semantic.PacingMode.legacy_poll, codec.semantic.PacingMode.notified_v1 }) |input_pacing| {
+            var output: [32768]u8 = undefined;
+            var tape: UiSchemaTape = .{ .writer = try f.Writer.init(&output, contract, codec.validate) };
+            const started: @FieldType(codec.semantic.ControlEvent, "started") = .{ .thread = 1, .identity = uiIdentity(), .config = .{}, .device = .{}, .pacing = actual };
+            try tape.event(.control, .control_event, @as(codec.semantic.ControlEvent, .{ .started = started }));
+            var descriptor = codec.launchDescriptor(started);
+            descriptor.pacing = input_pacing;
+            try tape.append(.control, .launch_descriptor, .input, @as(codec.Native(codec.LaunchDescriptor), .{ .occurrence = tape.occurrence, .value = descriptor }));
+            try tape.call(1, .{ .provider_create = .{ .source_hash = @splat(4), .source_bytes = 1 } });
+            try tape.call(2, .{ .owner_create = .{} });
+            try tape.call(3, .{ .load = .{ .source_hash = @splat(4), .source_bytes = 1 } });
+            try tape.event(.worker, .worker_event, @as(codec.semantic.WorkerEvent, .{ .started = 2 }));
+            try tape.pair(1, .{ .request_close = uiIdentity().epoch }, .{ .request_close = {} });
+            try tape.closeControl();
+            const reader = try f.Reader.preflight(try tape.finish(), contract, codec.validate);
+            // Only INPUT is returned to execution. Reference equality is a
+            // pre-owner consistency check, not an execution-result supplier.
+            try t.expectEqual(input_pacing, (try codec.readLaunchDescriptor(&reader)).pacing);
+            if (actual == input_pacing) {
+                const summary = try codec.validateInputs(&reader, contract);
+                try t.expectEqual(@as(u64, 0), summary.commands);
+                try t.expectEqual(@as(u64, 0), summary.callbacks);
+            } else try t.expectError(error.InvalidOrder, codec.validateInputs(&reader, contract));
+        }
+    }
+}
+
 test "launch descriptor reader uses only execution input and requires exactly one Control descriptor" {
     var output: [4096]u8 = undefined;
     var scratch: [1024]u8 = undefined;

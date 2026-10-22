@@ -30,7 +30,7 @@ pub const TestTickOutcome = struct { context: *anyopaque, call: *const fn (*anyo
 /// Passive test observation of one existing wait invocation. Role-local pair
 /// and burst identifiers belong to the test collector, with explicit overflow.
 /// An after edge reports return from the existing catch, not successful sleep.
-pub const PacingMode = enum { legacy_poll, notified_v1 };
+pub const PacingMode = semantic.PacingMode;
 /// One consumer resets before checking real work; any producer may notify.
 /// A notification is a persistent hint, never an engine readiness result.
 pub const WakeSignal = struct {
@@ -269,10 +269,10 @@ pub const Host = struct {
         self.control_thread = try std.Thread.spawn(.{}, controlMain, .{self});
         return self;
     }
-    /// Recording and replay retain the original polling schedule. Notification
-    /// pacing is currently supported only by the ordinary, non-recording Host.
+    /// Semantic owners use their pinned launch configuration. Existing semantic
+    /// constructors and private capture retain polling; ordinary owners notify.
     pub fn pacingMode(self: *const Host) PacingMode {
-        if (self.options.semantic != null) return .legacy_poll;
+        if (self.options.semantic) |session| return session.config.pacing;
         if (@import("builtin").is_test) if (self.options.test_capture != null) return .legacy_poll;
         return .notified_v1;
     }
@@ -470,7 +470,7 @@ pub const Host = struct {
         self.status.control_thread_id = @intCast(std.Thread.getCurrentId());
         if (self.options.semantic) |session| {
             session.used = true;
-            session.emitControl(.{ .started = .{ .thread = self.status.control_thread_id, .identity = self.launch_identity, .config = self.config, .device = self.options.device } });
+            session.emitControl(.{ .started = .{ .thread = self.status.control_thread_id, .identity = self.launch_identity, .config = self.config, .device = self.options.device, .pacing = self.pacingMode() } });
         }
         if (@import("builtin").is_test) {
             if (self.options.test_capture) |capture| {

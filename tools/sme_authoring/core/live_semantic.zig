@@ -11,6 +11,9 @@ const music = audio.music;
 const mailbox = @import("sme-author-live-mailbox");
 const source = @import("sme-author-preview-v1").source;
 pub const Owner = music.MusicRuntime;
+/// Fixed before Session initialization/attachment and throughout native joins.
+/// A pacing choice is scheduling configuration, never an expected work result.
+pub const PacingMode = enum { legacy_poll, notified_v1 };
 pub const Identity = struct {
     epoch: u64,
     document_id: u64,
@@ -108,7 +111,7 @@ pub const GateControl = union(enum) {
     stop_return: struct { sequence: u64, failure: ?anyerror },
 };
 pub const ControlEvent = union(enum) {
-    started: struct { thread: u64, identity: Identity, config: music.MusicRuntimeConfigV1, device: audio.device.DeviceConfig },
+    started: struct { thread: u64, identity: Identity, config: music.MusicRuntimeConfigV1, device: audio.device.DeviceConfig, pacing: PacingMode = .legacy_poll },
     enter: struct { call_id: u64, call: ControlCall },
     result: struct { call_id: u64, value: ControlResult },
     end: struct { call_id: u64, failed: bool },
@@ -147,6 +150,8 @@ pub const WorkerEvent = union(enum) {
 pub const ControlSink = struct { context: *anyopaque, emit: *const fn (*anyopaque, ControlEvent) void };
 pub const WorkerSink = struct { context: *anyopaque, emit: *const fn (*anyopaque, WorkerEvent) void };
 pub const Config = struct {
+    /// Immutable scheduling mode, bound by actual started and launch INPUT.
+    pacing: PacingMode = .legacy_poll,
     output: Owner.SemanticOutputSinkV1,
     service: audio.runtime.streaming.stream.LiveSemanticHooks,
     audio: audio.device.SemanticAudioSink,
