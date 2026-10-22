@@ -1,0 +1,75 @@
+{
+  "schema": "bugu.notified-semantic-v3.native-record-plan/v1",
+  "status": "FROZEN_NOT_RUN",
+  "source_commit": "a8ef20b9028290650b6ba7cc10187618813dd9b0",
+  "source_tree": "7f466dd56d0f154647c764eab619f5226d3ff45e",
+  "prerequisite": "Focused phase passed 123 tests with two explicit skips; its terminal result must be independently archived first.",
+  "purpose": "Single real notified_v1 concurrent Host -> streamed file minimum short-play protocol recording with strict ordered_job_scans admission. Not original long >=32768 qualification.",
+  "parameters": {
+    "REPO": "Exact clean frozen source with verified 16 authored input files",
+    "ELF": "Exact process test executable from this focused Debug build; do not rebuild",
+    "TAPE_DIRECTORY": "Fresh empty absolute local directory outside source",
+    "OUTPUT": "Fresh local guard output directory outside source",
+    "RUN_GUARDED": "Original runner with SHA below"
+  },
+  "executable": {
+    "filename": "semantic_live_process_test",
+    "bytes": 199348813,
+    "sha256": "9efaa8e0ac980236531488909fdd823bda609081053d70f3d89b1a1f53e3a862",
+    "provenance": "Current focused build, not a historical executable; same exact ELF will be required for fresh replay."
+  },
+  "environment": {
+    "unset_prefixes": [
+      "SME_"
+    ],
+    "unset_exact": [
+      "PYTHONOPTIMIZE"
+    ],
+    "set": {
+      "NO_COLOR": "1",
+      "SME_LIVE_SEMANTIC_MODE": "record",
+      "SME_LIVE_SEMANTIC_DIR": "<TAPE_DIRECTORY>",
+      "SME_LIVE_SEMANTIC_PACING": "notified_v1",
+      "SME_LIVE_SEMANTIC_ADMISSION": "ordered_job_scans",
+      "SME_LIVE_SEMANTIC_WRITER": "stream",
+      "SME_LIVE_SEMANTIC_WORKLOAD": "short-play"
+    }
+  },
+  "prechecks": [
+    "Exact source tree, clean worktree, ELF size/hash, runner hash and official Zig build provenance.",
+    "Verify all 16 fixture SHA values with --verify-only within 60 seconds.",
+    "Require output/tape directories unused; no controlled cross-frame, retry hook, delay or injection variables."
+  ],
+  "argv": [
+    "python3",
+    "<RUN_GUARDED>",
+    "--repo",
+    "<REPO>",
+    "--out",
+    "<OUTPUT>",
+    "--seconds",
+    "180",
+    "--",
+    "<ELF>"
+  ],
+  "runner_sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+  "bounds": {
+    "outer_seconds": 180,
+    "existing_native_observation_seconds": 60,
+    "minimum_start_free_bytes": 3355443200,
+    "stop_below_free_bytes": 2281701376,
+    "capture_bounds": "Unchanged: existing finite lane capacity, max_capture_bytes and max_file_bytes; no expansion.",
+    "workload": "Real Play accepted/executed, at least 8192 subsequent frames, real Stop accepted/executed, then Close; unchanged short upper-frame bound."
+  },
+  "required_evidence": [
+    "Actual Host uses notified_v1 and records pacing as canonical launch input and independent started reference.",
+    "No external timing hooks or generated output injection; actual source decoding and callback PCM.",
+    "Nonzero actual PCM plus canonical public Input and Schedule witnesses.",
+    "Both commands accepted/terminal/executed and acknowledged; actual closed/joined state, provider opened=closed and zero source/lease/instance assertions.",
+    "Complete streaming seal, flush/sync/readback, strict admission and final history.bin; report identity and file hashes.",
+    "Source and fixture postcheck; guard child exit and real cleanup evidence, never infer cleanup solely from timeout absence."
+  ],
+  "failure_policy": "One recording only. Preserve any overflow, malformed or unsupported-overlap rejection, timeout, runtime failure and incomplete tape. No reroll to obtain admission. No replay if no complete strictly admitted tape. Unknown terminal or cleanup remains unknown.",
+  "following": "Only if admitted, freeze same-ELF independent fresh replay and negative plans separately. Original long >=32768 remains a separate required phase; short success does not complete stage2.",
+  "publication": "Only source identities, plan and sanitized result. No raw logs, local paths, credentials, ELF, tape or audio binary. Main unchanged; no Windows or physical device action."
+}
