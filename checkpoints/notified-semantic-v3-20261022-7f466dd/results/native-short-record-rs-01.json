@@ -1,0 +1,90 @@
+{
+  "schema": "bugu.notified-semantic-v3.native-rs-result/v1",
+  "status": "RECORD_ADMITTED_FRESH_PENDING",
+  "source_commit": "a8ef20b9028290650b6ba7cc10187618813dd9b0",
+  "source_tree": "7f466dd56d0f154647c764eab619f5226d3ff45e",
+  "plan_commit": "de0f4134cdcb0a80815246eaa3d3be3849f52594",
+  "plan_sha256": "59b47f25044dc3414c90ce1ab40bd9102c5886b5e27fbb269d7e9042f8cfc16d",
+  "execution": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 154.2013044639989,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 26607427584
+  },
+  "build_steps": {
+    "passed": 4,
+    "total": 4
+  },
+  "tests": {
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0
+  },
+  "record_report": {
+    "profile": 9,
+    "wire_version": 3,
+    "pacing": "notified_v1",
+    "admission": "ordered_job_scans",
+    "framing_complete": true,
+    "semantic_admitted": true,
+    "fresh_replay_verified": false,
+    "controlled_cross_frame": false,
+    "submitted_frames": 10496,
+    "generated_frames": 10752,
+    "multi_frame_ticks": 0,
+    "corpus_bytes": 17716416,
+    "capture_allocation_bytes": 19302336,
+    "occurrences": 283581,
+    "control_joined": true,
+    "worker_joined": true,
+    "peak_records": [
+      921,
+      1143,
+      249,
+      44
+    ],
+    "peak_bytes": [
+      344920,
+      336592,
+      154860,
+      5056
+    ],
+    "source_opened": 16,
+    "source_closed": 16
+  },
+  "coverage": {
+    "public_inputs": 320,
+    "schedules": 16,
+    "submitted_samples": 20992,
+    "nonzero_submitted_samples": 17984,
+    "unresolved_scalar_overlaps": 0
+  },
+  "cleanup_basis": "Successful unchanged integration assertions require closed state, worker joined, no cleanup failure, source opened=closed, zero source-live/sample-leases/live-instances; report separately prints joins and opened/closed16/16. Not inferred solely from exit.",
+  "identities": {
+    "executable": {
+      "bytes": 40673480,
+      "sha256": "2c6b17fb2e6e9452e14118dfc881ab373bcb478e6585aa819faeecaac0059d8e"
+    },
+    "bank": {
+      "bytes": 1283976,
+      "sha256": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+    },
+    "history": {
+      "bytes": 17716416,
+      "sha256": "b8bda60aea8066cb576a9c9c72ebfa008a3130f1624e1d97700692d9c8b9d759"
+    }
+  },
+  "inputs_before_after": {
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "limitations": [
+    "Exactly one independent ReleaseSafe recording; Debug overflow remains preserved and unresolved.",
+    "No fresh replay or replay negative has run; strict admission is not an exact-replay pass.",
+    "No natural cross-frame tick witness in this short tape.",
+    "Short8192 minimum loop does not replace original long>=32768 requirement.",
+    "No Windows/physical device execution, no raw log/ELF/tape publication."
+  ]
+}
