@@ -1,0 +1,78 @@
+{
+  "schema": "bugu.notified-semantic-v3.native-releasesafe-plan/v1",
+  "status": "FROZEN_NOT_RUN",
+  "source_commit": "a8ef20b9028290650b6ba7cc10187618813dd9b0",
+  "source_tree": "7f466dd56d0f154647c764eab619f5226d3ff45e",
+  "prerequisite": "Debug focused passed; first and only Debug native short record failed Worker lane overflow, preserved at e00efd216e779a43e6084bf1d184bf990c3a81dc. This is a separately declared optimized-build diagnostic, not a Debug retry or repair.",
+  "purpose": "One ReleaseSafe build and strict notified short recording at unchanged source, 4MiB lanes and exact oracle. Distinguish optimized-build qualification from unresolved Debug throughput failure; outcome alone cannot diagnose its cause.",
+  "parameters": {
+    "REPO": "Exact clean frozen source with verified 16 authored input files",
+    "TAPE_DIRECTORY": "Fresh empty absolute local directory outside source",
+    "OUTPUT": "Fresh local guard output directory outside source",
+    "RUN_GUARDED": "Original runner with SHA below",
+    "ZIG": "Verified official Zig 0.16.0"
+  },
+  "executable": {
+    "provenance": "New ReleaseSafe test executable built once from exact source; record resulting ELF path/size/SHA locally. Any fresh replay must use that exact executable without rebuilding."
+  },
+  "environment": {
+    "unset_prefixes": [
+      "SME_"
+    ],
+    "unset_exact": [
+      "PYTHONOPTIMIZE"
+    ],
+    "set": {
+      "NO_COLOR": "1",
+      "SME_LIVE_SEMANTIC_MODE": "record",
+      "SME_LIVE_SEMANTIC_DIR": "<TAPE_DIRECTORY>",
+      "SME_LIVE_SEMANTIC_PACING": "notified_v1",
+      "SME_LIVE_SEMANTIC_ADMISSION": "ordered_job_scans",
+      "SME_LIVE_SEMANTIC_WRITER": "stream",
+      "SME_LIVE_SEMANTIC_WORKLOAD": "short-play"
+    }
+  },
+  "prechecks": [
+    "Exact source tree, clean worktree, runner hash and official Zig 0.16.0 identity. No source or capacity changes.",
+    "Verify all 16 fixture SHA values with --verify-only within 60 seconds.",
+    "Require output/tape directories unused; no controlled cross-frame, retry hook, delay or injection variables."
+  ],
+  "argv": [
+    "python3",
+    "<RUN_GUARDED>",
+    "--repo",
+    "<REPO>",
+    "--out",
+    "<OUTPUT>",
+    "--seconds",
+    "900",
+    "--",
+    "<ZIG>",
+    "build",
+    "sme-live-semantic-process-test",
+    "-j1",
+    "-Doptimize=ReleaseSafe",
+    "--summary",
+    "all"
+  ],
+  "runner_sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+  "bounds": {
+    "outer_seconds": 900,
+    "existing_native_observation_seconds": 60,
+    "minimum_start_free_bytes": 3355443200,
+    "stop_below_free_bytes": 2281701376,
+    "capture_bounds": "Unchanged: existing finite lane capacity, max_capture_bytes and max_file_bytes; no expansion.",
+    "workload": "Real Play accepted/executed, at least 8192 subsequent frames, real Stop accepted/executed, then Close; unchanged short upper-frame bound."
+  },
+  "required_evidence": [
+    "Actual Host uses notified_v1 and records pacing as canonical launch input and independent started reference.",
+    "No external timing hooks or generated output injection; actual source decoding and callback PCM.",
+    "Nonzero actual PCM plus canonical public Input and Schedule witnesses.",
+    "Both commands accepted/terminal/executed and acknowledged; actual closed/joined state, provider opened=closed and zero source/lease/instance assertions.",
+    "Complete streaming seal, flush/sync/readback, strict admission and final history.bin; report identity and file hashes.",
+    "Source and fixture postcheck; guard child exit and real cleanup evidence, never infer cleanup solely from timeout absence."
+  ],
+  "failure_policy": "Exactly one ReleaseSafe record execution after its single build. Preserve any compile failure, overflow, strict rejection, timeout, runtime failure or incomplete tape. No repeated record for favorable timing. If this also fails, stop recording attempts and return to evidence-based bounded capture design. No replay without a complete strictly admitted tape. Missing terminal or cleanup evidence remains UNKNOWN.",
+  "following": "If complete admitted tape exists, freeze exact-ELF independent fresh replay plan. Neither optimized success nor failure identifies the Debug bottleneck. Debug failure remains unresolved and original long >=32768 is separately required; short success does not complete stage2.",
+  "publication": "Only source identities, plan and sanitized result. No raw logs, local paths, credentials, ELF, tape or audio binary. Main unchanged; no Windows or physical device action."
+}
