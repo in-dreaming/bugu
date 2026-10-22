@@ -1,0 +1,147 @@
+{
+  "schema": 1,
+  "status": "PASS",
+  "stage": "Single Windows default Host chronology acceptance for notified_v1",
+  "plan": {
+    "url": "https://github.com/in-dreaming/bugu/blob/f5324139d64772e2e388cee72d0c28d1975226f2/checkpoints/notified-host-20261021-9c2a25a/plans/windows-default-debug-01.json",
+    "bytes": 5628,
+    "sha256": "5d07afd422d6295d99f7dc9b938aa73cd64714778c81497772911d649369816e"
+  },
+  "source": {
+    "documentary_candidate_commit": "4f2710c7a3db88649c3a495b5d7fe7950633788f",
+    "verified_tree": "9c2a25a4a9750e098e93a6949749ee717640aae8",
+    "patch_bytes": 33335,
+    "patch_sha256": "f3a09f1920180cca73730f29b5c503260e7e54a2d91ff6370f39cc748384b278",
+    "local_recovery_HEAD_is_not_claimed_as_candidate_commit": true
+  },
+  "execution": {
+    "command": "zig build sme-author-live-default-chronology-test -j1 -Doptimize=Debug --summary all",
+    "invocations": 1,
+    "platform": "Windows",
+    "zig_version": "0.16.0",
+    "native_target_from_zig_env": "x86_64-windows.win11_ge...win11_ge-gnu",
+    "optimization": "Debug",
+    "backend": "null_backend",
+    "start_utc": "2026-10-22T06:30:47.663601+00:00",
+    "end_utc": "2026-10-22T06:32:51.913515+00:00",
+    "elapsed_seconds": 124.24741529999301,
+    "deadline_seconds": 900,
+    "exit_code": 0,
+    "timed_out": false,
+    "natural_exit": true,
+    "related_processes_remaining": 0,
+    "plan_environment_variables_removed_in_child_only": [
+      "SME_LIVE_ADMISSION_TAPE",
+      "SME_LIVE_ADMISSION_IDENTITY_JSON",
+      "SME_LIVE_SEMANTIC_MODE",
+      "SME_LIVE_SEMANTIC_DIR",
+      "SME_LIVE_SEMANTIC_WORKLOAD",
+      "SME_LIVE_SEMANTIC_WRITER",
+      "SME_LIVE_SEMANTIC_FAIL_AFTER",
+      "SME_LIVE_SEMANTIC_REQUIRE_CROSS_FRAME",
+      "SME_DEFAULT_CONTROL_DELAY_MS",
+      "SME_DEFAULT_WORKER_DELAY_MS"
+    ],
+    "additional_semantic_or_admission_environment": false,
+    "build_caches_isolated_in_child_environment": true,
+    "seeds_emitted": [
+      "0x53dd971"
+    ]
+  },
+  "tests": {
+    "expected": 12,
+    "total": 12,
+    "passed": 12,
+    "failed": 0,
+    "crashed": 0,
+    "native_default_host_integration_passed": true,
+    "diagnostic_selftests_passed": 11
+  },
+  "native_evidence": {
+    "observed_mode": "notified_v1",
+    "ordinary": true,
+    "mode_evidence": "Original native fixture assertion and observed DEFAULT_HOST_PACING print",
+    "first_play": {
+      "accepted": true,
+      "terminal": "executed",
+      "evidence": "Completed original native receipt assertions"
+    },
+    "pcm": {
+      "captured_frames": 38656,
+      "audible_oracle_frames": 35072,
+      "nonzero_frames": 35058,
+      "ramp_frames": 32,
+      "silence_after_frames": 1888,
+      "all_four_stems": true,
+      "oracle_passed": true,
+      "evidence": "Original bounded PCM oracle and original DEFAULT_HOST_PCM summary"
+    },
+    "stop": {
+      "terminal": "executed",
+      "evidence": "Completed original native receipt and Close assertions"
+    },
+    "close": {
+      "phase": "closed",
+      "worker_joined": true,
+      "sources_opened": 16,
+      "sources_closed": 16,
+      "sources_live": 0,
+      "sample_leases": 0,
+      "live_instances": 0,
+      "evidence": "Completed unmodified original native Close/resource assertions"
+    },
+    "first_fault": null,
+    "first_fault_evidence": "No failure emitted; bounded native health and PCM assertions completed"
+  },
+  "protection": {
+    "protected_file_count": 6945,
+    "unchanged_during_execution": true,
+    "inventory_sha256_before_run": "72395c37b67ca0788d0b0ca61ba6c84c50eeb1c3e2b4dca01a8bbd7f7dcbd811",
+    "inventory_sha256_after_run": "72395c37b67ca0788d0b0ca61ba6c84c50eeb1c3e2b4dca01a8bbd7f7dcbd811",
+    "original_workspace_unchanged": true,
+    "dependency_inventory_unchanged": true
+  },
+  "local_evidence_identities": {
+    "stderr": {
+      "bytes": 609886,
+      "sha256": "ec0a5f682b891010195cc88f953c8519054813fd6777e97fbc5c55e7c510d2db"
+    },
+    "stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "arrival_log": {
+      "bytes": 689967,
+      "sha256": "9862f94db57d9035a25ef653088ff84a292dfdce9033647a4d90405c9501d6a2"
+    },
+    "native_test_binaries": [
+      {
+        "name": "author_live_default_chronology_test.exe",
+        "bytes": 34204672,
+        "sha256": "135e68b3de286303fc0e7bf65e7fbb3a2abcc14f1769d31ceb32270030a45ac4"
+      },
+      {
+        "name": "author_live_default_chronology_test.pdb",
+        "bytes": 30031872,
+        "sha256": "613242f081a0d8882ad385c475e20148335f8f47da80bde63f3f107765cd63a5"
+      }
+    ]
+  },
+  "scope": {
+    "panel": false,
+    "ReleaseSafe": false,
+    "GUI": false,
+    "physical_audio": false,
+    "extra_project_tests": false,
+    "timing_reruns": false,
+    "system_timer_or_security_changes": false,
+    "assertion_or_capacity_changes_outside_delivered_patch": false
+  },
+  "qualification_limits": [
+    "Single finite Windows ordinary notified_v1 acceptance with null backend.",
+    "New mode raw boundaries have not received dedicated full-log parser qualification.",
+    "Notification recording/replay, all histories, physical devices and universal real-time deadlines are not qualified.",
+    "Earlier Windows failures and cloud results remain independent evidence.",
+    "Raw logs, binary files, credentials, local paths and device identifiers remain local; only identities and this sanitized result are published."
+  ]
+}
