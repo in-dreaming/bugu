@@ -1,0 +1,56 @@
+{
+  "schema": "bugu.notified-semantic-v3.focused-result/v1",
+  "status": "COMPILE_FAILED_NATIVE_NOT_STARTED",
+  "source_commit": "5ce09d462892db5b2a867f73efdf7b3bc0e2d0b1",
+  "source_tree": "e4fcf6f4f5de6da90b20b9c4edb6f4a2c9cd7c27",
+  "plan_commit": "78d9afdbb601c00d702d8d95c24d863c57569f8c",
+  "plan_sha256": "b81fb8427d68cb15b6f34c6a9b89f80b0781261e9fc9c23bee7864b3ee342b5d",
+  "environment": "Cloud Linux x86_64; official Zig 0.16.0; Debug -j1; SME_* and PYTHONOPTIMIZE unset; NO_COLOR=1",
+  "execution": {
+    "child_exit": 1,
+    "stop_reason": null,
+    "elapsed_seconds": 61.15495894100059,
+    "source_guard_equal": true,
+    "source_worktree_clean_after": true,
+    "minimum_free_bytes": 27318370304
+  },
+  "summary": {
+    "build_steps_succeeded": 22,
+    "build_steps_total": 25,
+    "build_steps_failed": 1,
+    "tests_passed": 67,
+    "tests_skipped": 1,
+    "runtime_tests_failed": 0,
+    "codec_compilation_errors": 2
+  },
+  "targets": {
+    "format": "19/19 pass",
+    "codec": "compile failed; no codec tests executed",
+    "streaming": "8/8 pass",
+    "cli": "20/20 pass",
+    "semantic_process": "9 pass, 1 intended skip without explicit native mode",
+    "snapshot": "11/11 pass",
+    "production_host_archive": "compile pass",
+    "production_cli_help": "pass"
+  },
+  "failure": {
+    "location": "tools/sme_authoring/core/live_semantic_codec.zig:644:56",
+    "diagnostic": "error union with payload of error set type anyerror not allowed",
+    "cause": "The new roundtrip test instantiates INPUT Decoder.get for the complete Native(ControlEvent) union, including error-valued variants. It must decode only the concrete started variant rather than expand production INPUT support.",
+    "proposed_narrow_repair": "Decode occurrence, tag and concrete started fields; retain EOF, equality and re-encoding assertions. Align unused nominal codec.schema_version with wire version 3."
+  },
+  "inputs": {
+    "before_verified_files": 16,
+    "after_verified_files": 16,
+    "generated_files": 0,
+    "verified_bytes": 12288704
+  },
+  "limitations": [
+    "Whole focused phase failed; 67 passing tests are not overall qualification.",
+    "No native recording, sealed tape, independent replay or negative replay was attempted.",
+    "No claim of runtime cleanup is inferred solely from guard exit; this phase ran unit checks and production compilation.",
+    "Original long >=32768 frame qualification remains required; short 8192 is only a future minimum loop.",
+    "No Windows or physical device test. Source remained frozen."
+  ],
+  "publication": "Sanitized summary only; raw logs, local paths, binary and tape not included."
+}
