@@ -1,0 +1,67 @@
+{
+  "schema": "bugu.notified-semantic-v3.prefix-analysis/v1",
+  "source_tree": "7f466dd56d0f154647c764eab619f5226d3ff45e",
+  "related_failure_commit": "e00efd216e779a43e6084bf1d184bf990c3a81dc",
+  "artifact_sha256": "f0e6610970579b8e9900c7f0f6ee0c9a4d450ad35871457ec40e1ba73196b12b",
+  "method": "Read-only parse complete EVT1 frames from header offset192; check frame lengths and every payload SHA256. Read packet count u16; decode known WorkerEvent.result tag5 under exact v3 schema for error/worked/deferred flags. No native execution.",
+  "complete_framed_prefix": {
+    "bytes": 5963776,
+    "complete_frame_count": 42367,
+    "verified_frame_hashes": 42367,
+    "parsed_bytes": 5963692,
+    "remaining_partial_bytes": 84
+  },
+  "packet_points": [
+    {
+      "role": 0,
+      "family": 11,
+      "points": 33188
+    },
+    {
+      "role": 0,
+      "family": 115,
+      "points": 33188
+    },
+    {
+      "role": 1,
+      "family": 11,
+      "points": 35178
+    },
+    {
+      "role": 1,
+      "family": 115,
+      "points": 35178
+    },
+    {
+      "role": 2,
+      "family": 11,
+      "points": 25843
+    },
+    {
+      "role": 2,
+      "family": 115,
+      "points": 25843
+    }
+  ],
+  "worker_result_prefix": {
+    "worked_false": 313,
+    "deferred_absent": 374,
+    "worked_true": 61
+  },
+  "selected_framed_bytes": {
+    "pcm": 98946,
+    "worker_point_input_plus_reference": 946288,
+    "control_and_worker_event_cut": 967190
+  },
+  "code_review": [
+    "Collector drains one whole record per lane per pass, then encodes/hashes/appends; fixture repeats at most256 passes and does not sleep while progress exists.",
+    "Native point packets retain fixed-width structs and duplicate coordinate in separate INPUT/reference; variable integer encoding occurs only after lane pop.",
+    "Worker still performs up to4 real calls per burst, including complete scans when no job is eligible."
+  ],
+  "limits": [
+    "Incomplete prefix only; pending approximately8MiB of Control/Worker lane data is not represented.",
+    "313 worked=false results have no initial-claim deferral in this prefix, but no global timeline or final idle proportion is inferred.",
+    "Evidence establishes bounded capture backlog overflow, not a unique CPU, disk, scheduler or notification cause.",
+    "No code, capacity, oracle or scheduling changed; no recording retry."
+  ]
+}
