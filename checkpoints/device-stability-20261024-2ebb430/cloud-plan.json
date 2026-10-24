@@ -1,0 +1,82 @@
+{
+  "schema": "bugu.device-stability.cloud-plan/v1",
+  "status": "FROZEN_NOT_RUN",
+  "source_tree": "2ebb430eb44e267d9fd96e22c7f546a71d57d9bf",
+  "source_local_commit": "fdda6fd6ae43d6d7f1ae168d27779392e292a346",
+  "remote_parent": "b5e84b11e18382bb07f1d6c5b8904aedec8772c8",
+  "prerequisite": "Publish/read back this one-line source correction and new same-scope plan after independent review. Preserve prior harness compile failure; the original five-file scope is already published.",
+  "purpose": "Single finite cloud Debug validation of the opt-in safety layer and ordinary notified null-device lifecycle. No system device, Windows or microphone execution.",
+  "parameters": {
+    "REPO": "Exact clean candidate tree with fixed miniaudio/Ogg/Opus pins and16verified authored WAV inputs",
+    "ZIG": "Verified official Zig0.16.0",
+    "RUN_GUARDED": "Original verified guard with SHA below",
+    "OUTPUT": "Fresh nonexistent local guard output directory outside source"
+  },
+  "argv": [
+    "python3",
+    "<RUN_GUARDED>",
+    "--repo",
+    "<REPO>",
+    "--out",
+    "<OUTPUT>",
+    "--seconds",
+    "900",
+    "--",
+    "<ZIG>",
+    "build",
+    "sme-author-live-device-stability-test",
+    "sme-author-live-default-mode-test",
+    "sme-live-semantic-process-test",
+    "sme-author-live-production-check",
+    "-j1",
+    "-Doptimize=Debug",
+    "--summary",
+    "all"
+  ],
+  "runner_sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+  "environment": {
+    "unset_prefixes": [
+      "SME_"
+    ],
+    "unset_exact": [
+      "PYTHONOPTIMIZE"
+    ],
+    "set": {
+      "NO_COLOR": "1",
+      "SME_DEVICE_STABILITY_MODE": "null",
+      "SME_DEVICE_STABILITY_SECONDS": "2",
+      "SME_DEVICE_STABILITY_CYCLES": "2",
+      "SME_DEVICE_STABILITY_GAIN": "0"
+    }
+  },
+  "bounds": {
+    "outer_seconds": 900,
+    "minimum_start_free_bytes": 3355443200,
+    "stop_below_free_bytes": 2281701376,
+    "native": "Two independent real Host cycles; total active Play walltime at least2seconds, not frame-only. Play/Stop/tail/Close each20seconds deadline. OuterTERM10secondgrace thenKILL; no cleanup inferred from termination.",
+    "storage": "Fixed610UI diagnostic rows and scalar callback counters; no PCM retention or whole-history capture.",
+    "callback": "Test-only output zero-init and bounded per-sample sanitize/gain/clamp, no clock reads/allocations/locks/I/O/waits."
+  },
+  "prechecks": [
+    "Exact clean tree, officialZigversion, guardhash and source-manifest file hashes. Preserve existing phase2 ELF/tape untouched.",
+    "Verify16 authored WAV source inputs before and after with prepare_live_fixtures.py --verify-only, each60seconds. No replacement of existing mismatches.",
+    "Ensure no otherSME variables inherited; mode exactlynull, gain exactly0, no physical fallback. Guard output must not preexist."
+  ],
+  "required": [
+    "Twelve named harness tests: explicit null2second2cycle ordinaryHost run; closed config/budgets; final output mute/scale/clamp/nonfinite arithmetic; callbackcounter/discontinuity andcapacity failures; heartbeat meanings; preowner invalidgain and semantic/capture guard rejection; four exact device-helper regressions for disabledbits/fallback initialization/binding/nativecallback error paths.",
+    "Per actual cycle require genuine Play/Stop terminal/ACK, closed/join/destroy, provideropened=closed=16/live0/leases0/instances0 and empty first_error/cleanup_error. Read callback-owned safety stats only after genuine destruction; failedcleanup retains pinned context and is not successful.",
+    "Each cycle pre-safety finite nonzero samples/peak, post-safety zero muted PCM, no nonfinite/clamp/fallback/invalidshape/frame discontinuity/epochchange/internal streamfault. Control observes its existing streamfault counter without extraengine read. Callbackfactcounts andPCM/samplecounts must match.",
+    "Flat actual stderr must include config null/gain0/cycles2, two CLOSED/OUTPUT/NEGOTIATED records, complete active_ns>=2e9, backendnull/stereo, retained diagnostic rowcount consistent with emitted SAMPLE lines, no overflow/write truncation. Values are UI-observed progress/poll gaps, not precise callback jitter/OSxruns/acoustic evidence.",
+    "Default-mode regressions and semantic-process selftests pass with mode unset; external semantic recording/replay integration is intentionally skipped, not counted as new protocol qualification. Production archive compiles with guard/observers stripped.",
+    "Source/fixture postchecks and actual result exit/timeout/process cleanup inspected. Preserve failure if compileerror, runtimefault, deadline, resourceleak or missing evidence."
+  ],
+  "failure_policy": "One invocation on this tree, no timing reroll or altered bounds/assertions. A concrete failure is archived and diagnosed before any corrected-source attempt. Unknown/interrupted remains UNKNOWN.",
+  "following": "Only after this cloud result passes may a separately frozen Windows system-default muted hardware plan be reviewed. Hardware startup is not authorized by this cloud plan.",
+  "limits": [
+    "Stage2 finite optimized Linux long capture/fresh/negatives belong to source8c92/tree675f10d, no inherited qualification for this tree.",
+    "Muted device output cannot establish speakers, hearing, physical volume, acoustic uninterrupted audio or OSunderrun counters.",
+    "Current Host has no pause/resume or device-ID selection. Cycles are Stop/Close/newHost, not transportpause or device switching.",
+    "No source/output injection, buffer expansion, production supply change, main modification, rawlog/audio/ELF/tape upload, OSvolume/deviceconfiguration change."
+  ],
+  "prior_failure": "Original new harness failed compilation because Host.join error set only has CleanupPending, making else unreachable. Zero new harness tests executed. Existing mode3 and semantic9 passed,1 skipped; production compiled. Do not overwrite that result."
+}
