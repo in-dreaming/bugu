@@ -10,6 +10,7 @@ pub const codec = @import("live_semantic_codec.zig");
 pub const format = codec.format;
 pub const mailbox_schedule = @import("live_semantic_mailbox_schedule.zig");
 pub const exclusion_schedule = @import("live_semantic_exclusion_schedule.zig");
+pub const job_gate = @import("live_semantic_job_gate.zig");
 const semantic = codec.semantic;
 const cuts = codec.cuts;
 const stream = codec.stream;
@@ -108,6 +109,8 @@ pub const Driver = struct {
     clock: cuts.OfflineClock = .{},
     publication_calendar: mailbox_schedule.Scheduler = .{},
     exclusion_calendar: exclusion_schedule.Scheduler = .{},
+    job_calendar: job_gate.Gate(codec.JobOperationCursor) = .{},
+    ordered_jobs: bool = false,
     turn: std.atomic.Value(u64) = .init(1),
     failed: std.atomic.Value(bool) = .init(false),
     failure_claimed: std.atomic.Value(bool) = .init(false),
@@ -140,7 +143,7 @@ pub const Driver = struct {
     /// change execution. Complete preflight precedes Session/native owner setup.
     pub fn initWithPolicy(self: *Driver, reader: *const format.Reader, identity: format.Identity, io: std.Io, policy: codec.AdmissionPolicy) !void {
         if (self.address != null) return error.InvalidState;
-        _ = try codec.validateInputsWithPolicy(reader, identity, policy);
+        const preflight = try codec.validateInputsWithPolicy(reader, identity, policy);
         self.io = io;
         self.identity = identity;
         self.launch_descriptor = try codec.readLaunchDescriptor(reader);
@@ -151,6 +154,12 @@ pub const Driver = struct {
         try self.initConsumedReads(reader);
         try self.initPublicationCalendar(reader);
         try self.initExclusionCalendar(reader);
+        self.ordered_jobs = policy == .ordered_job_scans;
+        if (self.ordered_jobs) try self.job_calendar.init(
+            audio.runtime.streaming.release_profile.job_capacity,
+            .{ codec.JobOperationCursor.init(reader, .control), codec.JobOperationCursor.init(reader, .worker) },
+            preflight.job_schedule_operations,
+        );
         self.address = self;
         try self.clock.init(self, onClock);
         try self.session.initReplay(self.config(self.launch_descriptor.pacing));
@@ -183,6 +192,7 @@ pub const Driver = struct {
         self.failed.store(true, .release);
         self.publication_calendar.abort();
         self.exclusion_calendar.abort();
+        self.job_calendar.abort();
         self.clock.abort();
         // Session.poison is idempotent: this path may be reached either from a
         // native invalidation or as the callback of our own failure poisoning.
@@ -192,6 +202,7 @@ pub const Driver = struct {
         if (!self.failure_claimed.swap(true, .acq_rel)) self.failure_value = value;
         self.publication_calendar.abort();
         self.exclusion_calendar.abort();
+        self.job_calendar.abort();
         self.session.poison(); // aborts raw clock before releasing all waiters
         self.failed.store(true, .release);
     }
@@ -775,7 +786,27 @@ pub const Driver = struct {
         const runtime_publication = if (role == .render) codec.runtimePublicationStore(value.site) else null;
         const busy_claim = codec.exclusionClaim(role, value.site);
         const busy_release = codec.exclusionRelease(role, value.site);
+        const job_kind = if (self.ordered_jobs) codec.jobOperationKind(role, value.site) else null;
+        const job_eligible = codec.jobObservedEligibility(value) catch |err| {
+            self.fail(.{ .reason = err, .role = role, .occurrence = self.turn.load(.acquire), .family = .cut_fact });
+            return;
+        };
         var expected_after: ?u64 = null;
+        // The original atomic has already run. Publish only its validated real
+        // completion before waiting for the later global AFTER marker. Otherwise
+        // the other actor could be held at an intervening BEFORE marker forever.
+        if (value.edge == .after) if (job_kind) |kind| {
+            expected_after = self.job_calendar.completed(
+                if (role == .control) .control else .worker,
+                kind,
+                value.index,
+                value.generation,
+                job_eligible,
+            ) catch |err| {
+                self.fail(.{ .reason = err, .role = role, .occurrence = self.turn.load(.acquire), .family = .cut_fact });
+                return;
+            };
+        };
         if (value.edge == .after and (busy_claim or busy_release)) {
             const observed = value.value orelse {
                 self.fail(.{ .reason = error.InvalidOrder, .role = role, .occurrence = self.turn.load(.acquire), .family = .cut_fact });
@@ -836,11 +867,25 @@ pub const Driver = struct {
             self.fail(.{ .reason = error.InvalidOrder, .role = role, .occurrence = occurrence, .family = .cut_fact });
             return;
         };
-        const actual: codec.Cut = .{ .role = role, .site = value.site, .edge = value.edge, .index = value.index, .generation = value.generation, .publication_prefix = if (codec.publicationPrefixPoint(role, value.site, value.edge)) value.value orelse 0 else 0 };
+        const actual: codec.Cut = .{ .role = role, .site = value.site, .edge = value.edge, .index = value.index, .generation = value.generation, .publication_prefix = if (codec.publicationPrefixPoint(role, value.site, value.edge)) value.value orelse 0 else 0, .job_scan_eligible = job_eligible };
         if (!self.checkInput(role, .cut, occurrence, actual)) return;
         if (busy_claim and value.edge == .after and !self.checkInput(role, .exclusion_claim, occurrence, value.value.? == 0)) return;
         self.compare(role, .cut_fact, occurrence, value);
         self.leave(occurrence);
+        // Only the two original non-audio actors participate. Native-attempt
+        // mode keeps its original attempt contract and does not use this gate.
+        // Release BEFORE's global marker before waiting for the model ordinal;
+        // the peer may need an intervening marker to execute its real operation.
+        if (value.edge == .before and job_kind != null) {
+            while (!self.failed.load(.acquire)) {
+                if (self.job_calendar.ready(if (role == .control) .control else .worker, occurrence) catch |err| {
+                    self.fail(.{ .reason = err, .role = role, .occurrence = occurrence, .family = .cut_fact });
+                    return;
+                }) return;
+                self.wait();
+            }
+            return;
+        }
         // Advance the global marker before waiting, so the opposite native
         // actor can reach the exact publication required by this actual load.
         if (role == .control and codec.rawConsumedRead(value.site) and value.edge == .before) self.waitConsumedRead(value, occurrence);
@@ -1313,10 +1358,54 @@ pub const Driver = struct {
             self.report.command_terminal != self.report.command_submitted or
             self.report.terminal_acknowledged != self.report.command_submitted)
             return error.Incomplete;
+        if (self.ordered_jobs) try self.job_calendar.finish();
         self.report.eof = true;
         return self.report;
     }
 };
+/// Deterministic component test facade. A synthetic point-only tape is NOT a
+/// complete Host history and intentionally cannot replace full admission or
+/// native fresh-process qualification. This exposes no production test hook.
+pub const JobObservationRegression = if (@import("builtin").is_test) struct {
+    pub const Progress = struct { marker: u64, job_completed: u64, failed: bool };
+    pub fn initialize(driver: *Driver, reader: *const format.Reader) !void {
+        driver.* = .{};
+        driver.io = std.testing.io;
+        driver.started_at = std.Io.Clock.awake.now(driver.io);
+        inline for (std.meta.fields(format.Role)) |field| {
+            const role: format.Role = @enumFromInt(field.value);
+            driver.lanes[field.value] = .{ .input = codec.InputCursor.init(reader, role), .comparison = .{ .cursor = codec.ComparisonCursor.init(reader, role) } };
+        }
+        const operations = try codec.validateJobSchedule(reader);
+        try driver.job_calendar.init(audio.runtime.streaming.release_profile.job_capacity, .{ codec.JobOperationCursor.init(reader, .control), codec.JobOperationCursor.init(reader, .worker) }, operations);
+        driver.ordered_jobs = true;
+        try driver.publication_calendar.init(0);
+        try driver.publication_calendar.seal();
+        try driver.exclusion_calendar.init(0);
+        try driver.exclusion_calendar.seal();
+        try driver.clock.init(driver, Driver.onClock);
+        try driver.session.initReplay(driver.config(.notified_v1));
+    }
+    pub fn point(driver: *Driver, value: cuts.Point) void {
+        Driver.onPoint(driver, value);
+    }
+    pub fn cancel(driver: *Driver) void {
+        driver.fail(.{ .reason = error.Aborted, .role = .control, .occurrence = driver.turn.load(.acquire) });
+    }
+    pub fn progress(driver: *Driver) Progress {
+        return .{ .marker = driver.turn.load(.acquire), .job_completed = driver.job_calendar.turn.load(.acquire), .failed = driver.failed.load(.acquire) };
+    }
+    /// Called only after both actual test threads have joined.
+    pub fn finish(driver: *Driver) !void {
+        if (driver.failed.load(.acquire)) return error.ReplayMismatch;
+        for (&driver.lanes) |*lane_| {
+            try lane_.input.finish();
+            try lane_.comparison.cursor.finish();
+        }
+        try driver.job_calendar.finish();
+    }
+} else struct {};
+
 // Proposed append to live_semantic_replay.zig after central build freeze.
 // Private driver methods stay private; this test-only facade is absent in production.
 pub const ConsumedPrefixRegression = if (@import("builtin").is_test) struct {

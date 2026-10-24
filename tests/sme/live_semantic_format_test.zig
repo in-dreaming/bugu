@@ -74,17 +74,19 @@ test "live semantic profile has independent fixed identity and separate read cap
     try ui_reference.finish();
 }
 
-test "profile9 v3 explicitly rejects a validly resealed v2 envelope without inferring pacing" {
+test "profile9 v4 rejects resealed v2 and v3 envelopes without inferring missing input" {
     var output: [2048]u8 = undefined;
     const bytes = try corpus(&output);
     try t.expectEqual(@as(u16, 9), f.profile_id);
-    try t.expectEqual(@as(u16, 3), f.wire_version);
+    try t.expectEqual(@as(u16, 4), f.wire_version);
     _ = try f.Reader.preflight(bytes, identity(), valid);
     // This is a framing-only legacy-version specimen, not a converted history.
     // Rehash both envelopes so rejection cannot be attributed to stale digests.
-    std.mem.writeInt(u16, output[10..12], 2, .little);
-    reheader(output[0..bytes.len]);
-    try t.expectError(error.UnsupportedVersion, f.Reader.preflight(bytes, identity(), valid));
+    for ([_]u16{ 2, 3 }) |old_version| {
+        std.mem.writeInt(u16, output[10..12], old_version, .little);
+        reheader(output[0..bytes.len]);
+        try t.expectError(error.UnsupportedVersion, f.Reader.preflight(bytes, identity(), valid));
+    }
 }
 
 test "live semantic bytes are producer owned and native padding is not the wire" {
@@ -488,7 +490,7 @@ test "fourth UI producer must be independently drained and excluded" {
     try t.expect(!capture.lane(.ui).push(1, .input, "late", ""));
 }
 
-test "v1 empty header rejects by version before v3 trailer interpretation" {
+test "v1 empty header rejects by version before v4 trailer interpretation" {
     var bytes: [352]u8 = @splat(0); // The old minimum192+160 byte envelope.
     @memcpy(bytes[0..8], f.magic);
     std.mem.writeInt(u16, bytes[8..10], f.profile_id, .little);

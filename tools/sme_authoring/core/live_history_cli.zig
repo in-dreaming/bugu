@@ -1,5 +1,5 @@
 //! Original UI workload plus immutable-tape replay, without test dependencies.
-//! Profile9/v3 pins launch pacing and finite Play/Stop/Close admission.
+//! Profile9/v4 pins launch pacing, actual job predicates, and finite admission.
 const std = @import("std");
 const live = @import("sme-author-live-owner");
 const recording = live.semantic_recording;
@@ -376,7 +376,7 @@ fn record(allocator: std.mem.Allocator, io: std.Io, opt: Options, launch: live.L
 }
 pub fn run(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, output: *std.Io.Writer) !void {
     if (args.len == 0 or (args.len == 1 and std.mem.eql(u8, args[0], "--help"))) {
-        try output.writeAll("sme-live-history record --bank FILE --state U64 --script JSON --out FILE [--action-cap 256 --file-cap BYTES --capture-cap BYTES --deadline-ms 60000 --frame-limit FRAMES --admission native_attempt|ordered_job_scans --pacing legacy_poll|notified_v1]\nsme-live-history replay --bank FILE --state U64 --tape FILE [--file-cap BYTES --admission native_attempt|ordered_job_scans --pacing legacy_poll|notified_v1]\nFixed supported null-device configuration:48000Hz, stereo,256 frames. One Host per process; replay requires the identical executable and explicit matching pacing (default legacy_poll). Wire v2 needs its original matching tool; this tool accepts v3 only.\n");
+        try output.writeAll("sme-live-history record --bank FILE --state U64 --script JSON --out FILE [--action-cap 256 --file-cap BYTES --capture-cap BYTES --deadline-ms 60000 --frame-limit FRAMES --admission native_attempt|ordered_job_scans --pacing legacy_poll|notified_v1]\nsme-live-history replay --bank FILE --state U64 --tape FILE [--file-cap BYTES --admission native_attempt|ordered_job_scans --pacing legacy_poll|notified_v1]\nFixed supported null-device configuration:48000Hz, stereo,256 frames. One Host per process; replay requires the identical executable and explicit matching pacing (default legacy_poll). Wire v2/v3 need their original matching tools; this tool accepts v4 only.\n");
         return;
     }
     const opt = try options(args);

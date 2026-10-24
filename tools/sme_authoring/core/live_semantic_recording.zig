@@ -264,6 +264,10 @@ pub const Recorder = struct {
             self.fail();
             return;
         };
+        const job_scan_eligible = codec.jobObservedEligibility(value) catch {
+            self.fail();
+            return;
+        };
         const role = codec.wireRole(value.role);
         if (role == .control or role == .worker) self.flushGatePoints(role);
         const points = &self.points[@intFromEnum(role)];
@@ -272,7 +276,7 @@ pub const Recorder = struct {
             self.fail();
             return;
         } else 0;
-        const coordinate: codec.PacketInput = .{ .occurrence = occurrence, .site = value.site, .edge = value.edge, .index = value.index, .generation = value.generation, .publication_prefix = publication_prefix };
+        const coordinate: codec.PacketInput = .{ .occurrence = occurrence, .site = value.site, .edge = value.edge, .index = value.index, .generation = value.generation, .publication_prefix = publication_prefix, .job_scan_eligible = job_scan_eligible };
         points.inputs[points.count] = coordinate;
         points.references[points.count] = .{ .input = coordinate, .value = value.value };
         points.count += 1;

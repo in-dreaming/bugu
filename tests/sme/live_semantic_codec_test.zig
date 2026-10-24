@@ -23,6 +23,11 @@ fn end(value: codec.Cut) codec.Cut {
     result.edge = .after;
     return result;
 }
+fn scanEnd(value: codec.Cut, observed: codec.stream.observation.JobState) codec.Cut {
+    var result = end(value);
+    result.job_scan_eligible = codec.jobObservedEligibility(.{ .role = codec.nativeRole(result.role) catch unreachable, .site = result.site, .edge = .after, .index = result.index, .generation = result.generation, .value = @intFromEnum(observed) }) catch unreachable;
+    return result;
+}
 
 test "production codec roundtrips nonexhaustive identities and rejects malformed primitives" {
     const Id = enum(u64) { _ };
@@ -50,7 +55,9 @@ test "maximum packet expands ordered independent input and reference cursors and
     defer t.allocator.free(references);
     for (inputs, references, 0..) |*input, *reference, i| {
         input.* = .{ .occurrence = i + 1, .site = .service_worker_scan, .edge = if (i % 2 == 0) .before else .after, .index = i / 2, .generation = 0 };
-        reference.* = .{ .input = input.*, .value = if (i % 2 == 0) null else @intFromEnum(codec.stream.observation.JobState.queued) };
+        const observed: ?u64 = if (i % 2 == 0) null else @intFromEnum(codec.stream.observation.JobState.queued);
+        input.job_scan_eligible = try codec.jobObservedEligibility(.{ .role = .worker, .site = input.site, .edge = input.edge, .index = input.index, .generation = input.generation, .value = observed });
+        reference.* = .{ .input = input.*, .value = observed };
     }
     const in_bytes = try t.allocator.alloc(u8, f.max_payload);
     defer t.allocator.free(in_bytes);
@@ -60,8 +67,8 @@ test "maximum packet expands ordered independent input and reference cursors and
     defer t.allocator.free(corpus);
     const input_payload = try codec.encodePointInputs(.worker, inputs, in_bytes);
     const reference_payload = try codec.encodePointReferences(.worker, references, ref_bytes);
-    try t.expectEqual(@as(usize, 4227), input_payload.len);
-    try t.expectEqual(@as(usize, 5251), reference_payload.len);
+    try t.expectEqual(@as(usize, 5251), input_payload.len);
+    try t.expectEqual(@as(usize, 6275), reference_payload.len);
     const reader = try f.Reader.preflight(try frameTape(corpus, input_payload, reference_payload, .worker), identity(), codec.validate);
     var input = codec.InputCursor.init(&reader, .worker);
     var comparison = codec.ComparisonCursor.init(&reader, .worker);
@@ -101,7 +108,7 @@ test "packet readers reject invalid counts enum fields values and trailing paylo
     var in_bytes: [128]u8 = undefined;
     var ref_bytes: [128]u8 = undefined;
     var corpus: [2048]u8 = undefined;
-    const input: codec.PacketInput = .{ .occurrence = 1, .site = .service_worker_scan, .edge = .after, .index = 0, .generation = 0 };
+    const input: codec.PacketInput = .{ .occurrence = 1, .site = .service_worker_scan, .edge = .after, .index = 0, .generation = 0, .job_scan_eligible = false };
     const reference: codec.PacketReference = .{ .input = input, .value = @intFromEnum(codec.stream.observation.JobState.running) };
     const input_payload = try codec.encodePointInputs(.worker, &.{input}, &in_bytes);
     const reference_payload = try codec.encodePointReferences(.worker, &.{reference}, &ref_bytes);
@@ -119,12 +126,12 @@ test "packet readers reject invalid counts enum fields values and trailing paylo
     cursor = codec.InputCursor.init(&reader, .worker);
     try t.expectError(error.InvalidEnum, cursor.next());
     _ = try codec.encodePointInputs(.worker, &.{input}, &in_bytes);
-    ref_bytes[9] = 2;
+    ref_bytes[11] = 2;
     reader = try f.Reader.preflight(try frameTape(&corpus, input_payload, reference_payload, .worker), identity(), codec.validate);
     var comparison = codec.ComparisonCursor.init(&reader, .worker);
     try t.expectError(error.InvalidBoolean, comparison.next());
     _ = try codec.encodePointReferences(.worker, &.{reference}, &ref_bytes);
-    ref_bytes[10] = 2;
+    ref_bytes[12] = 2;
     reader = try f.Reader.preflight(try frameTape(&corpus, input_payload, reference_payload, .worker), identity(), codec.validate);
     comparison = codec.ComparisonCursor.init(&reader, .worker);
     try t.expectError(error.Noncanonical, comparison.next());
@@ -143,17 +150,18 @@ test "same-slot atomic crossings fail in both orders but coarse and different-sl
         .{ codec.cuts.Site.service_slot_guard_render_release, f.Role.render, codec.cuts.Site.service_slot_guard_close, f.Role.control },
     }) |case| {
         const read = point(case[0], case[1], .before, 7, 0);
+        const read_end = if (codec.jobOperationKind(read.role, read.site) == .scan) scanEnd(read, .free) else end(read);
         const publication = point(case[2], case[3], .before, 7, 12);
         var intervals: codec.ScanIntervals = .{};
         try intervals.point(read);
         try t.expectError(error.CrossedScan, intervals.point(publication));
         try t.expectError(error.Incomplete, intervals.finish());
         try t.expectError(error.InvalidOrder, intervals.point(read));
-        var wrong = end(read);
+        var wrong = read_end;
         wrong.generation += 1;
         try t.expectError(error.InvalidOrder, intervals.point(wrong));
-        try intervals.point(end(read));
-        try t.expectError(error.InvalidOrder, intervals.point(end(read)));
+        try intervals.point(read_end);
+        try t.expectError(error.InvalidOrder, intervals.point(read_end));
         try intervals.finish();
         intervals = .{};
         try intervals.point(publication);
@@ -165,7 +173,7 @@ test "same-slot atomic crossings fail in both orders but coarse and different-sl
         other_slot.index += 1;
         try intervals.point(read);
         try intervals.point(other_slot);
-        try intervals.point(end(read));
+        try intervals.point(read_end);
         try intervals.point(end(other_slot));
         try intervals.finish();
     }
@@ -196,7 +204,7 @@ test "finite Service grammar requires complete ordered slot reads and consumed g
         const read = point(.service_worker_scan, .worker, .before, i, 0);
         try grammar.point(read);
         try t.expectError(error.InvalidOrder, grammar.point(read));
-        try grammar.point(end(read));
+        try grammar.point(scanEnd(read, .free));
     }
     try grammar.boundary(after);
     try grammar.finish();
@@ -272,7 +280,7 @@ test "single strict-attempt admission counts unresolved job reads but never weak
                 try intervals.point(read);
                 try intervals.point(publication);
             }
-            try intervals.point(end(read));
+            try intervals.point(scanEnd(read, .free));
             try intervals.point(end(publication));
             try intervals.finish();
             try t.expectEqual(@as(u64, 1), intervals.unresolved_scalar_overlaps);
@@ -832,8 +840,8 @@ fn launchDescriptorFixture() codec.LaunchDescriptor {
     return .{ .document_id = uiIdentity().document_id, .revision = uiIdentity().revision, .draft_hash = uiIdentity().draft_hash, .state = uiIdentity().state, .device = .{ .backend = .null_backend } };
 }
 
-test "v3 launch pacing roundtrips both canonical INPUT and independent started reference" {
-    try t.expectEqual(@as(u16, 3), codec.schema_version);
+test "v4 launch pacing roundtrips both canonical INPUT and independent started reference" {
+    try t.expectEqual(@as(u16, 4), codec.schema_version);
     try t.expectEqual(f.wire_version, codec.schema_version);
     try t.expectEqual(codec.semantic.PacingMode.legacy_poll, launchDescriptorFixture().pacing);
     inline for (.{ codec.semantic.PacingMode.legacy_poll, codec.semantic.PacingMode.notified_v1 }) |pacing| {
@@ -2121,15 +2129,18 @@ test "initial entry raw consumed calendar keeps monotonic generation scoped coor
 }
 
 fn admissionPoint(tape: *UiSchemaTape, value: codec.Cut) !void {
-    try tape.event(value.role, .cut_fact, @as(codec.cuts.Point, .{ .role = try codec.nativeRole(value.role), .site = value.site, .edge = value.edge, .index = value.index, .generation = value.generation, .value = if (value.edge == .after) 0 else null }));
-    try tape.append(value.role, .cut, .input, @as(codec.Native(codec.Cut), .{ .occurrence = tape.occurrence, .value = value }));
+    const observed: codec.cuts.Point = .{ .role = try codec.nativeRole(value.role), .site = value.site, .edge = value.edge, .index = value.index, .generation = value.generation, .value = if (value.edge == .after) 0 else null };
+    var input = value;
+    input.job_scan_eligible = try codec.jobObservedEligibility(observed);
+    try tape.event(value.role, .cut_fact, observed);
+    try tape.append(value.role, .cut, .input, @as(codec.Native(codec.Cut), .{ .occurrence = tape.occurrence, .value = input }));
 }
 fn admissionScan(tape: *UiSchemaTape, role: f.Role, site: codec.cuts.Boundary, edge: codec.cuts.Edge, jobs: u64) !void {
     try tape.event(role, .boundary_fact, @as(codec.cuts.BoundaryPoint, .{ .role = try codec.nativeRole(role), .site = site, .edge = edge, .index = jobs }));
     try tape.append(role, .boundary, .input, @as(codec.Native(codec.Boundary), .{ .occurrence = tape.occurrence, .value = .{ .role = role, .site = site, .edge = edge, .index = jobs, .generation = 0 } }));
 }
 
-test "ordered job scans reject both predicate crossings while native attempt remains the default" {
+test "native attempt retains crossing diagnostics while strict rejects incomplete job histories" {
     inline for (.{
         .{ codec.cuts.Site.service_worker_scan, f.Role.worker, codec.cuts.Site.service_job_queued, f.Role.control, codec.cuts.Boundary.service_worker_scan },
         .{ codec.cuts.Site.service_acceptance_scan, f.Role.control, codec.cuts.Site.service_worker_completed, f.Role.worker, codec.cuts.Boundary.service_acceptance_scan },
@@ -2173,12 +2184,14 @@ test "ordered job scans reject both predicate crossings while native attempt rem
                 const explicit_attempt = try codec.validateInputsWithPolicy(&reader, contract, .native_attempt);
                 try t.expectEqualDeep(compatibility, explicit_attempt);
                 try t.expectEqual(@as(u64, if (shape == .overlap) 1 else 0), compatibility.unresolved_scalar_overlaps);
-                if (shape == .overlap) {
-                    try t.expectError(error.CrossedScan, codec.validateInputsWithPolicy(&reader, contract, .ordered_job_scans));
-                } else {
-                    const ordered = try codec.validateInputsWithPolicy(&reader, contract, .ordered_job_scans);
-                    try t.expectEqualDeep(compatibility, ordered);
-                }
+                try t.expectEqual(@as(u64, 0), compatibility.job_schedule_operations);
+                // These old scalar-conflict fixtures intentionally omit the
+                // rest of the job lifecycle. A completed store has no queued
+                // predecessor; a lone queued store cannot finish free. A
+                // false scan strictly after queuing is itself impossible.
+                const impossible = case[2] == .service_worker_completed or shape == .different_slot or
+                    (shape == .serial and publication_first);
+                try t.expectError(if (impossible) error.ImpossibleSchedule else error.Incomplete, codec.validateInputsWithPolicy(&reader, contract, .ordered_job_scans));
             }
         }
     }
@@ -2197,7 +2210,7 @@ fn admissionHash(hex: []const u8) ![32]u8 {
     return hash;
 }
 
-test "external original identity tape is rejected by ordered admission before Driver owners" {
+test "external original wire3 identity tape is rejected before Driver owners" {
     const tape_path = try admissionEnvironment("SME_LIVE_ADMISSION_TAPE");
     defer if (tape_path) |value| t.allocator.free(value);
     const identity_path = try admissionEnvironment("SME_LIVE_ADMISSION_IDENTITY_JSON");
@@ -2215,20 +2228,286 @@ test "external original identity tape is rejected by ordered admission before Dr
     const bytes = try std.Io.Dir.cwd().readFileAlloc(t.io, tape_path.?, t.allocator, .limited(f.max_file_bytes + 1));
     defer t.allocator.free(bytes);
     if (bytes.len > f.max_file_bytes) return error.AdmissionTapeTooLarge;
-    const reader = try f.Reader.preflight(bytes, contract, codec.validate);
-    const native = try codec.validateInputsWithPolicy(&reader, contract, .native_attempt);
-    try t.expectEqual(@as(u64, 1), native.unresolved_scalar_overlaps);
-    try t.expectEqualDeep(native, try codec.validateInputs(&reader, contract));
-    try t.expectError(error.CrossedScan, codec.validateInputsWithPolicy(&reader, contract, .ordered_job_scans));
-    const driver = try t.allocator.create(live.semantic_replay.Driver);
-    defer t.allocator.destroy(driver);
-    // initWithPolicy checks address, then complete policy preflight before
-    // touching any execution state. Initialize precisely that pre-owner state;
-    // avoid a multi-megabyte default aggregate temporary on the test stack.
-    driver.address = null;
-    driver.session = .{};
-    driver.running = false;
-    try t.expectError(error.CrossedScan, driver.initWithPolicy(&reader, contract, t.io, .ordered_job_scans));
-    try t.expect(driver.address == null and driver.session.address == null and driver.session.host == null and !driver.session.used and !driver.running);
-    std.debug.print("ADMISSION_ORIGINAL_TAPE native_unresolved={d} ordered=CrossedScan driver_address_null=true session_uninitialized=true running=false owners_created=false\n", .{native.unresolved_scalar_overlaps});
+    try t.expect(bytes.len >= f.header_size);
+    try t.expectEqual(@as(u16, 3), std.mem.readInt(u16, bytes[10..12], .little));
+    try t.expectError(error.UnsupportedVersion, f.Reader.preflight(bytes, contract, codec.validate));
+    // No Reader exists, so neither policy can reach Driver owner effects.
+    // The v3 ELF and its historical admission oracle remain original evidence.
+    std.debug.print("ADMISSION_ORIGINAL_TAPE wire=3 reader=UnsupportedVersion owners_created=false\n", .{});
+}
+
+test "wire4 job eligibility comes from each actual native state and only scan AFTER" {
+    inline for (.{ f.Role.control, f.Role.worker }) |role| {
+        const site: codec.cuts.Site = if (role == .worker) .service_worker_scan else .service_acceptance_scan;
+        var native: codec.cuts.Point = .{ .role = try codec.nativeRole(role), .site = site, .edge = .before, .index = 0 };
+        try t.expectEqual(@as(?bool, null), try codec.jobObservedEligibility(native));
+        try t.expect(!codec.jobObservationPoint(role, site, .before));
+        native.value = 0;
+        try t.expectError(error.Noncanonical, codec.jobObservedEligibility(native));
+        native.edge = .after;
+        try t.expect(codec.jobObservationPoint(role, site, .after));
+        for (std.enums.values(codec.stream.observation.JobState)) |state| {
+            native.value = @intFromEnum(state);
+            const expected = state == (if (role == .worker) codec.stream.observation.JobState.queued else .completed);
+            try t.expectEqual(@as(?bool, expected), try codec.jobObservedEligibility(native));
+        }
+        native.value = null;
+        try t.expectError(error.Noncanonical, codec.jobObservedEligibility(native));
+        native.value = 99;
+        try t.expectError(error.InvalidEnum, codec.jobObservedEligibility(native));
+        native.role = if (role == .worker) .control else .worker;
+        try t.expectError(error.UnsupportedValue, codec.jobObservedEligibility(native));
+    }
+    try t.expectEqual(@as(?bool, null), try codec.jobObservedEligibility(.{ .role = .control, .site = .service_job_queued, .edge = .after, .value = 1 }));
+}
+
+test "wire4 cut and packet eligibility presence value and location are canonical" {
+    var bytes: [256]u8 = undefined;
+    inline for (.{ f.Role.control, f.Role.worker }) |role| {
+        const site: codec.cuts.Site = if (role == .worker) .service_worker_scan else .service_acceptance_scan;
+        for ([_]bool{ false, true }) |eligible| {
+            var value: codec.Native(codec.Cut) = .{ .occurrence = 2, .value = .{ .role = role, .site = site, .edge = .after, .index = 0, .generation = 0, .job_scan_eligible = eligible } };
+            var encoded = try codec.encode(value, .input, &bytes);
+            const record: f.InputRecord = .{ .role = role, .ordinal = 1, .family = @intFromEnum(codec.Family.cut), .bytes = encoded };
+            try t.expectEqualDeep(value, try codec.decodeInput(codec.Cut, record, .cut));
+            bytes[encoded.len - 1] = 2;
+            try t.expectError(error.InvalidBoolean, codec.decodeInput(codec.Cut, record, .cut));
+            value.value.job_scan_eligible = null;
+            encoded = try codec.encode(value, .input, &bytes);
+            try t.expectError(error.Noncanonical, codec.decodeInput(codec.Cut, .{ .role = role, .ordinal = 1, .family = @intFromEnum(codec.Family.cut), .bytes = encoded }, .cut));
+            value.value.job_scan_eligible = eligible;
+            value.value.edge = .before;
+            encoded = try codec.encode(value, .input, &bytes);
+            try t.expectError(error.Noncanonical, codec.decodeInput(codec.Cut, .{ .role = role, .ordinal = 1, .family = @intFromEnum(codec.Family.cut), .bytes = encoded }, .cut));
+            const input: codec.PacketInput = .{ .occurrence = 2, .site = site, .edge = .after, .index = 0, .generation = 0, .job_scan_eligible = eligible };
+            const raw_state: codec.stream.observation.JobState = if (!eligible) .free else if (role == .worker) .queued else .completed;
+            var reference_bytes: [256]u8 = undefined;
+            var corpus: [2048]u8 = undefined;
+            const packet = try codec.encodePointInputs(role, &.{input}, &bytes);
+            const reference = try codec.encodePointReferences(role, &.{.{ .input = input, .value = @intFromEnum(raw_state) }}, &reference_bytes);
+            var reader = try f.Reader.preflight(try frameTape(&corpus, packet, reference, role), identity(), codec.validate);
+            var cursor = codec.InputCursor.init(&reader, role);
+            _ = try cursor.next();
+            try t.expectEqual(@as(?bool, eligible), (try codec.decodeInput(codec.Cut, (try cursor.next()).?, .cut)).value.job_scan_eligible);
+            var comparison = codec.ComparisonCursor.init(&reader, role);
+            try t.expectEqual(@as(?u64, @intFromBool(eligible)), (try codec.decode(codec.Native(codec.cuts.Point), (try comparison.next()).?.bytes)).value.value);
+            for ([_][2]u8{ .{ 2, 0 }, .{ 1, 2 }, .{ 0, 1 }, .{ 0, 0 } }, 0..) |invalid, i| {
+                bytes[packet.len - 2] = invalid[0];
+                bytes[packet.len - 1] = invalid[1];
+                reader = try f.Reader.preflight(try frameTape(&corpus, packet, reference, role), identity(), codec.validate);
+                cursor = codec.InputCursor.init(&reader, role);
+                try t.expectError(if (i < 2) error.InvalidBoolean else error.Noncanonical, cursor.next());
+            }
+            var misplaced = input;
+            misplaced.edge = .before;
+            try t.expectError(error.Noncanonical, codec.encodePointInputs(role, &.{misplaced}, &bytes));
+            misplaced.edge = .after;
+            misplaced.site = .ring_produced;
+            try t.expectError(error.Noncanonical, codec.encodePointInputs(role, &.{misplaced}, &bytes));
+            try t.expectError(error.UnsupportedValue, codec.encodePointInputs(if (role == .worker) .control else .worker, &.{input}, &bytes));
+            _ = try codec.encodePointInputs(role, &.{input}, &bytes);
+            var mismatched = input;
+            mismatched.job_scan_eligible = !eligible;
+            const mismatched_reference = try codec.encodePointReferences(role, &.{.{ .input = mismatched, .value = @intFromEnum(raw_state) }}, &reference_bytes);
+            reader = try f.Reader.preflight(try frameTape(&corpus, packet, mismatched_reference, role), identity(), codec.validate);
+            comparison = codec.ComparisonCursor.init(&reader, role);
+            try t.expectError(error.InvalidOrder, comparison.next());
+        }
+    }
+}
+
+fn jobPair(role: f.Role, site: codec.cuts.Site, before: u64, after: u64, index: u64, generation: u64, observed: ?codec.stream.observation.JobState) [2]codec.PacketInput {
+    const actual: codec.cuts.Point = .{ .role = codec.nativeRole(role) catch unreachable, .site = site, .edge = .after, .index = index, .generation = generation, .value = if (observed) |state| @intFromEnum(state) else null };
+    return .{
+        .{ .occurrence = before, .site = site, .edge = .before, .index = index, .generation = generation },
+        .{ .occurrence = after, .site = site, .edge = .after, .index = index, .generation = generation, .job_scan_eligible = codec.jobObservedEligibility(actual) catch unreachable },
+    };
+}
+fn joinJobPairs(comptime count: usize, pairs: [count][2]codec.PacketInput) [2 * count]codec.PacketInput {
+    var result: [2 * count]codec.PacketInput = undefined;
+    for (pairs, 0..) |pair, i| @memcpy(result[i * 2 ..][0..2], &pair);
+    return result;
+}
+fn jobInputReader(out: []u8, control: []const codec.PacketInput, worker: []const codec.PacketInput) !f.Reader {
+    var writer = try f.Writer.init(out, identity(), codec.validate);
+    var scratch: [4096]u8 = undefined;
+    var counts: [f.role_count]u64 = @splat(0);
+    for ([_][]const codec.PacketInput{ control, worker }, 0..) |values, i| {
+        if (values.len == 0) continue;
+        const role: f.Role = @enumFromInt(i);
+        try writer.append(role, 1, @intFromEnum(codec.Family.point_packet_input), .input, try codec.encodePointInputs(role, values, &scratch));
+        counts[i] = 1;
+    }
+    // Intentionally invalid comparison data proves the planner cannot read
+    // reference payloads. Full admission separately rejects such a history.
+    counts[0] += 1;
+    try writer.append(.control, counts[0], @intFromEnum(codec.Family.pcm), .reference, &.{255});
+    const tape = try writer.sealFraming(.{ .healthy = true, .closed_roles = @splat(true), .role_counts = counts });
+    return f.Reader.preflight(tape, identity(), codec.validate);
+}
+
+test "job operation cursors pair both roles using INPUT only and reject mismatched brackets" {
+    var corpus: [8192]u8 = undefined;
+    const queued = jobPair(.control, .service_job_queued, 1, 4, 0, 7, null);
+    const read = jobPair(.worker, .service_worker_scan, 2, 3, 0, 0, .queued);
+    var reader = try jobInputReader(&corpus, &queued, &read);
+    var control = codec.JobOperationCursor.init(&reader, .control);
+    var worker = codec.JobOperationCursor.init(&reader, .worker);
+    try t.expectEqualDeep(codec.job_schedule.Operation{ .role = .control, .kind = .queued, .before = 1, .after = 4, .index = 0, .generation = 7 }, (try control.next()).?);
+    try t.expectEqualDeep(codec.job_schedule.Operation{ .role = .worker, .kind = .scan, .before = 2, .after = 3, .index = 0, .generation = 0, .eligible = true }, (try worker.next()).?);
+    try t.expectEqual(@as(?codec.job_schedule.Operation, null), try control.next());
+    try t.expectEqual(@as(?codec.job_schedule.Operation, null), try worker.next());
+    var invalid_role = codec.JobOperationCursor.init(&reader, .render);
+    try t.expectError(error.UnsupportedValue, invalid_role.next());
+    for (0..4) |mutation| {
+        var invalid = queued;
+        switch (mutation) {
+            0 => invalid[1].site = .service_job_free,
+            1 => invalid[1].index = 1,
+            2 => invalid[1].generation = 8,
+            3 => invalid[1].edge = .before,
+            else => unreachable,
+        }
+        reader = try jobInputReader(&corpus, &invalid, &.{});
+        control = codec.JobOperationCursor.init(&reader, .control);
+        try t.expectError(error.InvalidOrder, control.next());
+    }
+    reader = try jobInputReader(&corpus, queued[0..1], &.{});
+    control = codec.JobOperationCursor.init(&reader, .control);
+    try t.expectError(error.Incomplete, control.next());
+    reader = try jobInputReader(&corpus, queued[1..2], &.{});
+    control = codec.JobOperationCursor.init(&reader, .control);
+    try t.expectError(error.InvalidOrder, control.next());
+}
+
+test "INPUT planner admits complete crossed true and false scans for both predicates" {
+    var corpus: [8192]u8 = undefined;
+    for ([_]bool{ false, true }) |worker_eligible| {
+        for ([_]bool{ false, true }) |control_eligible| {
+            const control = joinJobPairs(3, .{
+                jobPair(.control, .service_job_queued, 1, 4, 0, 7, null),
+                jobPair(.control, .service_acceptance_scan, 8, 11, 0, 0, if (control_eligible) .completed else .running),
+                jobPair(.control, .service_job_free, 12, 13, 0, 7, null),
+            });
+            const worker = joinJobPairs(3, .{
+                jobPair(.worker, .service_worker_scan, 2, 3, 0, 0, if (worker_eligible) .queued else .free),
+                jobPair(.worker, .service_worker_running, 5, 6, 0, 7, null),
+                jobPair(.worker, .service_worker_completed, 7, 10, 0, 7, null),
+            });
+            const reader = try jobInputReader(&corpus, &control, &worker);
+            try t.expectEqual(@as(u64, 6), try codec.validateJobSchedule(&reader));
+        }
+    }
+}
+
+test "INPUT planner rejects impossible predicates transitions generations bounds and final live slots" {
+    var corpus: [8192]u8 = undefined;
+    const queued = jobPair(.control, .service_job_queued, 1, 2, 0, 7, null);
+    const running = jobPair(.worker, .service_worker_running, 3, 4, 0, 7, null);
+    const completed = jobPair(.worker, .service_worker_completed, 5, 6, 0, 7, null);
+    const freed = jobPair(.control, .service_job_free, 7, 8, 0, 7, null);
+    var reader = try jobInputReader(&corpus, &joinJobPairs(2, .{ queued, freed }), &joinJobPairs(2, .{ running, completed }));
+    try t.expectEqual(@as(u64, 4), try codec.validateJobSchedule(&reader));
+    reader = try jobInputReader(&corpus, &queued, &.{});
+    try t.expectError(error.Incomplete, codec.validateJobSchedule(&reader));
+    reader = try jobInputReader(&corpus, &.{}, &completed);
+    try t.expectError(error.ImpossibleSchedule, codec.validateJobSchedule(&reader));
+    const false_after_queue = jobPair(.worker, .service_worker_scan, 3, 4, 0, 0, .free);
+    reader = try jobInputReader(&corpus, &queued, &false_after_queue);
+    try t.expectError(error.ImpossibleSchedule, codec.validateJobSchedule(&reader));
+    const true_initial = jobPair(.worker, .service_worker_scan, 1, 2, 0, 0, .queued);
+    reader = try jobInputReader(&corpus, &.{}, &true_initial);
+    try t.expectError(error.ImpossibleSchedule, codec.validateJobSchedule(&reader));
+    var wrong_generation = running;
+    for (&wrong_generation) |*value| value.generation = 8;
+    reader = try jobInputReader(&corpus, &joinJobPairs(2, .{ queued, freed }), &joinJobPairs(2, .{ wrong_generation, completed }));
+    try t.expectError(error.ImpossibleSchedule, codec.validateJobSchedule(&reader));
+    for ([_]u64{ 0, std.math.maxInt(u64) }) |generation| {
+        const invalid = jobPair(.control, .service_job_queued, 1, 2, 0, generation, null);
+        reader = try jobInputReader(&corpus, &invalid, &.{});
+        try t.expectError(error.InvalidGeneration, codec.validateJobSchedule(&reader));
+    }
+    const invalid_scan = jobPair(.worker, .service_worker_scan, 1, 2, 48, 0, .free);
+    reader = try jobInputReader(&corpus, &.{}, &invalid_scan);
+    try t.expectError(error.InvalidSlot, codec.validateJobSchedule(&reader));
+    const invalid_store = jobPair(.control, .service_job_queued, 1, 2, 48, 7, null);
+    reader = try jobInputReader(&corpus, &invalid_store, &.{});
+    try t.expectError(error.InvalidSlot, codec.validateJobSchedule(&reader));
+    const reused = jobPair(.control, .service_job_queued, 9, 10, 0, 7, null);
+    reader = try jobInputReader(&corpus, &joinJobPairs(3, .{ queued, freed, reused }), &joinJobPairs(2, .{ running, completed }));
+    try t.expectError(error.InvalidGeneration, codec.validateJobSchedule(&reader));
+}
+
+fn jobAdmissionPoint(tape: *UiSchemaTape, role: f.Role, site: codec.cuts.Site, edge: codec.cuts.Edge, index: u64, generation: u64, state: ?codec.stream.observation.JobState) !void {
+    return jobAdmissionPointMutation(tape, role, site, edge, index, generation, state, 0);
+}
+fn jobAdmissionPointMutation(tape: *UiSchemaTape, role: f.Role, site: codec.cuts.Site, edge: codec.cuts.Edge, index: u64, generation: u64, state: ?codec.stream.observation.JobState, mutation: u8) !void {
+    var native: codec.cuts.Point = .{ .role = try codec.nativeRole(role), .site = site, .edge = edge, .index = index, .generation = generation, .value = if (state) |value| @intFromEnum(value) else null };
+    const eligible = try codec.jobObservedEligibility(native);
+    // The fixture's reference follows production's independent normalization;
+    // the INPUT boolean came from the supplied raw state, not this reference.
+    if (eligible) |value| native.value = @intFromBool(value);
+    if (mutation == 2) native.value = @intFromBool(!eligible.?);
+    try tape.event(role, .cut_fact, native);
+    try tape.append(role, .cut, .input, @as(codec.Native(codec.Cut), .{ .occurrence = tape.occurrence, .value = .{ .role = role, .site = site, .edge = edge, .index = index, .generation = generation, .job_scan_eligible = if (mutation == 1) !eligible.? else eligible } }));
+}
+
+test "strict full admission proves crossed job scans only after all finite validations" {
+    for ([_]bool{ false, true }) |eligible| {
+        for ([_]bool{ false, true }) |release_final| {
+            for ([_]u8{ 0, 1, 2 }) |mutation| {
+                if (!release_final and mutation != 0) continue;
+                var output: [131072]u8 = undefined;
+                const contract = try uiSchemaIdentity();
+                var tape: UiSchemaTape = .{ .writer = try f.Writer.init(&output, contract, codec.validate) };
+                try tape.start();
+                const jobs = (codec.ServiceScanGrammar{}).jobs;
+                try admissionScan(&tape, .worker, .service_worker_scan, .before, jobs);
+                try jobAdmissionPoint(&tape, .control, .service_job_queued, .before, 0, 7, .queued);
+                try jobAdmissionPoint(&tape, .worker, .service_worker_scan, .before, 0, 0, null);
+                try jobAdmissionPoint(&tape, .control, .service_job_queued, .after, 0, 7, .queued);
+                try jobAdmissionPointMutation(&tape, .worker, .service_worker_scan, .after, 0, 0, if (eligible) .queued else .free, mutation);
+                for (1..jobs) |slot| {
+                    try jobAdmissionPoint(&tape, .worker, .service_worker_scan, .before, slot, 0, null);
+                    try jobAdmissionPoint(&tape, .worker, .service_worker_scan, .after, slot, 0, .free);
+                }
+                try admissionScan(&tape, .worker, .service_worker_scan, .after, jobs);
+                try jobAdmissionPoint(&tape, .worker, .service_worker_running, .before, 0, 7, .running);
+                try jobAdmissionPoint(&tape, .worker, .service_worker_running, .after, 0, 7, .running);
+                try admissionScan(&tape, .control, .service_acceptance_scan, .before, jobs);
+                try jobAdmissionPoint(&tape, .worker, .service_worker_completed, .before, 0, 7, .completed);
+                try jobAdmissionPoint(&tape, .control, .service_acceptance_scan, .before, 0, 0, null);
+                try jobAdmissionPoint(&tape, .worker, .service_worker_completed, .after, 0, 7, .completed);
+                try jobAdmissionPoint(&tape, .control, .service_acceptance_scan, .after, 0, 0, if (eligible) .completed else .running);
+                for (1..jobs) |slot| {
+                    try jobAdmissionPoint(&tape, .control, .service_acceptance_scan, .before, slot, 0, null);
+                    try jobAdmissionPoint(&tape, .control, .service_acceptance_scan, .after, slot, 0, .free);
+                }
+                try admissionScan(&tape, .control, .service_acceptance_scan, .after, jobs);
+                if (release_final) {
+                    try jobAdmissionPoint(&tape, .control, .service_job_free, .before, 0, 7, .free);
+                    try jobAdmissionPoint(&tape, .control, .service_job_free, .after, 0, 7, .free);
+                }
+                try tape.pair(1, .{ .request_close = uiIdentity().epoch }, .{ .request_close = {} });
+                try tape.closeControl();
+                const reader = try f.Reader.preflight(try tape.finish(), contract, codec.validate);
+                if (mutation != 0) {
+                    try t.expectError(error.InvalidOrder, codec.validateInputsWithPolicy(&reader, contract, .native_attempt));
+                    try t.expectError(error.InvalidOrder, codec.validateInputsWithPolicy(&reader, contract, .ordered_job_scans));
+                    continue;
+                }
+                var attempt = try codec.validateInputsWithPolicy(&reader, contract, .native_attempt);
+                try t.expectEqual(@as(u64, 2), attempt.unresolved_scalar_overlaps);
+                try t.expectEqual(@as(u64, 0), attempt.job_schedule_operations);
+                if (release_final) {
+                    const strict = try codec.validateInputsWithPolicy(&reader, contract, .ordered_job_scans);
+                    try t.expectEqual(@as(u64, 2 * jobs + 4), strict.job_schedule_operations);
+                    try t.expectEqual(@as(u64, 0), strict.unresolved_scalar_overlaps);
+                    attempt.unresolved_scalar_overlaps = 0;
+                    attempt.job_schedule_operations = 2 * jobs + 4;
+                    try t.expectEqualDeep(attempt, strict);
+                } else try t.expectError(error.Incomplete, codec.validateInputsWithPolicy(&reader, contract, .ordered_job_scans));
+            }
+        }
+    }
 }

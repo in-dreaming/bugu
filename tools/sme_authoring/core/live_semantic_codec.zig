@@ -9,8 +9,9 @@ pub const cuts = audio.runtime.live_semantic;
 pub const stream = audio.runtime.streaming.stream;
 pub const source = @import("sme-author-preview-v1").source;
 pub const payload_overlap = @import("live_semantic_payload_overlap.zig");
-pub const Error = format.Error || payload_overlap.Error || error{ UnsupportedValue, BorrowedValue, InvalidEnum, InvalidBoolean, ErrorInput, CrossedScan };
-pub const schema_version: u16 = 3;
+pub const job_schedule = @import("live_semantic_job_schedule.zig");
+pub const Error = format.Error || payload_overlap.Error || job_schedule.Error || error{ UnsupportedValue, BorrowedValue, InvalidEnum, InvalidBoolean, ErrorInput, CrossedScan };
+pub const schema_version: u16 = 4;
 pub const Family = enum(u16) {
     cut = 1,
     boundary = 2,
@@ -86,7 +87,55 @@ pub fn eventTag(value: anytype) u16 {
 /// Replay orders actual operations only:
 /// it never assigns a recorded prefix to an engine counter. Zero is a real
 /// acquired prefix, not an absent value. Only supported AFTER points carry it.
-pub const Cut = struct { role: format.Role, site: cuts.Site, edge: cuts.Edge, index: u64, generation: u64, publication_prefix: u64 = 0 };
+/// The distinct optional job boolean is the real AFTER-load eligibility,
+/// never a selected job, state assignment, or replacement return value.
+pub const Cut = struct { role: format.Role, site: cuts.Site, edge: cuts.Edge, index: u64, generation: u64, publication_prefix: u64 = 0, job_scan_eligible: ?bool = null };
+/// Only the two actual selector loads carry this AFTER-only scheduling input.
+/// It never supplies an engine return value or selects a descriptor.
+pub fn jobObservationPoint(role: format.Role, site: cuts.Site, edge: cuts.Edge) bool {
+    return edge == .after and ((role == .worker and site == .service_worker_scan) or
+        (role == .control and site == .service_acceptance_scan));
+}
+pub fn jobOperationKind(role: format.Role, site: cuts.Site) ?job_schedule.Kind {
+    return switch (site) {
+        .service_worker_scan => if (role == .worker) .scan else null,
+        .service_acceptance_scan => if (role == .control) .scan else null,
+        .service_job_queued => if (role == .control) .queued else null,
+        .service_worker_running => if (role == .worker) .running else null,
+        .service_worker_completed => if (role == .worker) .completed else null,
+        .service_job_free => if (role == .control) .free else null,
+        else => null,
+    };
+}
+fn validateJobRole(role: format.Role, site: cuts.Site) Error!void {
+    switch (site) {
+        .service_worker_scan,
+        .service_acceptance_scan,
+        .service_job_queued,
+        .service_worker_running,
+        .service_worker_completed,
+        .service_job_free,
+        => if (jobOperationKind(role, site) == null) return error.UnsupportedValue,
+        else => {},
+    }
+}
+fn validateJobInput(role: format.Role, site: cuts.Site, edge: cuts.Edge, eligible: ?bool) Error!void {
+    try validateJobRole(role, site);
+    if (jobObservationPoint(role, site, edge) != (eligible != null)) return error.Noncanonical;
+}
+/// Derive only from the Point already delivered by the real load callback.
+/// Before carries no observed value; an invalid native state is not false.
+pub fn jobObservedEligibility(value: cuts.Point) Error!?bool {
+    const role = wireRole(value.role);
+    try validateJobRole(role, value.site);
+    if (value.site != .service_worker_scan and value.site != .service_acceptance_scan) return null;
+    if (value.edge == .before) {
+        if (value.value != null) return error.Noncanonical;
+        return null;
+    }
+    const state = std.enums.fromInt(stream.observation.JobState, value.value orelse return error.Noncanonical) orelse return error.InvalidEnum;
+    return if (value.site == .service_worker_scan) state == .queued else state == .completed;
+}
 /// All six acquire sites read one Service-wide observation_sequence counter,
 /// regardless of the point's stream slot / generation coordinates.
 pub fn serviceSequenceRead(site: cuts.Site) bool {
@@ -710,6 +759,7 @@ pub fn native(comptime T: type, bytes: []const u8) Error!Native(T) {
     if (T == Cut) {
         try validatePublicationPrefix(value.value.role, value.value.site, value.value.edge, value.value.publication_prefix);
         try validateExclusionRole(value.value.role, value.value.site);
+        try validateJobInput(value.value.role, value.value.site, value.value.edge, value.value.job_scan_eligible);
     }
     if (T == MailboxCut) try validateMailboxCut(value.value);
     if (T == WorkerGateCut) try validateWorkerGateCut(value.value);
@@ -799,21 +849,25 @@ pub fn encodeNative(r: format.NativeRecord, bytes: []u8) Error![]const u8 {
     };
 }
 /// A packet is only bounded storage compression of consecutive real Point
-/// callbacks, never a scan result. Inputs contain coordinates and occurrence
-/// stamps plus an explicit supported publication scheduling prefix; references
-/// independently retain actual comparison values.
+/// callbacks, never a synthesized scan or selection. Inputs contain coordinates and occurrence
+/// stamps plus explicit publication and native job-scan scheduling inputs;
+/// references independently retain actual comparison values.
 pub const max_packet_points: usize = 512;
-pub const PacketInput = struct { occurrence: u64, site: cuts.Site, edge: cuts.Edge, index: u64, generation: u64, publication_prefix: u64 = 0 };
+pub const PacketInput = struct { occurrence: u64, site: cuts.Site, edge: cuts.Edge, index: u64, generation: u64, publication_prefix: u64 = 0, job_scan_eligible: ?bool = null };
 pub const PacketReference = struct { input: PacketInput, value: ?u64 };
 pub const PacketHeader = struct { count: u16 };
 comptime {
+    if (@sizeOf(PacketHeader) + max_packet_points * @sizeOf(PacketInput) > format.max_payload or
+        @sizeOf(PacketHeader) + max_packet_points * @sizeOf(PacketReference) > format.max_payload or
+        2 + max_packet_points * (10 + 2 + 1 + 10 + 10 + 10 + 2 + 1 + 10) > format.max_payload)
+        @compileError("Point packets exceed the unchanged finite payload bound");
     if (@sizeOf(PacketHeader) + max_packet_points * @sizeOf(Native(WorkerGateCut)) > format.max_payload or
         @sizeOf(PacketHeader) + max_packet_points * @sizeOf(Native(mailbox.WorkerGateCheckpoint)) > format.max_payload or
         2 + max_packet_points * (10 + 3 + 10 + 1 + 10) > format.max_payload)
         @compileError("WorkerGate packets exceed the unchanged finite payload bound");
 }
 // Canonical unsigned LEB128, bounded to ten bytes for every u64. Encoding
-// runs only on the non-RT collector; native capture packets are unchanged.
+// runs only on the non-RT collector; native capture remains owned and bounded.
 fn putPacketUint(e: *format.Encoder, original: u64) Error!void {
     var value = original;
     while (true) {
@@ -848,6 +902,7 @@ fn packetCoordinate(role: format.Role, value: PacketInput) Error!void {
     if (value.occurrence == 0) return error.InvalidOrder;
     try validatePublicationPrefix(role, value.site, value.edge, value.publication_prefix);
     try validateExclusionRole(role, value.site);
+    try validateJobInput(role, value.site, value.edge, value.job_scan_eligible);
     if (!cuts.allowedPoint(.{ .role = try nativeRole(role), .site = value.site, .edge = value.edge, .index = value.index, .generation = value.generation })) return error.UnsupportedValue;
     switch (value.site) {
         .service_worker_scan => if (role != .worker or value.index >= 256 or value.generation != 0) return error.UnsupportedValue,
@@ -865,9 +920,11 @@ fn putPacketInput(e: *format.Encoder, role: format.Role, value: PacketInput) Err
     try putPacketUint(e, value.index);
     try putPacketUint(e, value.generation);
     try putPacketUint(e, value.publication_prefix);
+    try e.int(u8, @intFromBool(value.job_scan_eligible != null));
+    try e.int(u8, @intFromBool(value.job_scan_eligible orelse false));
 }
 fn getPacketInput(d: *format.Decoder, role: format.Role) Error!PacketInput {
-    const value: PacketInput = .{
+    var value: PacketInput = .{
         .occurrence = try getPacketUint(d),
         .site = std.enums.fromInt(cuts.Site, try d.int(u16)) orelse return error.InvalidEnum,
         .edge = std.enums.fromInt(cuts.Edge, try d.int(u8)) orelse return error.InvalidEnum,
@@ -875,6 +932,11 @@ fn getPacketInput(d: *format.Decoder, role: format.Role) Error!PacketInput {
         .generation = try getPacketUint(d),
         .publication_prefix = try getPacketUint(d),
     };
+    const present = try d.int(u8);
+    const eligible = try d.int(u8);
+    if (present > 1 or eligible > 1) return error.InvalidBoolean;
+    if (present == 0 and eligible != 0) return error.Noncanonical;
+    value.job_scan_eligible = if (present == 1) eligible == 1 else null;
     try packetCoordinate(role, value);
     return value;
 }
@@ -1012,17 +1074,7 @@ fn encodeNativeWorkerGatePacket(comptime T: type, r: format.NativeRecord, bytes:
 const PacketKind = enum { point, worker_gate };
 fn comparisonPoint(value: cuts.Point) Error!cuts.Point {
     var result = value;
-    switch (value.site) {
-        .service_worker_scan, .service_acceptance_scan => {
-            if (value.edge == .before) {
-                if (value.value != null) return error.Noncanonical;
-            } else {
-                const state = std.enums.fromInt(stream.observation.JobState, value.value orelse return error.Noncanonical) orelse return error.InvalidEnum;
-                result.value = @intFromBool(if (value.site == .service_worker_scan) state == .queued else state == .completed);
-            }
-        },
-        else => {},
-    }
+    if (try jobObservedEligibility(value)) |eligible| result.value = @intFromBool(eligible);
     return result;
 }
 /// Value-copyable forward cursor. All stored slices refer to immutable Reader
@@ -1045,7 +1097,7 @@ pub const InputCursor = struct {
         self.ordinal = std.math.add(u64, self.ordinal, 1) catch return error.CounterOverflow;
         if (self.pending) |value| {
             self.pending = null;
-            const payload = try encode(@as(Native(Cut), .{ .occurrence = value.occurrence, .value = .{ .role = self.raw.role, .site = value.site, .edge = value.edge, .index = value.index, .generation = value.generation, .publication_prefix = value.publication_prefix } }), .input, &self.scratch);
+            const payload = try encode(@as(Native(Cut), .{ .occurrence = value.occurrence, .value = .{ .role = self.raw.role, .site = value.site, .edge = value.edge, .index = value.index, .generation = value.generation, .publication_prefix = value.publication_prefix, .job_scan_eligible = value.job_scan_eligible } }), .input, &self.scratch);
             return .{ .role = self.raw.role, .ordinal = self.ordinal, .family = @intFromEnum(Family.cut), .bytes = payload };
         }
         if (self.pending_gate) |value| {
@@ -1127,6 +1179,10 @@ pub const ComparisonCursor = struct {
         if (present == 0 and bits != 0) return error.Noncanonical;
         if ((value.site == .service_worker_scan or value.site == .service_acceptance_scan) and
             (if (value.edge == .before) present != 0 else present != 1 or bits > 1)) return error.Noncanonical;
+        // The packet's duplicated coordinate must pair with its own native
+        // reference, not disappear during expansion. No reference is exposed
+        // to JobOperationCursor or the input-only planner.
+        if (value.job_scan_eligible) |eligible| if (bits != @intFromBool(eligible)) return error.InvalidOrder;
         self.offset = d.offset;
         self.remaining -= 1;
         if (self.remaining == 0 and self.offset != self.packet.len) return error.InvalidLength;
@@ -1144,6 +1200,7 @@ pub fn decodeInput(comptime T: type, record: format.InputRecord, family: Family)
     if (T == Cut) {
         try validatePublicationPrefix(value.value.role, value.value.site, value.value.edge, value.value.publication_prefix);
         try validateExclusionRole(value.value.role, value.value.site);
+        try validateJobInput(value.value.role, value.value.site, value.value.edge, value.value.job_scan_eligible);
     }
     if (T == MailboxCut) try validateMailboxCut(value.value);
     if (T == WorkerGateCut) try validateWorkerGateCut(value.value);
@@ -1498,6 +1555,8 @@ const CommandAccounting = struct {
 pub const InputPreflight = struct {
     /// Diagnostic attempt only: no ordering is inferred for these overlaps.
     unresolved_scalar_overlaps: u64 = 0,
+    /// Full strict INPUT witness cardinality; zero under native_attempt.
+    job_schedule_operations: u64 = 0,
     events: u64 = 0,
     control_calls: u64 = 0,
     worker_calls: u64 = 0,
@@ -1638,7 +1697,8 @@ fn expectedInput(marker: EventCut, role: format.Role, reference: ?format.Referen
 pub const AdmissionPolicy = enum {
     /// Compatibility contract: one strict native attempt, not recovered atomic order.
     native_attempt,
-    /// Reject the two unsequenced job-selector predicate conflicts before owners.
+    /// Prove INPUT-only job scheduling before owners; all other conflict
+    /// domains retain their original rejection and canonical checks.
     ordered_job_scans,
 };
 
@@ -1792,7 +1852,13 @@ pub fn validateInputsWithPolicy(reader: *const format.Reader, identity: format.I
                         const point = try decode(Native(cuts.Point), (reference orelse return error.Incomplete).bytes);
                         try validateExclusionPoint(point.value);
                         if (wireRole(point.value.role) != cut.role or point.value.site != cut.site or point.value.edge != cut.edge or point.value.index != cut.index or point.value.generation != cut.generation) return error.InvalidOrder;
+                        if (cut.site == .service_worker_scan or cut.site == .service_acceptance_scan) {
+                            if (cut.edge == .before) {
+                                if (point.value.value != null) return error.Noncanonical;
+                            } else if (point.value.value == null or point.value.value.? > 1) return error.Noncanonical;
+                        }
                         if (publicationPrefixPoint(cut.role, cut.site, cut.edge) and point.value.value != @as(?u64, cut.publication_prefix)) return error.InvalidOrder;
+                        if (cut.job_scan_eligible) |eligible| if (point.value.value != @as(?u64, @intFromBool(eligible))) return error.InvalidOrder;
                         if (cut.role != role or !cuts.allowedPoint(.{ .role = try nativeRole(role), .site = cut.site, .edge = cut.edge, .index = cut.index, .generation = cut.generation })) return error.UnsupportedValue;
                         if (exclusionClaim(cut.role, cut.site) and cut.edge == .after) {
                             const claim = try input.next() orelse return error.Incomplete;
@@ -1917,12 +1983,14 @@ pub fn validateInputsWithPolicy(reader: *const format.Reader, identity: format.I
     var heads: [format.role_count]?OrderedEvent = @splat(null);
     for (&cursors, 0..) |*cursor, i| heads[i] = try nextOrderedEvent(cursor);
     var occurrence: u64 = 0;
-    // The compatibility policy allows one strict native attempt for fully represented job reads.
-    // ordered_job_scans instead rejects these known predicate overlaps before owners.
-    // This does not resolve their atomic order: the real after-read predicate
-    // comparison is mandatory, and any mismatch terminates the attempt. Guard
-    // custody and omitted Scheduler scans remain pre-owner rejection cases.
-    var intervals: ScanIntervals = .{ .allow_unresolved_job_reads = policy == .native_attempt };
+    // Attempt mode still does not promise an atomic witness. Strict mode may
+    // defer only job-predicate overlap to the mandatory INPUT planner below;
+    // this is not unresolved-read admission. Guard custody and omitted
+    // Scheduler scans remain pre-owner rejection cases under both policies.
+    var intervals: ScanIntervals = .{
+        .allow_unresolved_job_reads = policy == .native_attempt,
+        .defer_job_reads_to_planner = policy == .ordered_job_scans,
+    };
     var grammar: ServiceScanGrammar = .{};
     var payload_intervals: payload_overlap.Validator = .{};
     var ui_invocation_active = false;
@@ -1968,6 +2036,10 @@ pub fn validateInputsWithPolicy(reader: *const format.Reader, identity: format.I
     try intervals.finish();
     try grammar.finish();
     try payload_intervals.finish();
+    // No strict success can escape the deferred proof. In particular the
+    // planner runs only after global occurrence uniqueness, full grammar and
+    // every other conflict domain have passed, and requires final free slots.
+    if (policy == .ordered_job_scans) summary.job_schedule_operations = try validateJobSchedule(reader);
     summary.unresolved_scalar_overlaps = intervals.unresolved_scalar_overlaps;
     return summary;
 }
@@ -1993,6 +2065,98 @@ fn nextOrderedEvent(cursor: *InputCursor) Error!?OrderedEvent {
         return result;
     };
     return null;
+}
+
+/// One role's real job loads/stores, paired only from execution INPUT. This
+/// cursor never opens a ComparisonCursor, and owns constant-size state. Full
+/// event grammar/global uniqueness remain validateInputsWithPolicy's duty.
+pub const JobOperationCursor = struct {
+    input: InputCursor,
+    role: format.Role,
+    last_occurrence: u64 = 0,
+    pub fn init(reader: *const format.Reader, role: format.Role) JobOperationCursor {
+        return .{ .input = InputCursor.init(reader, role), .role = role };
+    }
+    pub fn next(self: *JobOperationCursor) Error!?job_schedule.Operation {
+        const role: job_schedule.Role = switch (self.role) {
+            .control => .control,
+            .worker => .worker,
+            else => return error.UnsupportedValue,
+        };
+        const slots = try jobSlotCount();
+        var before: ?Native(Cut) = null;
+        while (try nextOrderedEvent(&self.input)) |event| {
+            if (event.role != self.role or event.occurrence <= self.last_occurrence) return error.InvalidOrder;
+            self.last_occurrence = event.occurrence;
+            const cut = event.cut orelse {
+                if (before != null) return error.InvalidOrder;
+                continue;
+            };
+            if (cut.role != self.role) return error.InvalidOrder;
+            try validateJobInput(cut.role, cut.site, cut.edge, cut.job_scan_eligible);
+            const kind = jobOperationKind(cut.role, cut.site) orelse {
+                if (before != null) return error.InvalidOrder;
+                continue;
+            };
+            if (cut.index >= slots) return error.InvalidSlot;
+            if (kind == .scan) {
+                if (cut.generation != 0) return error.InvalidGeneration;
+            } else if (cut.generation == 0 or cut.generation == std.math.maxInt(u64)) return error.InvalidGeneration;
+            if (cut.edge == .before) {
+                if (before != null) return error.InvalidOrder;
+                before = .{ .occurrence = event.occurrence, .value = cut };
+            } else {
+                const begin = before orelse return error.InvalidOrder;
+                var expected = begin.value;
+                expected.edge = .after;
+                expected.job_scan_eligible = cut.job_scan_eligible;
+                if (!std.meta.eql(expected, cut)) return error.InvalidOrder;
+                return .{
+                    .role = role,
+                    .kind = kind,
+                    .before = begin.occurrence,
+                    .after = event.occurrence,
+                    .index = cut.index,
+                    .generation = cut.generation,
+                    .eligible = cut.job_scan_eligible,
+                };
+            }
+        }
+        if (before != null) return error.Incomplete;
+        return null;
+    }
+};
+fn jobSlotCount() Error!usize {
+    const slots: usize = audio.runtime.streaming.release_profile.job_capacity;
+    if (slots == 0 or slots > job_schedule.hard_slot_cap) return error.UnsupportedSlots;
+    return slots;
+}
+/// Certify one complete initially-free/finally-free Service lifetime with two
+/// input heads and 48 fixed slots. Caller must additionally validate canonical
+/// references, full event grammar and global occurrence uniqueness. Returning
+/// an operation count does not expose any reference-derived decision.
+pub fn validateJobSchedule(reader: *const format.Reader) Error!u64 {
+    var planner: job_schedule.Scheduler = .{};
+    try planner.init(try jobSlotCount());
+    var inputs = [_]JobOperationCursor{ JobOperationCursor.init(reader, .control), JobOperationCursor.init(reader, .worker) };
+    var need_head = [_]bool{ true, true };
+    var eof = [_]bool{ false, false };
+    while (true) {
+        for (&inputs, 0..) |*input, role| {
+            if (!need_head[role] or eof[role]) continue;
+            if (try input.next()) |op| {
+                try planner.push(op);
+                need_head[role] = false;
+            } else {
+                try planner.roleEOF(@enumFromInt(role));
+                eof[role] = true;
+            }
+        }
+        const selected = try planner.next() orelse break;
+        need_head[@intFromEnum(selected.op.role)] = true;
+    }
+    try planner.finish();
+    return planner.next_ordinal;
 }
 
 /// Completeness grammar for the three finite Service envelopes. No loaded
@@ -2085,9 +2249,9 @@ pub const ServiceScanGrammar = struct {
 };
 
 /// Finite scalar conflict admission, not a generic dependency graph. Service
-/// scan packets retain every read/CAS edge. Strict mode rejects same-slot
-/// conflicting atomic overlap; explicit attempt mode counts unresolved job
-/// reads without deriving an order or weakening the actual comparator. Omitted Scheduler scalar scans still use
+/// scan packets retain every read/CAS edge. Job overlap is either rejected,
+/// explicitly deferred to the mandatory full INPUT planner, or counted only
+/// for native-attempt admission without recovering atomic order. Omitted Scheduler scalar scans still use
 /// whole-envelope exclusion. Global RMW stamps anchor original source brackets.
 pub const ScanIntervals = struct {
     const Identity = struct { role: format.Role, index: u64, generation: u64 };
@@ -2097,9 +2261,12 @@ pub const ScanIntervals = struct {
     publications: [3][10]?Identity = @splat(@splat(null)),
     operations: [3]?Cut = @splat(null),
     allow_unresolved_job_reads: bool = false,
+    defer_job_reads_to_planner: bool = false,
     unresolved_scalar_overlaps: u64 = 0,
     fn scalarOverlap(self: *ScanIntervals, read_cut: Cut) Error!void {
-        if (!self.allow_unresolved_job_reads or (read_cut.site != .service_worker_scan and read_cut.site != .service_acceptance_scan)) return error.CrossedScan;
+        if (read_cut.site != .service_worker_scan and read_cut.site != .service_acceptance_scan) return error.CrossedScan;
+        if (self.defer_job_reads_to_planner) return;
+        if (!self.allow_unresolved_job_reads) return error.CrossedScan;
         self.unresolved_scalar_overlaps = std.math.add(u64, self.unresolved_scalar_overlaps, 1) catch return error.CounterOverflow;
     }
     fn scalarConflict(read_cut: Cut, publication_kind: Publication, identity: Identity) bool {
@@ -2112,6 +2279,7 @@ pub const ScanIntervals = struct {
         };
     }
     fn operation(self: *ScanIntervals, value: Cut) Error!void {
+        try validateJobInput(value.role, value.site, value.edge, value.job_scan_eligible);
         const active = &self.operations[@intFromEnum(value.role)];
         const expected: format.Role = switch (value.site) {
             .service_worker_scan => .worker,
@@ -2131,6 +2299,7 @@ pub const ScanIntervals = struct {
         } else {
             var expected_end = active.* orelse return error.InvalidOrder;
             expected_end.edge = .after;
+            expected_end.job_scan_eligible = value.job_scan_eligible;
             if (!std.meta.eql(expected_end, value)) return error.InvalidOrder;
             active.* = null;
         }

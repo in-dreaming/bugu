@@ -6,9 +6,9 @@ const std = @import("std");
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 pub const profile_id: u16 = 9;
-// v3 binds canonical launch pacing. v2 requires its original matching tool;
-// missing pacing is never inferred or silently upgraded by this Reader.
-pub const wire_version: u16 = 3;
+// v4 adds explicit native job-scan eligibility INPUT. Older tapes require
+// their original matching tools; missing inputs are never inferred/upgraded.
+pub const wire_version: u16 = 4;
 pub const magic = "SMELSB01";
 pub const header_size: usize = 192;
 pub const frame_header_size: usize = 64;
