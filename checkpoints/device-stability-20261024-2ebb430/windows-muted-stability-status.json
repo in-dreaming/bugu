@@ -1,6 +1,6 @@
 {
   "schema": "bugu.device-stability.windows-status/v1",
-  "phase": "BUILD_STARTING",
+  "phase": "BUILD_RUNNING",
   "source_commit": "b48f2297f0dfa749c473b42d6a2d0e0dc12892ef",
   "source_tree": "2ebb430eb44e267d9fd96e22c7f546a71d57d9bf",
   "plan_sha256": "e90630e81d65b2d5ab9c6510f7c558a4a3f7ec931c3af0575456bf09b03259de",
@@ -14,5 +14,8 @@
   "dependencies_verified": 3,
   "fixture_files_verified": 16,
   "fixture_bytes": 12288704,
-  "build_guard_seconds": 1800
+  "build_guard_seconds": 1800,
+  "elapsed_seconds_observed": 71.3947293,
+  "owned_process_count": 3,
+  "guard_stop_reason": null
 }
