@@ -41,7 +41,7 @@ fn reheader(bytes: []u8) void {
 test "live semantic profile has independent fixed identity and separate read capabilities" {
     var out: [2048]u8 = undefined;
     const bytes = try corpus(&out);
-    try t.expectEqualSlices(u8, "SMELSB01\x09\x00\x03\x00", bytes[0..12]);
+    try t.expectEqualSlices(u8, "SMELSB01\x09\x00\x04\x00", bytes[0..12]);
     const r = try f.Reader.preflight(bytes, identity(), valid);
     try t.expectEqual(@as(u64, 7), r.counts.total);
     try t.expectEqualSlices(u64, &.{ 3, 1, 1, 2 }, &r.counts.roles);
