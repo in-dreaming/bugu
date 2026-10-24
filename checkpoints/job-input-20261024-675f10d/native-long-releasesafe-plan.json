@@ -1,0 +1,85 @@
+{
+  "schema": "bugu.job-input-v4.native-long-releasesafe-plan/v1",
+  "status": "FROZEN_NOT_RUN",
+  "source_commit": "8c92e7d7b912d0d73120591057c5b337200f1631",
+  "source_tree": "675f10d4011635700f7d9567950737707e7b7849",
+  "prerequisite": "The final-tree focused Debug batch must complete without failure and its independent result must be archived before this native stage runs. Preserve prior failed build/header tests and all historical wire3 outcomes.",
+  "purpose": "One ReleaseSafe build and exactly one original long strict notified recording. Exercise real wire4 job-predicate INPUT and complete fixed-space preflight on unmodified long >=32768 frames, not a replacement short scenario.",
+  "parameters": {
+    "REPO": "Exact clean frozen source with verified 16 authored input files",
+    "TAPE_DIRECTORY": "Fresh empty absolute local directory outside source",
+    "OUTPUT": "Fresh local guard output directory outside source",
+    "RUN_GUARDED": "Original runner with SHA below",
+    "ZIG": "Verified official Zig 0.16.0"
+  },
+  "executable": {
+    "provenance": "New ReleaseSafe test executable built once from exact source; record resulting ELF path/size/SHA locally. Any fresh replay must use that exact executable without rebuilding."
+  },
+  "environment": {
+    "unset_prefixes": [
+      "SME_"
+    ],
+    "unset_exact": [
+      "PYTHONOPTIMIZE"
+    ],
+    "set": {
+      "NO_COLOR": "1",
+      "SME_LIVE_SEMANTIC_MODE": "record",
+      "SME_LIVE_SEMANTIC_DIR": "<TAPE_DIRECTORY>",
+      "SME_LIVE_SEMANTIC_PACING": "notified_v1",
+      "SME_LIVE_SEMANTIC_ADMISSION": "ordered_job_scans",
+      "SME_LIVE_SEMANTIC_WRITER": "stream",
+      "SME_LIVE_SEMANTIC_WORKLOAD": "long"
+    }
+  },
+  "prechecks": [
+    "Exact source tree, clean worktree, runner hash and official Zig 0.16.0 identity. No source or capacity changes.",
+    "Verify all 16 fixture SHA values with --verify-only within 60 seconds.",
+    "Require output/tape directories unused; no controlled cross-frame, retry hook, delay or injection variables."
+  ],
+  "argv": [
+    "python3",
+    "<RUN_GUARDED>",
+    "--repo",
+    "<REPO>",
+    "--out",
+    "<OUTPUT>",
+    "--seconds",
+    "900",
+    "--",
+    "<ZIG>",
+    "build",
+    "sme-live-semantic-process-test",
+    "sme-author-live-production-check",
+    "-j1",
+    "-Doptimize=ReleaseSafe",
+    "--summary",
+    "all"
+  ],
+  "runner_sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+  "bounds": {
+    "outer_seconds": 900,
+    "existing_native_observation_seconds": 60,
+    "minimum_start_free_bytes": 3355443200,
+    "stop_below_free_bytes": 2281701376,
+    "capture_bounds": "Unchanged: existing finite lane capacity, max_capture_bytes and max_file_bytes; no expansion.",
+    "workload": "Original long: real Play accepted/executed, at least32768 subsequent submitted frames before real Stop submission, both commands executed/acknowledged, then genuine Close/join. Existing60second observation bound unchanged."
+  },
+  "required_evidence": [
+    "Actual Host uses notified_v1; wire4 launch INPUT and independent started reference agree. Record gate scan predicates only from actual native reads.",
+    "No external timing hooks or generated output injection; actual source decoding and callback PCM.",
+    "Inspect actual nonzero PCM and canonical public Input/Schedule coverage reported by the existing record test; do not use outputs as execution inputs.",
+    "Both commands accepted/terminal/executed and acknowledged; actual closed/joined state, provider opened=closed and zero source/lease/instance assertions.",
+    "Complete streaming framing seal, flush/sync/readback, mandatory ordered_job_scans full validation plus INPUT-only four-state proof, final history.bin and recorded identity/hashes. No expected engine-state assignment.",
+    "Source and fixture postcheck; guard child exit and real cleanup evidence, never infer cleanup solely from timeout absence.",
+    "Distinguish original >=32768-frame duration from arbitrarily long stability. No natural crossing is inferred without its specific evidence; component crossed-read tests are separately identified."
+  ],
+  "failure_policy": "Exactly one native long record after the single optimized build. Preserve compilation failures, capture overflow, runtime fault, strict rejection, timeout or incomplete tape. No timing reroll, capacity increase, short substitution or fresh replay without an admitted complete tape. Diagnose concrete evidence before any further recording. Missing terminal or cleanup evidence is UNKNOWN.",
+  "following": "If the complete wire4 long tape is admitted, freeze its exact ELF/bank/tape identities and independently run same-ELF fresh long replay, then bounded negative tests. A failed record stops this sequence. Historical Debug capture overflow and wire3 long rejection stay retained and unresolved by this result alone; stage3 starts only after stage2 qualification.",
+  "publication": "Only source identities, plan and sanitized result. No raw logs, local paths, credentials, ELF, tape or audio binary. Main unchanged; no Windows or physical device action.",
+  "historical_limits": [
+    "The previous wire3 short record/fresh/negatives passed on their original ELF; this new run does not convert or claim replay of the rejected old long tape.",
+    "Only current optimized finite Linux null-backend profile is tested; not all histories, Debug capture throughput or physical devices.",
+    "No main change, raw log/audio/ELF/tape upload, Windows run, runtime supply change, timing hook, output injection or capacity growth."
+  ]
+}
