@@ -1,0 +1,86 @@
+{
+  "schema": "bugu.job-input-gate.focused-result/v1",
+  "status": "FOCUSED_FAILED_ONE_STALE_WIRE_HEADER_ASSERTION",
+  "source_commit": "1bf4bdd410955d14e8e31293ad9df2f3562bdb1c",
+  "source_tree": "27cc25c78d234eaa87c5bb1de94e670cbe9245d2",
+  "plan_commit": "f9650838b03ae133e24b473ae7e7bfc1c70ca19a",
+  "plan_sha256": "3b4ee334c4e4731bcc9dee04d07251636f0ae778b9310efedb63db032f277ea2",
+  "guard": {
+    "exit": 1,
+    "stop_reason": null,
+    "elapsed_seconds": 140.19661512400012,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 28530249728
+  },
+  "build_steps": {
+    "succeeded": 29,
+    "total": 31,
+    "failed": 1
+  },
+  "tests": {
+    "passed": 153,
+    "failed": 1,
+    "skipped": 2,
+    "total": 156
+  },
+  "groups": {
+    "job_gate": {
+      "passed": 18,
+      "includes_pure_model_tests": 7
+    },
+    "real_atomic_driver_callbacks": {
+      "passed": 7
+    },
+    "format": {
+      "passed": 18,
+      "failed": 1
+    },
+    "codec": {
+      "passed": 62,
+      "skipped": 1
+    },
+    "streaming": {
+      "passed": 8
+    },
+    "cli": {
+      "passed": 20
+    },
+    "process_local": {
+      "passed": 9,
+      "skipped": 1
+    },
+    "snapshot": {
+      "passed": 11
+    }
+  },
+  "production_archive_compile": "passed",
+  "cli_compile_and_help": "passed",
+  "failure": {
+    "location": "tests/sme/live_semantic_format_test.zig:44",
+    "test": "live semantic profile has independent fixed identity and separate read capabilities",
+    "detail": "The fixed magic/profile/version byte assertion still expects wire3. Actual bytes encode wire4, consistent with the deliberately changed format constant and other updated version assertions.",
+    "next": "Change only the independent fixed expected version byte from3 to4. Keep the literal magic/profile assertion, old-version rejection tests, all runtime code and original native oracles unchanged. Freeze new source/plan first."
+  },
+  "fixture_verification_before": {
+    "scope": "authored-input-source-only",
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "fixture_verification_after": {
+    "scope": "authored-input-source-only",
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "native_recording_started": false,
+  "native_replay_started": false,
+  "limits": [
+    "Overall batch failed; passing groups are not a complete focused pass.",
+    "Two intentional skips are native integration without mode and unavailable original external tape, not successful native qualification.",
+    "Seven component tests use real atomic actors/onPoint and cleanup joins but do not instantiate a Host or prove real capture/fresh replay.",
+    "Gate target includes the unchanged bounded oracle:4551834 cases,43539 feasible prefixes,8881 complete; not universal system proof.",
+    "Original build-graph failure and original wire3 long rejection retained; stage3 not started.",
+    "Guard wrapper exit0 is not the actual child result: child exit1 is authoritative."
+  ]
+}
