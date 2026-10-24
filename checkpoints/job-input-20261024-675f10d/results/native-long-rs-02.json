@@ -1,0 +1,107 @@
+{
+  "schema": "bugu.job-input-v4.native-long-result/v2",
+  "status": "PASS_RECORD_AND_STRICT_ADMISSION_FRESH_PENDING",
+  "source_commit": "8c92e7d7b912d0d73120591057c5b337200f1631",
+  "source_tree": "675f10d4011635700f7d9567950737707e7b7849",
+  "plan_sha256": "ea32385c03c6a1b0a8e8f813dcb42988dec84c61a9cf2a6eed99d64a194efb7d",
+  "guard": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 5.065069622999999,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 28346138624
+  },
+  "tests": {
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0
+  },
+  "build": "6/6 steps; reused same ReleaseSafe test executable and production archive from prior build",
+  "identities": {
+    "executable": {
+      "bytes": 40732608,
+      "sha256": "92b3daf40217232c9a49d77c5258ba8f95331b90e8b687a63c8078e71c51ed13"
+    },
+    "bank": {
+      "bytes": 1283976,
+      "sha256": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+    },
+    "history": {
+      "bytes": 48498479,
+      "sha256": "3f1162e730513205f18f95bcd4f352e5d70560a16b9b6d90f0f7e4dba7f716a6"
+    }
+  },
+  "record": {
+    "profile": 9,
+    "wire_version": 4,
+    "pacing": "notified_v1",
+    "admission": "ordered_job_scans",
+    "framing_complete": true,
+    "semantic_admitted": true,
+    "fresh_replay_verified": false,
+    "controlled_cross_frame": false,
+    "submitted_frames": 34816,
+    "generated_frames": 35072,
+    "multi_frame_ticks": 0,
+    "corpus_bytes": 48498479,
+    "capture_allocation_bytes": 19302336,
+    "occurrences": 843386,
+    "control_joined": true,
+    "worker_joined": true,
+    "control_thread": 23,
+    "worker_thread": 24,
+    "callback_thread": 26,
+    "peak_records": [
+      898,
+      1020,
+      249,
+      44
+    ],
+    "peak_bytes": [
+      337776,
+      316732,
+      153324,
+      5056
+    ],
+    "source_opened": 16,
+    "source_closed": 16
+  },
+  "reference_coverage": {
+    "public_inputs": 728,
+    "schedules": 16,
+    "submitted_samples": 69632,
+    "nonzero_submitted_samples": 66624
+  },
+  "strict_admission": {
+    "admitted": true,
+    "unresolved_scalar_overlaps": 0,
+    "fresh_replay_verified": false
+  },
+  "cleanup_basis": "Passing record test checks closed phase, joined Worker, provider live=0 and opened=closed, sample_leases=0, live_instances=0. Long witness checks real Play/Stop accepted, terminal and executed, 2 command submissions/terminals/acknowledgments. Recorder shutdown joins Control and Worker. cleanup_error is not separately printed or asserted by this record path.",
+  "prechecks": {
+    "created_exclusively": true,
+    "empty_before_run": true,
+    "directory_open_succeeded": true,
+    "non_symlink": true,
+    "write_access": true,
+    "same_elf_sha256": "92b3daf40217232c9a49d77c5258ba8f95331b90e8b687a63c8078e71c51ed13"
+  },
+  "fixtures_before": {
+    "scope": "authored-input-source-only",
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "fixtures_after": {
+    "scope": "authored-input-source-only",
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "limits": [
+    "First actual long record; prior invocation failed before recordProcess due to missing directory and remains retained.",
+    "No natural cross-frame tick witness: multi_frame_ticks=0. The real-atomic crossing tests are separate coverage; this result alone does not establish crossed-read occurrence in this tape.",
+    "Stage2 remains incomplete until independent fresh replay and negative validation. No Windows, physical device or unbounded duration qualification.",
+    "Original Debug capture overflow and prior wire3 long rejection remain preserved. No main modification or binary/raw publication."
+  ]
+}
