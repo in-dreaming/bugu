@@ -1,0 +1,127 @@
+{
+  "schema": "bugu.job-input-v4.negative-result/v1",
+  "status": "PASS_TWO_EXPECTED_REJECTIONS",
+  "source_commit": "8c92e7d7b912d0d73120591057c5b337200f1631",
+  "source_tree": "675f10d4011635700f7d9567950737707e7b7849",
+  "plan_sha256": "80a70bc1b5dfcc0254f3c9833189ada225e4d5d33f2b9e96f6f749b2e2194aae",
+  "identities": {
+    "executable": {
+      "bytes": 40732608,
+      "sha256": "92b3daf40217232c9a49d77c5258ba8f95331b90e8b687a63c8078e71c51ed13"
+    },
+    "bank": {
+      "bytes": 1283976,
+      "sha256": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+    },
+    "history": {
+      "bytes": 48498479,
+      "sha256": "3f1162e730513205f18f95bcd4f352e5d70560a16b9b6d90f0f7e4dba7f716a6"
+    }
+  },
+  "cases": {
+    "wrong_pacing": {
+      "guard": {
+        "exit": 1,
+        "stop_reason": null,
+        "elapsed_seconds": 2.058017619000111,
+        "source_guard_equal": true,
+        "minimum_free_bytes": 28344561664
+      },
+      "tests": {
+        "passed": 9,
+        "expected_failed": 1,
+        "skipped": 0
+      },
+      "reason": "WrongLaunch",
+      "owner_effects_started": false,
+      "matched": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "host_joined": false,
+      "host_destroyed": false,
+      "retained": false,
+      "meaning": "No Host created; false join/destroy does not indicate leaked owners."
+    },
+    "reference_mismatch": {
+      "guard": {
+        "exit": 1,
+        "stop_reason": null,
+        "elapsed_seconds": 2.0627089820000037,
+        "source_guard_equal": true,
+        "minimum_free_bytes": 28294651904
+      },
+      "tests": {
+        "passed": 9,
+        "expected_failed": 1,
+        "skipped": 0
+      },
+      "preflight_admitted": true,
+      "reason": "ReplayMismatch",
+      "failure": {
+        "role": "render",
+        "occurrence": 32932,
+        "family": "pcm",
+        "byte_offset": 1063
+      },
+      "mutation": {
+        "scope": "Only one finite submitted PCM reference sample bit changed; frame and file hashes recomputed. All INPUT frames, scheduling coordinates, bank, counts and original files unchanged.",
+        "complete_frames": 335398,
+        "mutation": {
+          "role": 2,
+          "family": 114,
+          "class_code": 1,
+          "occurrence": 32932,
+          "frame_offset": 1903996,
+          "payload_byte": 1063,
+          "sample_index": 256,
+          "before_bits": 3117646697,
+          "after_bits": 3117646696
+        },
+        "history_bytes": 48498479,
+        "history_sha256": "483c8ab341c158cbd9d4e1ef0ab27ac369fa1ededdf5ef5f1e80e7ef3027fdcd",
+        "bank_sha256": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+      },
+      "host_joined": true,
+      "host_destroyed": true,
+      "retained": false,
+      "eof": false,
+      "final_status": {
+        "phase": "closed",
+        "first_error": null,
+        "cleanup_error": null,
+        "worker_joined": true,
+        "provider_opened": 16,
+        "provider_closed": 16,
+        "provider_live": 0,
+        "sample_leases": 0,
+        "live_instances": 0
+      },
+      "stop_executed": false,
+      "meaning": "Intentional early mismatch; actual cleanup completed, no claim of successful Stop/EOF."
+    }
+  },
+  "original_files_unchanged": true,
+  "fixtures_before": {
+    "scope": "authored-input-source-only",
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "fixtures_after": {
+    "scope": "authored-input-source-only",
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "limits": [
+    "Original long minimum32768 frames, not physical-device long-duration stability.",
+    "No natural cross-frame tick witness in this recording; do not imply one. Real-atomic predicate crossings qualified separately.",
+    "Debug recording overflow and original wire3 long strict rejection remain retained.",
+    "No Windows or physical devices; no binary/raw uploads; main unchanged.",
+    "Actual bounded Linux null-device optimized profile qualified, not universal histories, Windows wire4, real devices, uninterrupted long-duration or Debug recording throughput.",
+    "No raw log, ELF, tape or audio upload. Stage3 not run."
+  ]
+}
