@@ -1,0 +1,134 @@
+{
+  "schema": "bugu.device-stability.windows-plan/v1",
+  "status": "FROZEN_NOT_RUN",
+  "purpose": "One independently built Windows system-default output stability run, explicitly muted,600seconds total activePlay across two separate Host lifecycles. Not600seconds percycle; no microphone, OSsettings change, physical device switching or acoustic claim.",
+  "source": {
+    "repository": "https://github.com/in-dreaming/bugu",
+    "branch": "source/sme-headless-notified-20261022",
+    "commit": "b48f2297f0dfa749c473b42d6a2d0e0dc12892ef",
+    "tree": "2ebb430eb44e267d9fd96e22c7f546a71d57d9bf",
+    "cloud_result": "Cloud Debug24pass/1skip includes newharness12/12, null2seconds2cycles; not hardware proof. The independent result must be archived before this hardware stage."
+  },
+  "parameters": {
+    "ACCEPTANCE": "Fresh independent Windows source checkout, outside original user worktree and previous acceptance copy",
+    "OUTPUT": "Fresh local evidence directory outside tracked source",
+    "ZIG": "Previously verified official Windows Zig0.16.0 executable",
+    "PYTHON": "Available Python3 standard-library interpreter",
+    "LOCAL_CACHE": "Fresh unique cache outside source, not checked-in legacy cache",
+    "GLOBAL_CACHE": "Separate qualified cache outside source",
+    "EXE": "Unique author_live_device_stability_test.exe actually built/used by the build phase, SHA256 pinned before hardware execution"
+  },
+  "preservation": [
+    "Reuse and freshly verify the existing original-workspace protection inventory (last reported6945 files). Keep original worktree and previous acceptance copy untouched. Record before/after counts/hashes; report differences rather than hiding or overwriting them.",
+    "Clone/fetch the exact published commit into a fresh independent checkout; do not apply headless source over the old full-tree copy. Verify exact commit/tree and clean tracked files. No checkout/main modification or Gitpush in the original workspace.",
+    "Do not import or trust compiled binaries from tracked old caches. Use the isolated local/global cache paths in the actual build argv. No GPU/fonts/full application targets."
+  ],
+  "dependencies": [
+    {
+      "path": "third_party/miniaudio",
+      "repository": "https://github.com/mackron/miniaudio.git",
+      "commit": "9634bedb5b5a2ca38c1ee7108a9358a4e233f14d"
+    },
+    {
+      "path": "third_party/ogg",
+      "repository": "https://github.com/xiph/ogg.git",
+      "commit": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822"
+    },
+    {
+      "path": "third_party/opus",
+      "repository": "https://github.com/xiph/opus.git",
+      "commit": "22244de5a79bd1d6d623c32e72bf1954b56235be"
+    }
+  ],
+  "fixtures": {
+    "files": 16,
+    "total_bytes": 12288704,
+    "preparation": [
+      "python3 tools/sme/prepare_live_fixtures.py",
+      "python3 tools/sme/prepare_live_fixtures.py --verify-only"
+    ],
+    "sha256": {
+      "tools/sme/live-fixtures.json": "2f9a6dab70d8d037e5d8bf23d399acd7258064036f1fb1be8972cb5adc00dd38",
+      "tools/sme/prepare_live_fixtures.py": "00f0a34936cde5d749dd7bb3e5ef8534abdbb4adf189557d499b4a890f5b24ed",
+      "examples/sme/assets/generate.py": "a59277f25b17bf830495995eae432b960a4e020ff6b4f91831294f977a9229a5",
+      "examples/sme/assets/score.json": "ba5985ccb7009b8666d0f563aea91b32b2b7ab286e4b9da6ead71c7ebe6550bb"
+    },
+    "rule": "Run original integer-only source generator in independent checkout, verify all16 lengths/SHA; never stub outputs, alter expected data, replace mismatched files or upload audio."
+  },
+  "common_environment": {
+    "unset_prefix_case_insensitive": "SME_",
+    "unset_exact": [
+      "PYTHONOPTIMIZE"
+    ],
+    "set": {
+      "NO_COLOR": "1"
+    },
+    "powershell_example": "Get-ChildItem Env: | Where-Object { $_.Name -like 'SME_*' } | ForEach-Object { Remove-Item -LiteralPath ('Env:' + $_.Name) }; Remove-Item Env:PYTHONOPTIMIZE -ErrorAction SilentlyContinue; $env:NO_COLOR = '1'"
+  },
+  "build": {
+    "seconds": 1800,
+    "cwd": "<ACCEPTANCE>",
+    "argv": [
+      "<ZIG>",
+      "build",
+      "sme-author-live-device-stability-test",
+      "sme-author-live-production-check",
+      "-j1",
+      "-Dtarget=x86_64-windows-msvc",
+      "-Doptimize=ReleaseSafe",
+      "--summary",
+      "all",
+      "--cache-dir",
+      "<LOCAL_CACHE>",
+      "--global-cache-dir",
+      "<GLOBAL_CACHE>"
+    ],
+    "powershell_example": "& $Zig build sme-author-live-device-stability-test sme-author-live-production-check -j1 -Dtarget=x86_64-windows-msvc -Doptimize=ReleaseSafe --summary all --cache-dir $LocalCache --global-cache-dir $GlobalCache",
+    "expected": "New Windows build must succeed;11 harness selftests pass and the explicit system/null workload test is skipped because mode is unset. Device helper tests use explicit null backend only. Production archive compiles with safety stripped. No system output is opened in build stage.",
+    "identity": "Record Zig version and existing official tool provenance/hash, exact source tree/dependency pins/fixture hashes. Identify exactly one emitted author_live_device_stability_test.exe in isolated cache and record path privately, size and SHA256. No source edits to make Windows compile; any failure returns to cloud engineering."
+  },
+  "hardware": {
+    "seconds": 900,
+    "cwd": "<ACCEPTANCE>",
+    "argv": [
+      "<EXE>"
+    ],
+    "environment_add": {
+      "SME_DEVICE_STABILITY_MODE": "system",
+      "SME_DEVICE_STABILITY_SECONDS": "600",
+      "SME_DEVICE_STABILITY_CYCLES": "2",
+      "SME_DEVICE_STABILITY_GAIN": "0"
+    },
+    "powershell_example": "$env:SME_DEVICE_STABILITY_MODE = 'system'; $env:SME_DEVICE_STABILITY_SECONDS = '600'; $env:SME_DEVICE_STABILITY_CYCLES = '2'; $env:SME_DEVICE_STABILITY_GAIN = '0'; & $Exe",
+    "execution": "Exactly one direct independent process using the same Windows executable built above, no rebuild or audible option. Each cycle has300seconds target activePlay, then realStop/tail/Close/join/destroy; newHost forcycle2. Total activePlay>=600seconds plus bounded lifecycle overhead.",
+    "device": "Actual system default playback endpoint only. No null fallback, no capture/microphone, no OSdefault endpoint or volume change, no device disconnect or switch. No device identity is inferred from registered-endpoint counts.",
+    "safety": "Application final output explicitly gain0/muted, required peak_after=0. The test guard validates finitegain and absolute digital cap0.01 (-40dBFS), but audible gain0.01 is NOT enabled by this plan. No physical loudness or speaker operation claimed.",
+    "format": "Host requests48000Hz/stereo/256frames. Require actual negotiation.backend=system (not null), native/callback stereo and strict_match.48000is requested sample rate; currentpublic record does not expose actual hardware sample rate/endpoint name.",
+    "success": "12/12 testpass, two genuine closed+output+negotiated cycle records, complete active duration>=600e9ns, no safety/stream/continuity errors, all resources genuinelyreleased. No mode-default inference; exactsystemconfig printed."
+  },
+  "guard_contract": {
+    "build_max_seconds": 1800,
+    "hardware_max_seconds": 900,
+    "minimum_free_bytes_before_each": 5368709120,
+    "stop_below_free_bytes": 2281701376,
+    "implementation": "Reuse the existing Windows bounded-process supervisor only after verifying its command, timeout and owned-subtree cleanup behavior; record its localhash and actualargv. Commands shown above are innerargv, not permission to execute unguarded. Capture stdout/stderr to local files without blocking on pipe buffers.",
+    "progress": "Write/read elapsed time, currentphase, ownedPID/starttime/process subtree, CPU and log growth at bounded intervals (e.g.10seconds). Return status nonblocking so the coordinator can monitor during the10minute run.",
+    "timeout_cancel": "On timeout/cancel/diskfloor, terminate only the owned subprocess tree, with a bounded10secondgrace then force if necessary. Windows job-object containment or targeted taskkill /PID <owned PID> /T /F is acceptable; verify identity/starttime and descendants. Never kill all processes byname or touch unrelated userprocesses.",
+    "cleanup_evidence": "External termination cannot prove Hostjoin/resourcecleanup. Preserve timeout/interruption/retention asfailure orUNKNOWN and explicitly check remaining ownedprocesses. No hidden retry or resumption of partialrun.",
+    "sequence": "Build and selftests must pass first. On any unexpected result stop subsequent hardware invocation. Eachphase exactlyonce; realhardwarefailure is preserved, not rerolled to choose timing."
+  },
+  "checks": [
+    "Verify source/dependencies/fixtures and originalprotectedfiles before and after; keep source assertion/capacity/oracles unchanged.",
+    "Parse actual flat schema1 stderr, not nested truncated formats: two CLOSED/OUTPUT/NEGOTIATED rows, correctcycles/backend, COMPLETE duration, DIAGNOSTICS rowcount/capacity/overflow and every SAMPLE. Raw logs remain local.",
+    "Eachcycle genuinePlay andStop executed/ACK; finalclosed, workerjoined, first_error/cleanup_errorabsent, opened=closed=16/live0/leases0/instances0, actualHostdestroy and TestAllocatorcleanup.",
+    "Eachcycle pregainpeak/nonzero sourcepositive, postgainpeak0, no nonfinite/clamp/fallback/invalidbuffer/nooutput, no framegap/backward/epochchange, callback/facts/sample equalities, Control-observedstreamfaults0. No silentstatusmissing or capacitytruncation accepted.",
+    "UI-observedprogress/poll gaps are not exactcallbackjitter or OSxrun telemetry. A>=1secondobserved no-progress intervalfails theharness; silenceisintentional output protection, not proof of acoustic audioquality.",
+    "Record finalsource/executable identities, actual testcounts, durations, seed ifemitted, failures andcleanup. Noeventorcounter fabrication. Registereddevice metadata doesnotprove multiplephysicaldevices."
+  ],
+  "remaining_gaps": [
+    "No user-levelPause/Resume or device-IDselection incurrentHost; twoStop/Close/newHostcycles do not coverthose features.",
+    "No audibleoutput/speaker/hearing verification, actualdevice-switch/replug or recovery scenario. Default600secondmuted run is one boundedstability check, notunlimited reliability.",
+    "Windows wire4record/fresh qualification is notpartofthisplan. PriorLinuxprotocolresults keep their exactoldELFidentity."
+  ],
+  "publication": "Only this plan and sanitized source/tool/fixture identities, counts/timings and necessary error/cleanup summaries may be published to the authorized delivery branch. No rawlogs, localpaths, endpointnames, credentials, PCM/audio, executable or tape. Main unchanged."
+}
