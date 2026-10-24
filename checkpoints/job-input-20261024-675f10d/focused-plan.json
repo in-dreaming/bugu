@@ -1,0 +1,136 @@
+{
+  "schema": "bugu.job-input-gate.focused-plan/v2",
+  "status": "FROZEN_NOT_RUN",
+  "base_remote_commit": "1bf4bdd410955d14e8e31293ad9df2f3562bdb1c",
+  "base_tree": "27cc25c78d234eaa87c5bb1de94e670cbe9245d2",
+  "target_tree": "675f10d4011635700f7d9567950737707e7b7849",
+  "patch_sha256": "999ae70ee4bfb33398db9cc31dcd349988a8085a177a79524b6837ae6945cf03",
+  "scope": "One fixed expected wire-header byte corrected from3 to4, retaining literal equality and v2/v3 rejection. Same focused targets, limits and all production source.",
+  "static_review": [
+    "Independent schema/codec and execution-gate reviews found no static blocker. Review is not compilation or native qualification.",
+    "Recorder derives scan eligibility only from the same real AFTER Point. INPUT and independent normalized reference stay paired; malformed role/site/presence/boolean values reject.",
+    "Strict admission keeps complete global marker/grammar/other overlap validation, then requires a complete initially/finally-free four-state proof. Native-attempt does not enable the new ordinal gate.",
+    "Each replay actor streams both immutable INPUT role cursors through a private fixed 48-slot model. BEFORE marker releases before readiness wait; actual atomic completion validates and publishes ordinal before waiting for AFTER marker.",
+    "Failure/cancel aborts the gate; successful final verification is after real owner joins/destruction and EOF/resource checks. In-flight native atomics may complete during cooperative cancellation, never manufacture successful replay proof.",
+    "Focused full-policy fixtures include both predicates true/false with 48+48 reads and all four writes, single-sided INPUT/reference corruption, and nonfree final rejection.",
+    "Seven real-atomic component tests call production Driver.onPoint with two threads and finite waits: both predicate directions true/false, later-AFTER ordering, wrong actual predicate, and cancellation. These are explicitly not full Host qualification.",
+    "Eleven gate tests include identity/result rejection without valid progress, EOF/count/cursor errors, bounds, abort, overflow and 65537-operation fixed-space streaming. The imported pure planner may execute its separately bounded oracle tests too.",
+    "Wire2/3 reject explicitly; old files/binaries remain evidence, never converted. CLI/documentation now identify v4 only. Formatting and diff-whitespace checks passed before freezing; no compile/test has run on this tree.",
+    "Reconstructed on2026-10-24 from exact published ff0c1c40. Ten files match original candidate hashes; the sole new real-atomic test has the same seven scenarios and independent static review. The five-second limit is a success deadline, not a guarantee that thread join is forcibly terminated.",
+    "Cancellation test marker2 proves protocol waiting/no normal progress without Worker, not a sampled exact waiting instruction. All source stays UNVERIFIED until actual focused execution.",
+    "Independent review of the single registration line confirmed a unique module/path, the existing source-local test-root reuse path, and no additional named imports or production edits. Not compiled or tested on this corrected tree.",
+    "Independent read-only review confirmed the single fixed version-byte update is the intended wire4 oracle, not a self-referential expectation or relaxed comparison. Old v2/v3 UnsupportedVersion assertions remain; no runtime changes."
+  ],
+  "parameters": {
+    "REPO": "Isolated exact target source tree with fixed miniaudio/Ogg/Opus and prepared verified 16 authored inputs",
+    "ZIG": "Verified official Zig0.16.0",
+    "RUN_GUARDED": "Original 2862-byte runner",
+    "OUTPUT": "New local output directory outside source"
+  },
+  "environment": {
+    "location": "cloud Linux x86_64 only",
+    "unset_prefixes": [
+      "SME_"
+    ],
+    "unset_exact": [
+      "PYTHONOPTIMIZE"
+    ],
+    "set": {
+      "NO_COLOR": "1"
+    },
+    "unexpected": "Confirm no extra SME variables before execution; ordinary Python3, no -O."
+  },
+  "sequence": [
+    {
+      "id": "input-identity-before",
+      "argv": [
+        "python3",
+        "tools/sme/prepare_live_fixtures.py",
+        "--verify-only"
+      ],
+      "timeout_seconds": 60
+    },
+    {
+      "id": "focused-debug-01",
+      "argv": [
+        "<ZIG>",
+        "build",
+        "sme-live-semantic-job-gate-check",
+        "sme-live-semantic-job-replay-check",
+        "sme-live-semantic-format-check",
+        "sme-live-semantic-codec-check",
+        "sme-live-semantic-streaming-check",
+        "sme-live-history-cli-check",
+        "sme-live-semantic-process-test",
+        "sme-author-live-snapshot-boundary-test",
+        "sme-author-live-production-check",
+        "sme-live-history",
+        "-j1",
+        "-Doptimize=Debug",
+        "--summary",
+        "all",
+        "--",
+        "--help"
+      ],
+      "guard": "<RUN_GUARDED>",
+      "timeout_seconds": 900,
+      "expected": "Run focused format/codec/streaming/gate/real-atomic/CLI/snapshot tests and compile production archive/CLI help. Native process case and external historical-file case intentionally skip without explicit environment; skips are not passes. No capture, Host native qualification or new tape in this stage."
+    },
+    {
+      "id": "input-identity-after",
+      "argv": [
+        "python3",
+        "tools/sme/prepare_live_fixtures.py",
+        "--verify-only"
+      ],
+      "timeout_seconds": 60
+    }
+  ],
+  "runner": {
+    "sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+    "argv": [
+      "python3",
+      "<RUN_GUARDED>",
+      "--repo",
+      "<REPO>",
+      "--out",
+      "<OUTPUT>/focused-debug-01",
+      "--seconds",
+      "900",
+      "--",
+      "<stage argv>"
+    ],
+    "minimum_start_free_bytes": 3355443200,
+    "stop_below_free_bytes": 2281701376,
+    "timeout": "SIGTERM process group then 10-second grace/SIGKILL; exit or lack of timeout alone never proves native cleanup.",
+    "source_guard": "Exact clean tree and immutable inputs before/after; guard actual child exit and stop reason, not wrapper exit alone"
+  },
+  "stop": "Single execution; on failure/timeout/source drift stop native-dependent stages and preserve result. No retries for favorable timing. New source repair needs new frozen source/plan. Missing terminal evidence is UNKNOWN.",
+  "following_separate_plans": [
+    "After a focused pass, separately freeze an optimized build plus one no-hook strict notified original long workload (at least32768 frames after actual Play) using the same 4MiB lane capacity. No reroll or short-workload substitution.",
+    "Only a complete admitted new wire4 tape may enter identical-ELF fresh-process replay. Compare exact PCM, canonical Input/Schedule, UI/command outcomes and actual cleanup.",
+    "Negative malformed or impossible histories must reject before owners where possible; a reference-only mutation must reject or genuinely compare unequal with real cleanup. No expected output injection.",
+    "Any new source repair requires a new source/plan checkpoint. Original Debug capacity failure and wire3 long CrossedScan rejection remain retained, not relabeled as passing."
+  ],
+  "publication": "Source, plans and sanitized terminal summaries only; no raw log, local path, credential, audio input/output, ELF or tape. Main unchanged.",
+  "limits": [
+    "No Windows or physical device actions.",
+    "No new timing hook, buffer growth, generic atomic scheduling or expected-output injection.",
+    "No native notified replay claim until independent process qualification completes.",
+    "Planner maximum48 is explicit and rejects larger pools; current Host uses48. This does not expand general Service support beyond the captured profile.",
+    "Full native capture overhead and long replay are not qualified by these component tests; a 512MiB maximum reader bound does not imply immediate cancellation during a long non-job cursor tail."
+  ],
+  "previous_failure": "e4fca77362d4d6b750e0b4dffa937d18f557f961 preserves153 pass/1 failure/2 skips with only the stale header expectation failing. Earlier build-graph failure and wire3 long rejection also remain unchanged.",
+  "prior_reconstruction": {
+    "applies_to_tree": "e8e20c81f8c149c907246801742558dfbc284815",
+    "details": {
+      "original_unpublished_tree": "2c29f60fab480e0d8db7af71459efccc9d3db526",
+      "original_manifest_sha256": "23f6f4e200eee6bb75d50440e252e191a7cfaf454e7a20736fe6b73e81243af7",
+      "exact_matching_files": 10,
+      "newly_implemented_files": [
+        "tests/sme/live_semantic_job_replay_test.zig"
+      ],
+      "status": "New source identity: ten files match preserved original hashes, the seven-case real-atomic test was newly implemented and independently reviewed. No old candidate compilation/test result exists."
+    }
+  }
+}
