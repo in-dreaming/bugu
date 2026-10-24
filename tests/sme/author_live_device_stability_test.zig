@@ -365,7 +365,6 @@ fn closeActual(host: *live.Host) !live.Status {
                     try pause();
                     continue;
                 },
-                else => return err,
             };
             const status = (host.readStatus() orelse return error.StabilityMissingClosedStatus).value;
             try drainTerminals(host);
