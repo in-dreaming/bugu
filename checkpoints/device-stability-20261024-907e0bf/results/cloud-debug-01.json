@@ -1,0 +1,54 @@
+{
+  "schema": "bugu.device-stability.cloud-result/v1",
+  "status": "FAILED_NEW_HARNESS_COMPILE_ZERO_NEW_TESTS",
+  "source_commit": "b5e84b11e18382bb07f1d6c5b8904aedec8772c8",
+  "source_tree": "907e0bf2d7118750e408568026541c660b833d65",
+  "plan_sha256": "cde39afd3392db2afa15904b472835b310ba828323582d030547eacdfc2f74ca",
+  "guard": {
+    "exit": 1,
+    "stop_reason": null,
+    "elapsed_seconds": 54.10396615799982,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 27906605056
+  },
+  "harness": {
+    "compiled": false,
+    "tests_executed": 0,
+    "cause": "tests/sme/author_live_device_stability_test.zig:368 unreachable else prong; Host.join inferred error set contains only CleanupPending, already handled."
+  },
+  "other_results": {
+    "default_mode": {
+      "passed": 3
+    },
+    "semantic_process": {
+      "passed": 9,
+      "skipped": 1,
+      "skip": "external recording/replay mode unset"
+    },
+    "production_archive": "Debug compiled successfully"
+  },
+  "overall": {
+    "passed": 12,
+    "skipped": 1,
+    "build_steps_succeeded": 9,
+    "build_steps_total": 12,
+    "failed_build_steps": 1
+  },
+  "fixtures_before": {
+    "scope": "authored-input-source-only",
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "fixtures_after": {
+    "scope": "authored-input-source-only",
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "limits": [
+    "Overall failure, not new safety/native lifecycle qualification. No system or Windows device execution.",
+    "Narrow next fix removes the unreachable error-switch else only, preserving CleanupPending wait/deadline/retained cleanup.",
+    "Preserve this first compile failure, stage2 evidence and exact previous tree. No production supply or oracle changes."
+  ]
+}
