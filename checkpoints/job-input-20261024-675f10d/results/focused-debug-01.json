@@ -1,0 +1,80 @@
+{
+  "schema": "bugu.job-input-gate.focused-result/v1",
+  "status": "FOCUSED_PASSED_NATIVE_QUALIFICATION_PENDING",
+  "source_commit": "8c92e7d7b912d0d73120591057c5b337200f1631",
+  "source_tree": "675f10d4011635700f7d9567950737707e7b7849",
+  "plan_commit": "6c9bdd9357e28b64f49fc7d1c13c98d849f11254",
+  "plan_sha256": "968288819771db48d51e5515a37adda33a732426c0dfc8ff5be1d940608d6dd7",
+  "guard": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 5.0700310010001886,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 28508647424
+  },
+  "build_steps": {
+    "succeeded": 31,
+    "total": 31,
+    "failed": 0
+  },
+  "tests": {
+    "passed": 154,
+    "failed": 0,
+    "skipped": 2,
+    "total": 156
+  },
+  "groups": {
+    "job_gate": {
+      "passed": 18,
+      "includes_pure_model_tests": 7
+    },
+    "real_atomic_driver_callbacks": {
+      "passed": 7
+    },
+    "format": {
+      "passed": 19
+    },
+    "codec": {
+      "passed": 62,
+      "skipped": 1
+    },
+    "streaming": {
+      "passed": 8
+    },
+    "cli": {
+      "passed": 20
+    },
+    "process_local": {
+      "passed": 9,
+      "skipped": 1
+    },
+    "snapshot": {
+      "passed": 11
+    }
+  },
+  "production_archive_compile": "cached success",
+  "cli_compile_and_help": "cached compile and actual help success",
+  "fixture_verification_before": {
+    "scope": "authored-input-source-only",
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "fixture_verification_after": {
+    "scope": "authored-input-source-only",
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "native_recording_started": false,
+  "native_replay_started": false,
+  "limits": [
+    "Focused Debug pass does not qualify native capture, independent fresh replay, long duration or physical audio.",
+    "Two intentional skips are native integration without mode and unavailable original external tape, not successful native qualification.",
+    "Seven component tests use real atomic actors/onPoint and cleanup joins but do not instantiate a Host or prove real capture/fresh replay.",
+    "Gate target includes the unchanged bounded oracle:4551834 cases,43539 feasible prefixes,8881 complete; not universal system proof.",
+    "Original build-graph failure and original wire3 long rejection retained; stage3 not started.",
+    "Guard wrapper and actual child both exited0; no timeout or source drift. Historical failures remain independently archived."
+  ],
+  "execution_basis": "All eight test runner steps actually executed and reported counts/timing. Unchanged compilation artifacts were cached; the corrected format test recompiled. Production archive reused its verified cached compile; CLI cached compile plus real help execution."
+}
