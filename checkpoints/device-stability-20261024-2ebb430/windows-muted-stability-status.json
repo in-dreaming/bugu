@@ -1,6 +1,6 @@
 {
   "schema": "bugu.device-stability.windows-status/v1",
-  "phase": "HARDWARE_RUNNING",
+  "phase": "HARDWARE_CYCLE_1_CLOSED_CONTINUING",
   "source_commit": "b48f2297f0dfa749c473b42d6a2d0e0dc12892ef",
   "source_tree": "2ebb430eb44e267d9fd96e22c7f546a71d57d9bf",
   "plan_sha256": "e90630e81d65b2d5ab9c6510f7c558a4a3f7ec931c3af0575456bf09b03259de",
@@ -36,12 +36,39 @@
     "bytes": 8613376,
     "sha256": "f501a916f5733354efc42bb34e8589314a2b02eeac139f43b8f07279a33f3a1d"
   },
-  "elapsed_seconds_observed": 201.3565993,
+  "elapsed_seconds_observed": 301.7905515,
   "actual_config_observed": {
     "mode": "system",
     "total_active_seconds": 600,
     "cycles": 2,
     "final_output_gain": 0,
     "muted": true
-  }
+  },
+  "completed_cycles": [
+    {
+      "cycle": 0,
+      "active_ns": "300014567300",
+      "phase": "closed",
+      "play_executed": true,
+      "stop_executed": true,
+      "worker_joined": true,
+      "opened": 16,
+      "closed": 16,
+      "live": 0,
+      "leases": 0,
+      "instances": 0,
+      "first_error": null,
+      "cleanup_error": null,
+      "backend": "system",
+      "native_channels": 2,
+      "callback_channels": 2,
+      "negotiation": "strict_match",
+      "peak_before": 0.13930014,
+      "peak_after": 0,
+      "callbacks": 56264,
+      "stream_faults": 0,
+      "discontinuities": 0,
+      "fallback": 0
+    }
+  ]
 }
