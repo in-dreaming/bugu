@@ -101,6 +101,12 @@ pub const Options = struct {
     source_fault: source.Fault = .{},
     recovery: enum { close, restart_at_bar } = .close,
     test_pcm: if (@import("builtin").is_test) ?audio.RuntimeMiniaudioBackend.TestPcm else void = if (@import("builtin").is_test) null else {},
+    /// Explicit test-only final device-output protection. Caller owns immutable
+    /// configuration and callback-owned counters through actual Host.destroy.
+    /// Not compatible with capture/replay; production has no storage or branch.
+    test_output_safety: if (@import("builtin").is_test) ?*audio.RuntimeMiniaudioBackend.TestOutputSafety else void = if (@import("builtin").is_test) null else {},
+    /// Read-only branch observation, with borrowed lifetime through both joins.
+    test_callback_facts: if (@import("builtin").is_test) ?audio.RuntimeMiniaudioBackend.TestCallbackFacts else void = if (@import("builtin").is_test) null else {},
     /// Test-only setup before the release publication that admits Worker.
     /// Use this for immutable hooks that Worker reads through its real lifetime.
     test_before_worker: if (@import("builtin").is_test) ?TestSetup else void = if (@import("builtin").is_test) null else {},
@@ -219,6 +225,12 @@ pub const Host = struct {
         if (options.device.sample_rate != 48_000 or options.device.channels != 2 or options.device.period_frames != 256 or options.device.output_layout_request != null) return error.UnsupportedDeviceConfiguration;
         if (!@import("builtin").is_test and (options.test_fault != .none or (options.device.backend == .null_backend and options.semantic == null))) return error.TestOnly;
         if (@import("builtin").is_test) if (options.test_worker_wait_ms != 1 and options.test_worker_wait_ms != 16) return error.InvalidState;
+        if (@import("builtin").is_test) {
+            if (options.test_output_safety != null or options.test_callback_facts != null) {
+                if (options.semantic != null or options.test_capture != null) return error.InvalidState;
+            }
+            if (options.test_output_safety) |safety| try safety.validate();
+        }
         if (@import("builtin").is_test) if (options.test_wait_observer != null and (options.semantic != null or options.test_capture != null)) return error.InvalidState;
         if (@import("builtin").is_test) if (options.test_retry_workload != null) {
             const session = options.semantic orelse return error.InvalidState;
@@ -601,7 +613,11 @@ pub const Host = struct {
         self.renderer.?.* = audio.RuntimeRenderer.init(self.control.?, 48_000);
         self.operation = .backend_init;
         self.backend = try audio.RuntimeMiniaudioBackend.init(self.renderer.?, 256, 2);
-        if (@import("builtin").is_test) self.backend.?.test_pcm = self.options.test_pcm;
+        if (@import("builtin").is_test) {
+            self.backend.?.test_pcm = self.options.test_pcm;
+            self.backend.?.test_output_safety = self.options.test_output_safety;
+            self.backend.?.test_callback_facts = self.options.test_callback_facts;
+        }
         // Establish the one fixed Worker before owner creation: spawn failure
         // cannot strand an owner whose retirement requires a Worker.
         self.operation = .worker_spawn;

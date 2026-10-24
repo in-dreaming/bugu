@@ -906,6 +906,81 @@ fn runtimeNotificationCallback(notification: [*c]const c.ma_device_notification)
 }
 
 pub const RuntimeMiniaudioBackend = struct {
+    /// Restricted hardware-test final-output guard. This is not a production
+    /// volume control, limiter, or statement about physical listening volume.
+    /// The cap is digital amplitude only: 0.01 (-40 dBFS).
+    pub const TestOutputSafety = if (@import("builtin").is_test) struct {
+        pub const maximum_gain: f32 = 0.01;
+        pub const amplitude_cap: f32 = 0.01;
+        pub const Config = struct { gain: f32 = 0 };
+        /// Nonfinite, clamp, invalid-buffer and fallback counts are failure
+        /// evidence for the harness, even though the final buffer is bounded.
+        pub const Stats = struct {
+            callback_count: u64 = 0,
+            sample_count: u64 = 0,
+            nonfinite_count: u64 = 0,
+            nonzero_before_count: u64 = 0,
+            clamped_count: u64 = 0,
+            /// Maximum absolute finite input; nonfinite inputs are counted
+            /// separately and MUST fail the harness, not count as clean silence.
+            peak_before: f32 = 0,
+            peak_after: f32 = 0,
+            no_output_count: u64 = 0,
+            invalid_buffer_count: u64 = 0,
+            fallback_count: u64 = 0,
+        };
+
+        /// Borrowed storage must stay pinned through native stop/uninit/join,
+        /// including start failure, loss, reopen and Host destruction. Config
+        /// is immutable after setup. Only the audio callback may touch stats
+        /// while bound; inspect them only after genuine callback quiescence.
+        config: Config,
+        stats: Stats = .{},
+
+        pub fn init(config: Config) core.BuguError!@This() {
+            const self: @This() = .{ .config = config };
+            try self.validate();
+            return self;
+        }
+        pub fn validate(self: *const @This()) core.BuguError!void {
+            if (!std.math.isFinite(self.config.gain) or self.config.gain < 0 or self.config.gain > maximum_gain)
+                return error.InvalidArgument;
+        }
+        /// Deterministic test seam. Use only on detached storage, never from a
+        /// host thread while a device owns this guard. The callback uses its
+        /// frozen setup gain, not a mutable control/volume input.
+        pub fn apply(self: *@This(), samples: []f32) void {
+            self.applyWithGain(samples, self.config.gain);
+        }
+        fn applyWithGain(self: *@This(), samples: []f32, gain: f32) void {
+            self.stats.callback_count +|= 1;
+            self.stats.sample_count +|= @intCast(samples.len);
+            for (samples) |*sample| {
+                if (!std.math.isFinite(sample.*)) {
+                    self.stats.nonfinite_count +|= 1;
+                    sample.* = 0;
+                    continue;
+                }
+                self.stats.peak_before = @max(self.stats.peak_before, @abs(sample.*));
+                if (sample.* != 0) self.stats.nonzero_before_count +|= 1;
+                // Exact zero for mute, including signed zero. The finite gain
+                // is frozen before open and cannot overflow a finite input.
+                const scaled = if (gain == 0) 0 else sample.* * gain;
+                if (!std.math.isFinite(scaled)) {
+                    self.stats.nonfinite_count +|= 1;
+                    sample.* = 0;
+                    continue;
+                }
+                if (scaled > amplitude_cap or scaled < -amplitude_cap) self.stats.clamped_count +|= 1;
+                sample.* = std.math.clamp(scaled, -amplitude_cap, amplitude_cap);
+                self.stats.peak_after = @max(self.stats.peak_after, @abs(sample.*));
+            }
+        }
+    } else struct {};
+    const TestOutputSafetyBinding = if (@import("builtin").is_test) struct {
+        safety: *TestOutputSafety,
+        gain: f32,
+    } else void;
     /// Test observer only: actual negotiated callback output, never a render
     /// source. Borrowed context must survive device callback quiescence.
     pub const TestPcm = struct {
@@ -947,6 +1022,26 @@ pub const RuntimeMiniaudioBackend = struct {
     test_fail_stop_once: if (@import("builtin").is_test) bool else void = if (@import("builtin").is_test) false else {},
     test_pcm: if (@import("builtin").is_test) ?TestPcm else void = if (@import("builtin").is_test) null else {},
     test_callback_facts: if (@import("builtin").is_test) ?TestCallbackFacts else void = if (@import("builtin").is_test) null else {},
+    /// Host-exclusive opt-in, assigned before first open. Null leaves every
+    /// existing byte contract unchanged. No binding/config changes while live.
+    test_output_safety: if (@import("builtin").is_test) ?*TestOutputSafety else void = if (@import("builtin").is_test) null else {},
+    test_output_safety_binding: if (@import("builtin").is_test) ?TestOutputSafetyBinding else void = if (@import("builtin").is_test) null else {},
+
+    fn prepareTestOutputSafety(self: *RuntimeMiniaudioBackend) core.BuguError!void {
+        if (!@import("builtin").is_test) return;
+        if (self.test_output_safety_binding) |binding| {
+            if (self.test_output_safety != binding.safety or self.adapter.semantic_audio != null) return error.InvalidState;
+            try binding.safety.validate();
+            if (binding.safety.config.gain != binding.gain) return error.InvalidState;
+            return;
+        }
+        if (self.test_output_safety) |safety| {
+            if (self.state != .closed or self.generation != 0 or self.callback_registered or self.context_initialized or
+                self.renderer.device_callbacks_active.load(.acquire) or self.adapter.semantic_audio != null) return error.InvalidState;
+            try safety.validate();
+            self.test_output_safety_binding = .{ .safety = safety, .gain = safety.config.gain };
+        }
+    }
 
     pub fn init(renderer: *runtime.RuntimeRenderer, quantum_frames: u32, channel_count: u16) core.BuguError!RuntimeMiniaudioBackend {
         return .{ .renderer = renderer, .adapter = try RuntimeFixedQuantumAdapter.init(renderer, quantum_frames, channel_count) };
@@ -961,6 +1056,7 @@ pub const RuntimeMiniaudioBackend = struct {
     }
     fn attachSemanticAudioBindingQuiescent(self: *RuntimeMiniaudioBackend, sink: SemanticAudioSink, token: runtime.RuntimeRenderer.DeviceQuiescence) !void {
         try self.renderer.validateDeviceQuiescence(token);
+        if (@import("builtin").is_test) if (self.test_output_safety != null or self.test_output_safety_binding != null) return error.InvalidState;
         if ((self.state != .closed and self.state != .open) or self.callback_registered or
             self.renderer.device_callbacks_active.load(.acquire) or self.adapter.semantic_audio != null) return error.InvalidState;
         self.adapter.semantic_audio = sink;
@@ -1003,6 +1099,7 @@ pub const RuntimeMiniaudioBackend = struct {
     }
 
     pub fn open(self: *RuntimeMiniaudioBackend, config: DeviceConfig) core.BuguError!void {
+        if (@import("builtin").is_test) try self.prepareTestOutputSafety();
         // Replay must never open a physical/system driver, even when attachment
         // preceded device selection. Ordinary capture/device behavior is intact.
         if (self.semantic_audio_replay and config.backend != .null_backend) return error.InvalidArgument;
@@ -1027,6 +1124,7 @@ pub const RuntimeMiniaudioBackend = struct {
     pub fn start(self: *RuntimeMiniaudioBackend) core.BuguError!void {
         if (self.state == .running) return;
         if (self.state != .open) return core.BuguError.InvalidState;
+        if (@import("builtin").is_test) try self.prepareTestOutputSafety();
         if (self.semantic_audio_replay and !self.semanticReplayDeviceEligible()) return error.InvalidState;
         try self.renderer.registerDeviceCallbacks();
         self.callback_registered = true;
@@ -1174,6 +1272,115 @@ pub const RuntimeMiniaudioBackend = struct {
     /// Test-only driver fault source: this calls the real null/backend stop,
     /// so the installed miniaudio notification callback supplies the loss fact.
     pub const DriverTest = if (@import("builtin").is_test) struct {
+        /// Shared deterministic checks are callable from the narrowly selected
+        /// hardware-test root, without relying on imported inline-test discovery.
+        pub fn checkOutputSafetyDisabled() !void {
+            const expected = [_]u32{ 0x7fc01234, 0x80000000, 0x40000000, 0xc0400000 };
+            var samples: [expected.len]f32 = undefined;
+            for (&samples, expected) |*sample, bits| sample.* = @bitCast(bits);
+            var pass = RuntimeOutputSafetyPass.begin(null, &samples, 2, 2);
+            pass.finish(false);
+            try std.testing.expectEqualSlices(u8, std.mem.asBytes(&expected), std.mem.asBytes(&samples));
+        }
+        pub fn checkOutputSafetyFallback() !void {
+            var safety = try RuntimeMiniaudioBackend.TestOutputSafety.init(.{});
+            const binding: RuntimeMiniaudioBackend.TestOutputSafetyBinding = .{ .safety = &safety, .gain = 0 };
+            var samples = [_]f32{ std.math.nan(f32), 7, -9, std.math.inf(f32) };
+            var fallback = RuntimeOutputSafetyPass.begin(binding, &samples, 2, 2);
+            // A branch returning before rendering can never expose stale device PCM.
+            try std.testing.expectEqualSlices(f32, &.{ 0, 0, 0, 0 }, &samples);
+            fallback.finish(true);
+            fallback.finish(true); // exactly once despite explicit completion + defer
+            try std.testing.expectEqual(@as(u64, 1), safety.stats.callback_count);
+            try std.testing.expectEqual(@as(u64, 4), safety.stats.sample_count);
+            try std.testing.expectEqual(@as(u64, 1), safety.stats.fallback_count);
+
+            samples = .{ 1, 2, 3, 4 };
+            var invalid = RuntimeOutputSafetyPass.begin(binding, &samples, 2, 0);
+            try std.testing.expect(invalid.invalid_buffer);
+            invalid.finish(true);
+            try std.testing.expectEqualSlices(f32, &.{ 1, 2, 3, 4 }, &samples);
+            try std.testing.expectEqual(@as(u64, 1), safety.stats.invalid_buffer_count);
+            var absent = RuntimeOutputSafetyPass.begin(binding, null, 2, 2);
+            absent.finish(true);
+            try std.testing.expectEqual(@as(u64, 1), safety.stats.no_output_count);
+            try std.testing.expectEqual(@as(u64, 3), safety.stats.callback_count);
+            try std.testing.expectEqual(@as(u64, 4), safety.stats.sample_count);
+        }
+        pub fn checkOutputSafetyBinding() !void {
+            const control = try runtime.ControlRuntime.create(std.testing.allocator);
+            defer std.testing.allocator.destroy(control);
+            defer control.destroy() catch unreachable;
+            var renderer = runtime.RuntimeRenderer.init(control, 48_000);
+            var backend = try RuntimeMiniaudioBackend.init(&renderer, 256, 2);
+            defer backend.deinit();
+            var safety = try RuntimeMiniaudioBackend.TestOutputSafety.init(.{});
+            backend.test_output_safety = &safety;
+            safety.config.gain = std.math.nan(f32);
+            try std.testing.expectError(error.InvalidArgument, backend.open(.{ .backend = .null_backend }));
+            try std.testing.expectEqual(RuntimeDeviceState.closed, backend.state);
+            try std.testing.expect(!backend.context_initialized and backend.test_output_safety_binding == null);
+            try std.testing.expectEqual(@as(u64, 0), safety.stats.callback_count);
+            safety.config.gain = 0;
+            try backend.open(.{ .backend = .null_backend });
+            safety.config.gain = 0.001;
+            try std.testing.expectError(error.InvalidState, backend.start());
+            try std.testing.expect(!backend.callback_registered);
+            safety.config.gain = 0;
+            backend.stop();
+            backend.test_output_safety = null;
+            try std.testing.expectError(error.InvalidState, backend.open(.{ .backend = .null_backend }));
+            try std.testing.expectEqual(@as(u64, 0), safety.stats.callback_count);
+        }
+        pub fn checkOutputSafetyNativeCallbacks() !void {
+            const control = try runtime.ControlRuntime.create(std.testing.allocator);
+            defer std.testing.allocator.destroy(control);
+            defer control.destroy() catch unreachable;
+            var renderer = runtime.RuntimeRenderer.init(control, 48_000);
+            var backend = try RuntimeMiniaudioBackend.init(&renderer, 256, 2);
+            defer backend.deinit();
+            var safety = try RuntimeMiniaudioBackend.TestOutputSafety.init(.{});
+            backend.test_output_safety = &safety;
+            try backend.open(.{ .backend = .null_backend });
+            const saved_output = backend.output;
+            defer {
+                backend.output = saved_output;
+                backend.adapter.pending_start = 0;
+                backend.adapter.pending_len = 0;
+            }
+            var samples = [_]f32{ 9, -9, std.math.nan(f32), std.math.inf(f32) };
+            backend.output = null;
+            try RuntimeMiniaudioBackend.DriverTest.callbackUnstarted(&backend, &samples, 2);
+            try std.testing.expectEqualSlices(f32, &.{ 0, 0, 0, 0 }, &samples);
+            backend.output = saved_output;
+
+            // An explicitly corrupted adapter view reaches the real render-error
+            // fallback before it can read pending samples. No driver state is forged.
+            backend.adapter.pending_start = max_pending_samples;
+            backend.adapter.pending_len = 2;
+            @memset(&samples, 9);
+            try RuntimeMiniaudioBackend.DriverTest.callbackUnstarted(&backend, &samples, 2);
+            try std.testing.expectEqualSlices(f32, &.{ 0, 0, 0, 0 }, &samples);
+            backend.adapter.pending_start = 0;
+            backend.adapter.pending_len = 0;
+
+            // Native playback still owns four samples; a mismatched negotiated view
+            // must leave all four initialized, without overrunning or partial writes.
+            backend.output.?.matrix.output.count = 1;
+            @memset(&samples, 9);
+            try RuntimeMiniaudioBackend.DriverTest.callbackUnstarted(&backend, &samples, 2);
+            try std.testing.expectEqualSlices(f32, &.{ 0, 0, 0, 0 }, &samples);
+            backend.output = saved_output;
+            try RuntimeMiniaudioBackend.DriverTest.callbackUnstarted(&backend, null, 2);
+            backend.stop(); // read counters only after genuine native close/join
+            try std.testing.expectEqual(@as(u64, 4), safety.stats.callback_count);
+            try std.testing.expectEqual(@as(u64, 12), safety.stats.sample_count);
+            try std.testing.expectEqual(@as(u64, 3), safety.stats.fallback_count);
+            try std.testing.expectEqual(@as(u64, 1), safety.stats.invalid_buffer_count);
+            try std.testing.expectEqual(@as(u64, 1), safety.stats.no_output_count);
+            try std.testing.expectEqual(@as(f32, 0), safety.stats.peak_after);
+        }
+
         /// Same installed callback, with a genuinely opened but never-started
         /// null device. Tests supply only outer arguments; the real negotiated
         /// adapter chooses chunks, quanta and pending output. No device fields
@@ -1269,11 +1476,56 @@ fn dataCallback(device: [*c]c.ma_device, output: ?*anyopaque, input: ?*const any
     negotiated.render(&backend.adapter, &backend.callback_scratch, out[0..sample_count], frame_count) catch @memset(out[0..sample_count], 0);
 }
 
+/// Test-only ownership-local guard for every physical output return. The
+/// valid native buffer starts initialized, including errors before rendering.
+/// Success finalizes before PCM observers; the defer covers all fallback exits.
+const RuntimeOutputSafetyPass = if (@import("builtin").is_test) struct {
+    binding: ?RuntimeMiniaudioBackend.TestOutputSafetyBinding,
+    samples: ?[]f32 = null,
+    finished: bool = false,
+    invalid_buffer: bool = false,
+
+    fn begin(binding: ?RuntimeMiniaudioBackend.TestOutputSafetyBinding, output: ?*anyopaque, frames: u32, channels: u16) @This() {
+        var self: @This() = .{ .binding = binding };
+        const bound = binding orelse return self;
+        const pointer = output orelse {
+            bound.safety.stats.callback_count +|= 1;
+            bound.safety.stats.no_output_count +|= 1;
+            return self;
+        };
+        const count = checkedSamples(frames, channels) catch {
+            // The native shape is invalid: do not traverse an unknown buffer.
+            // This explicit counter MUST fail a harness, never report success.
+            bound.safety.stats.callback_count +|= 1;
+            bound.safety.stats.invalid_buffer_count +|= 1;
+            self.invalid_buffer = true;
+            return self;
+        };
+        const samples: [*]f32 = @ptrCast(@alignCast(pointer));
+        self.samples = samples[0..count];
+        @memset(self.samples.?, 0);
+        return self;
+    }
+    fn finish(self: *@This(), fallback: bool) void {
+        if (self.finished) return;
+        self.finished = true;
+        const bound = self.binding orelse return;
+        const samples = self.samples orelse return;
+        if (fallback) bound.safety.stats.fallback_count +|= 1;
+        bound.safety.applyWithGain(samples, bound.gain);
+    }
+} else void;
+
 fn runtimeDataCallback(device: [*c]c.ma_device, output: ?*anyopaque, input: ?*const anyopaque, frame_count: c.ma_uint32) callconv(.c) void {
     _ = input;
     if (device == null) return;
     const backend: *RuntimeMiniaudioBackend = @ptrCast(@alignCast(device.*.pUserData));
     const callback_channels: u16 = std.math.cast(u16, device.*.playback.channels) orelse 0;
+    var safety_pass: RuntimeOutputSafetyPass = if (@import("builtin").is_test)
+        RuntimeOutputSafetyPass.begin(backend.test_output_safety_binding, output, frame_count, callback_channels)
+    else {};
+    defer if (@import("builtin").is_test) safety_pass.finish(true);
+    if (@import("builtin").is_test) if (safety_pass.invalid_buffer) return;
     // A null timer may wake after the final recorded logical callback. Only
     // the separate offline binding can hold that unadmitted wake. Capture and
     // physical drivers always take the unchanged callback path below.
@@ -1342,6 +1594,14 @@ fn runtimeDataCallback(device: [*c]c.ma_device, output: ?*anyopaque, input: ?*co
         callback_return = .no_negotiated_output;
         return;
     });
+    if (@import("builtin").is_test) if (safety_pass.binding) |binding| {
+        if (negotiated.matrix.output.count != callback_channels) {
+            binding.safety.stats.invalid_buffer_count +|= 1;
+            callback_return = .sample_count_failed;
+            callback_failure = error.UnsupportedChannelLayout;
+            return;
+        }
+    };
     const sample_count = checkedSamples(frame_count, negotiated.matrix.output.count) catch |err| {
         callback_return = .sample_count_failed;
         callback_failure = err;
@@ -1367,6 +1627,7 @@ fn runtimeDataCallback(device: [*c]c.ma_device, output: ?*anyopaque, input: ?*co
     };
     callback_return = .completed;
     witness_failure = .none;
+    if (@import("builtin").is_test) safety_pass.finish(false);
     if (@import("builtin").is_test) if (backend.test_pcm) |hook|
         hook.call(hook.context, backend.adapter.device_epoch, first_frame, negotiated.matrix.output.count, out[0..sample_count]);
     if (backend.adapter.semantic_audio) |sink| sink.call(sink.context, .{ .pcm = .{
@@ -1515,4 +1776,20 @@ test "TASK-025 runtime adapter preserves exactly-once short PCM across callback 
     owner.retire();
     try control.destroy();
     try std.testing.expect(owner.canDestroy());
+}
+
+test "test output safety disabled pass preserves every output bit" {
+    try RuntimeMiniaudioBackend.DriverTest.checkOutputSafetyDisabled();
+}
+
+test "test output safety initializes fallbacks and rejects unknown buffer shapes" {
+    try RuntimeMiniaudioBackend.DriverTest.checkOutputSafetyFallback();
+}
+
+test "test output safety rejects invalid or changed binding before native startup" {
+    try RuntimeMiniaudioBackend.DriverTest.checkOutputSafetyBinding();
+}
+
+test "test output safety native callback covers missing output and render failure returns" {
+    try RuntimeMiniaudioBackend.DriverTest.checkOutputSafetyNativeCallbacks();
 }

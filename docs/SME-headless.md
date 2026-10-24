@@ -49,3 +49,21 @@ strict 先验证完整全局 marker、scan grammar、载荷和既有其它重叠
 回放仍执行原始原子读写：先释放真实 BEFORE marker，再等待已证明的操作序号；执行后核验真实谓词和身份，发布完成序号，最后进入 AFTER marker。没有把预期值赋给引擎状态，也不阻塞 Audio 线程。取消沿用现有失败传播和真实 owner join/销毁，不以计数器跳跃代替清理。native_attempt 不启用这个执行门，保留实际尝试、可能不匹配的合同。
 
 这是待独立验证的接入候选。纯模型的有限穷举不是完整系统证明；短闭环、既有 wire 3 的成功或失败也不是 wire 4 long 录制与 fresh replay 的替代。生产供给策略、真实 PCM/命令 oracle、4 MiB lane 容量和原 long 门槛不变。
+
+## 2026-10-24 有限资格结果
+
+源码 `8c92e7d7b912d0d73120591057c5b337200f1631`、tree `675f10d4011635700f7d9567950737707e7b7849` 已完成独立云端验证：focused Debug 154 pass / 2 skip；ReleaseSafe 原 long 首次实际录制 10/10，34,816 帧；同 ELF 新进程 strict replay 10/10，完整比较 PCM、公共 Input/Schedule、命令及角色 EOF。错误 pacing 在 owner 创建前拒绝，单个 PCM reference 位变异在实际 render 比较中拒绝并完成真实清理。
+
+原输出目录准备遗漏的 9 pass / 1 fail 单独保留，发生在 recordProcess 之前；修正执行前置条件，不是重复录制挑选时序。更早的编译错误、Debug capture overflow、旧 wire3 long 不适用结果也均保留。此次录制 `multi_frame_ticks=0`，不宣称自然跨帧见证；真实原子跨读写的受控测试是另一项覆盖。
+
+这只资格化有限 Linux null-backend 优化形态，不是所有历史保证，不是 Windows wire4 或真实设备稳定性。34,816 帧约 0.73 秒，不称长期播放。原始 ELF/tape 只保留于本次云端工作区，不随源码发布；以后重建须重新生成同构建录制，不能冒充旧二进制身份。后续硬件 harness 与此已验源码分开提交、分开验证。
+
+## 阶段3候选：静音真实设备稳定性 harness
+
+新增独立 opt-in `sme-author-live-device-stability-test`，未设置专用模式时跳过真实运行。普通生产构建不包含输出保护或测试观察器；既有录制/回放不允许同时启用这些测试字段。旧已验源码身份与本阶段候选的验证记录分开。
+
+拟用 `SME_DEVICE_STABILITY_MODE=system` 选择实际系统默认播放设备；不枚举或修改 OS 默认设备，不开启麦克风，不改变 OS 音量。默认 `SME_DEVICE_STABILITY_GAIN=0`，最后输出缓冲强制静音；可选的 `0.01` 仅表示数字 gain 与最大绝对幅度 0.01（-40dBFS），不是未知硬件下的声压保证。低增益开声不属于默认验收。保护前真实非零样本、连续帧、内部 stream fault、回调返回分支及资源生命周期另有固定统计。非有限值或触发限幅不会被静默算作通过。
+
+`SME_DEVICE_STABILITY_SECONDS` 是明确限定的真实 Play 墙钟秒数，system 最多 600 秒，云端 null 检查最多 5 秒；可选 `SME_DEVICE_STABILITY_CYCLES` 最多 4 轮，且活动秒数加每轮 80 秒生命周期预算不得超过 840 秒。每轮实际 Play→Stop→Close→销毁，再建立新的 Host，不能称为同一 transport 的 Pause/Resume。控制轮询约 10ms，每秒保留固定容量快照；进度空档是 UI 观测估计，不是精确 OS xrun 或 callback jitter。命令和关闭各有界，外层 guard 超时不证明资源已释放。
+
+静音真实设备运行只验证软件产生非零数据、实际驱动回调/消费进展和清理，不验证扬声器、声压或听感断音。当前 Host 没有用户级 Pause/Resume、device ID 选择或定向切换接口；已有 restart_at_bar 故障恢复也不能冒充物理设备切换。本阶段先验证最小默认设备路径，尚未执行的硬件与功能覆盖必须明确保留。
