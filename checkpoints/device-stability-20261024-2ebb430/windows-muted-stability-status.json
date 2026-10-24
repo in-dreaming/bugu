@@ -1,0 +1,14 @@
+{
+  "schema": "bugu.device-stability.windows-status/v1",
+  "phase": "PREPARING_FIXED_SOURCE",
+  "source_commit": "b48f2297f0dfa749c473b42d6a2d0e0dc12892ef",
+  "source_tree": "2ebb430eb44e267d9fd96e22c7f546a71d57d9bf",
+  "plan_sha256": "e90630e81d65b2d5ab9c6510f7c558a4a3f7ec931c3af0575456bf09b03259de",
+  "protected_files": 6945,
+  "protected_changed": 0,
+  "protected_missing": 0,
+  "zig_version": "0.16.0",
+  "build_invocations": 0,
+  "hardware_invocations": 0,
+  "blocked": false
+}
