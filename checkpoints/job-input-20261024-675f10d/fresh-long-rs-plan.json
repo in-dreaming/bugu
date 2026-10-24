@@ -1,0 +1,83 @@
+{
+  "schema": "bugu.job-input-v4.fresh-plan/v1",
+  "status": "FROZEN_NOT_RUN",
+  "source_commit": "8c92e7d7b912d0d73120591057c5b337200f1631",
+  "source_tree": "675f10d4011635700f7d9567950737707e7b7849",
+  "purpose": "One independent process exact same-ELF replay of the first admitted notified wire4 ReleaseSafe original long recording. No rebuild, re-record, hooks or reference injection.",
+  "identities": {
+    "executable": {
+      "bytes": 40732608,
+      "sha256": "92b3daf40217232c9a49d77c5258ba8f95331b90e8b687a63c8078e71c51ed13"
+    },
+    "bank": {
+      "bytes": 1283976,
+      "sha256": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+    },
+    "history": {
+      "bytes": 48498479,
+      "sha256": "3f1162e730513205f18f95bcd4f352e5d70560a16b9b6d90f0f7e4dba7f716a6"
+    }
+  },
+  "parameters": {
+    "REPO": "Exact clean source tree",
+    "ELF": "Exact recorded ReleaseSafe executable",
+    "TAPE_DIRECTORY": "Original recorded directory containing immutable bank.bin/history.bin",
+    "OUTPUT": "New guard output outside source",
+    "RUN_GUARDED": "Original verified runner"
+  },
+  "environment": {
+    "unset_prefixes": [
+      "SME_"
+    ],
+    "unset_exact": [
+      "PYTHONOPTIMIZE"
+    ],
+    "set": {
+      "NO_COLOR": "1",
+      "SME_LIVE_SEMANTIC_MODE": "replay",
+      "SME_LIVE_SEMANTIC_DIR": "<TAPE_DIRECTORY>",
+      "SME_LIVE_SEMANTIC_PACING": "notified_v1",
+      "SME_LIVE_SEMANTIC_ADMISSION": "ordered_job_scans",
+      "SME_LIVE_SEMANTIC_WORKLOAD": "long"
+    }
+  },
+  "argv": [
+    "python3",
+    "<RUN_GUARDED>",
+    "--repo",
+    "<REPO>",
+    "--out",
+    "<OUTPUT>",
+    "--seconds",
+    "180",
+    "--",
+    "<ELF>"
+  ],
+  "runner_sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+  "bounds": {
+    "seconds": 180,
+    "minimum_start_free_bytes": 3355443200,
+    "stop_below_free_bytes": 2281701376,
+    "timeout": "TERM process group, 10 second grace then KILL. A timeout does not prove native cleanup."
+  },
+  "prechecks": [
+    "Archive record result first. Verify exact source tree/clean worktree, ELF and both input file hashes.",
+    "Verify16 authored fixtures before and after within60 seconds each. No extraSME variables.",
+    "Original tape directory exists and has bank.bin/history.bin/record-result.json only; replay-result.json must not preexist. Pin input hashes before and after. Record result must be archived before this invocation."
+  ],
+  "required": [
+    "Strict preflight admitted before owners, requested pacing matching canonical launch.",
+    "Actual concurrent native owners, real source decoding/clocks and output comparisons.",
+    "Exact full PCM, canonical Input/Schedule, command/UI outcomes, role EOF and actual Host joined/destroyed.",
+    "Both Play and Stop accepted/executed and exact2 terminal outcomes; nonzero realPCM witness.",
+    "Report actual result/cleanup and unchanged source and bank/history hashes; do not infer cleanup from exit alone.",
+    "Strict INPUT-only job schedule and role EOF complete; actual observed predicates compared independently. Reject mismatch, never assign recorded atomics or output samples."
+  ],
+  "stop": "Single attempt; preserve mismatch/rejection/timeout with original tape unchanged. No re-record or timing retry. Unknown remains UNKNOWN.",
+  "limits": [
+    "Original long minimum32768 frames, not physical-device long-duration stability.",
+    "No natural cross-frame tick witness in this recording; do not imply one. Real-atomic predicate crossings qualified separately.",
+    "Debug recording overflow and original wire3 long strict rejection remain retained.",
+    "No Windows or physical devices; no binary/raw uploads; main unchanged."
+  ]
+}
