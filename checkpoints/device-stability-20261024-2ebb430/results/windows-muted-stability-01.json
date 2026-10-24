@@ -1,0 +1,317 @@
+{
+  "schema": "bugu.device-stability.windows-result/v1",
+  "status": "PASS_FINITE_SYSTEM_MUTED_ONLY",
+  "source_commit": "b48f2297f0dfa749c473b42d6a2d0e0dc12892ef",
+  "source_tree": "2ebb430eb44e267d9fd96e22c7f546a71d57d9bf",
+  "plan_sha256": "e90630e81d65b2d5ab9c6510f7c558a4a3f7ec931c3af0575456bf09b03259de",
+  "tools": {
+    "zig_version": "0.16.0",
+    "zig_sha256": "086ce9d47ba42f33a514e1a6e04eb1d4a8fa1d75e0868e0213caad447c91e864",
+    "python_version": "Python 3.14.2"
+  },
+  "dependencies": [
+    {
+      "path": "third_party/miniaudio",
+      "commit": "9634bedb5b5a2ca38c1ee7108a9358a4e233f14d",
+      "clean": true
+    },
+    {
+      "path": "third_party/ogg",
+      "commit": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+      "clean": true
+    },
+    {
+      "path": "third_party/opus",
+      "commit": "22244de5a79bd1d6d623c32e72bf1954b56235be",
+      "clean": true
+    }
+  ],
+  "fixtures": {
+    "files": 16,
+    "bytes": 12288704,
+    "before_verified": true,
+    "after_verified": true,
+    "script_hashes": {
+      "tools/sme/live-fixtures.json": "2f9a6dab70d8d037e5d8bf23d399acd7258064036f1fb1be8972cb5adc00dd38",
+      "tools/sme/prepare_live_fixtures.py": "00f0a34936cde5d749dd7bb3e5ef8534abdbb4adf189557d499b4a890f5b24ed",
+      "examples/sme/assets/generate.py": "a59277f25b17bf830495995eae432b960a4e020ff6b4f91831294f977a9229a5",
+      "examples/sme/assets/score.json": "ba5985ccb7009b8666d0f563aea91b32b2b7ab286e4b9da6ead71c7ebe6550bb"
+    }
+  },
+  "executable": {
+    "bytes": 8613376,
+    "sha256": "f501a916f5733354efc42bb34e8589314a2b02eeac139f43b8f07279a33f3a1d",
+    "format": "PE x86_64",
+    "source_commit": "b48f2297f0dfa749c473b42d6a2d0e0dc12892ef",
+    "source_tree": "2ebb430eb44e267d9fd96e22c7f546a71d57d9bf"
+  },
+  "build": {
+    "invocations": 1,
+    "command": "zig build sme-author-live-device-stability-test sme-author-live-production-check -j1 -Dtarget=x86_64-windows-msvc -Doptimize=ReleaseSafe --summary all --cache-dir <ISOLATED_LOCAL_CACHE> --global-cache-dir <ISOLATED_GLOBAL_CACHE>",
+    "returncode": 0,
+    "elapsed_seconds": 172.20878200000152,
+    "guard_seconds": 1800,
+    "stop_reason": null,
+    "passed": 11,
+    "skipped": 1,
+    "production_compile": true,
+    "mode_unset": true,
+    "physical_output_opened": false,
+    "owned_remaining": 0
+  },
+  "hardware": {
+    "invocations": 1,
+    "command": "<same SHA256-pinned Windows EXE>",
+    "environment": {
+      "SME_DEVICE_STABILITY_MODE": "system",
+      "SME_DEVICE_STABILITY_SECONDS": "600",
+      "SME_DEVICE_STABILITY_CYCLES": "2",
+      "SME_DEVICE_STABILITY_GAIN": "0"
+    },
+    "returncode": 0,
+    "elapsed_seconds": 603.4689955999493,
+    "guard_seconds": 900,
+    "stop_reason": null,
+    "externally_terminated": false,
+    "passed": 12,
+    "failed": 0,
+    "seed_emitted": null,
+    "owned_remaining": 0,
+    "record_counts": {
+      "DEVICE_STABILITY_CONFIG": 1,
+      "DEVICE_STABILITY_CLOSED": 2,
+      "DEVICE_STABILITY_OUTPUT": 2,
+      "DEVICE_STABILITY_NEGOTIATED": 2,
+      "DEVICE_STABILITY_COMPLETE": 1,
+      "DEVICE_STABILITY_DIAGNOSTICS": 1,
+      "DEVICE_STABILITY_SAMPLE": 602,
+      "DEVICE_STABILITY_NATIVE_ERROR": 0,
+      "DEVICE_STABILITY_FAILURE_CLEANUP": 0
+    },
+    "inspection_errors": [],
+    "config": [
+      {
+        "schema": "1",
+        "mode": "system",
+        "target_active_seconds": "600",
+        "cycles": "2",
+        "final_output_gain": "0",
+        "muted": "true",
+        "poll_ms": "10",
+        "diagnostic_interval_ms": "1000",
+        "outer_watchdog_required_seconds": "900",
+        "semantic": "false",
+        "recorder": "false",
+        "callback_clock_hook": "false",
+        "lifecycle_cycles_not_pause_resume": "true",
+        "system_selection": "default_output",
+        "no_microphone": "true",
+        "no_pcm_retention": "true",
+        "no_volume_changes": "true"
+      }
+    ],
+    "closed": [
+      {
+        "schema": "1",
+        "cycle": "0",
+        "active_ns": "300014567300",
+        "phase": "closed",
+        "worker_joined": "true",
+        "play_executed": "true",
+        "stop_executed": "true",
+        "first_error_present": "false",
+        "first_error": "none",
+        "first_error_site": "none",
+        "cleanup_error_present": "false",
+        "cleanup_error": "none",
+        "provider_opened": "16",
+        "provider_closed": "16",
+        "provider_live": "0",
+        "provider_reads": "55341",
+        "sample_leases": "0",
+        "live_instances": "0",
+        "host_callbacks": "56264",
+        "worker_calls": "319928",
+        "lost": "0",
+        "reopened": "0"
+      },
+      {
+        "schema": "1",
+        "cycle": "1",
+        "active_ns": "300003547600",
+        "phase": "closed",
+        "worker_joined": "true",
+        "play_executed": "true",
+        "stop_executed": "true",
+        "first_error_present": "false",
+        "first_error": "none",
+        "first_error_site": "none",
+        "cleanup_error_present": "false",
+        "cleanup_error": "none",
+        "provider_opened": "16",
+        "provider_closed": "16",
+        "provider_live": "0",
+        "provider_reads": "55238",
+        "sample_leases": "0",
+        "live_instances": "0",
+        "host_callbacks": "56245",
+        "worker_calls": "320620",
+        "lost": "0",
+        "reopened": "0"
+      }
+    ],
+    "output": [
+      {
+        "schema": "1",
+        "cycle": "0",
+        "final_callbacks": "56264",
+        "final_samples": "28807168",
+        "peak_before": "0.13930014",
+        "peak_after": "0",
+        "finite_nonzero_before": "28800064",
+        "nonfinite": "0",
+        "clamped": "0",
+        "no_output": "0",
+        "invalid_buffer": "0",
+        "fallback": "0",
+        "pcm_callbacks": "56264",
+        "pcm_frames": "14403584",
+        "callback_entries": "56264",
+        "callback_returns": "56264",
+        "callback_error_code": "0",
+        "discontinuities": "0",
+        "missing_frames": "0",
+        "backward_frames": "0",
+        "epoch_changes": "0",
+        "invalid_shape": "false",
+        "nonfinite_after": "false",
+        "counter_overflow": "false",
+        "control_observations": "89129",
+        "stream_faults": "0",
+        "ui_poll_gap_ns": "116093100",
+        "ui_progress_gap_ns": "116093100",
+        "ui_no_progress_ns": "31586800"
+      },
+      {
+        "schema": "1",
+        "cycle": "1",
+        "final_callbacks": "56245",
+        "final_samples": "28797440",
+        "peak_before": "0.13930014",
+        "peak_after": "0",
+        "finite_nonzero_before": "28792384",
+        "nonfinite": "0",
+        "clamped": "0",
+        "no_output": "0",
+        "invalid_buffer": "0",
+        "fallback": "0",
+        "pcm_callbacks": "56245",
+        "pcm_frames": "14398720",
+        "callback_entries": "56245",
+        "callback_returns": "56245",
+        "callback_error_code": "0",
+        "discontinuities": "0",
+        "missing_frames": "0",
+        "backward_frames": "0",
+        "epoch_changes": "0",
+        "invalid_shape": "false",
+        "nonfinite_after": "false",
+        "counter_overflow": "false",
+        "control_observations": "89172",
+        "stream_faults": "0",
+        "ui_poll_gap_ns": "96312900",
+        "ui_progress_gap_ns": "96312900",
+        "ui_no_progress_ns": "16170200"
+      }
+    ],
+    "negotiated": [
+      {
+        "schema": "1",
+        "cycle": "0",
+        "output_present": "true",
+        "requested_sample_rate": "48000",
+        "native_channels": "2",
+        "callback_channels": "2",
+        "backend": "system",
+        "reason": "strict_match"
+      },
+      {
+        "schema": "1",
+        "cycle": "1",
+        "output_present": "true",
+        "requested_sample_rate": "48000",
+        "native_channels": "2",
+        "callback_channels": "2",
+        "backend": "system",
+        "reason": "strict_match"
+      }
+    ],
+    "complete": [
+      {
+        "schema": "1",
+        "mode": "system",
+        "cycles": "2",
+        "target_active_seconds": "600",
+        "measured_active_ns": "600018114900",
+        "host_lifecycle_wall_ns": "601214232200",
+        "source_preparation_excluded": "true",
+        "all_hosts_destroyed": "true"
+      }
+    ],
+    "diagnostics": [
+      {
+        "schema": "1",
+        "retained": "602",
+        "capacity": "610",
+        "overflow": "false",
+        "ui_observations_only": "true",
+        "callback_clock_reads": "false",
+        "exact_callback_jitter": "false",
+        "os_underruns_available": "false",
+        "acoustic_validation": "false"
+      }
+    ],
+    "native_errors": [],
+    "failure_cleanup": [],
+    "all_retained_samples_checked": true,
+    "raw_log_identity": {
+      "stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stderr": {
+        "bytes": 159880,
+        "sha256": "b9a26eaa55a0c0d0e1a5283e0b35570fc609b31cb39a62061eb8dabb04144720"
+      }
+    },
+    "sample_coverage": {
+      "records": 602,
+      "per_cycle_counts": [
+        301,
+        301
+      ],
+      "all_sample_field_sets_complete": true,
+      "sample_frame_equality_mismatches": 0,
+      "fixed_quantum_counter_mismatches": 0,
+      "max_reported_skipped_status": 12,
+      "status_present_all_retained_rows": true
+    }
+  },
+  "preservation": {
+    "files": 6945,
+    "inventory_sha256": "72395c37b67ca0788d0b0ca61ba6c84c50eeb1c3e2b4dca01a8bbd7f7dcbd811",
+    "before_changed": 0,
+    "before_missing": 0,
+    "after_changed": 0,
+    "after_missing": 0,
+    "tracked_source_clean": true,
+    "executable_unchanged": true,
+    "related_remaining_count": 0
+  },
+  "limits": [
+    "Only system default output, application gain zero and 600 seconds total active Play across two distinct Stop/Close/destroy/newHost lifecycles.",
+    "No audible or acoustic quality verification; no microphone, system volume/default-device changes, device switching, unplug/recovery, Pause/Resume or Windows wire4 qualification.",
+    "48000 Hz is requested; actual hardware rate and endpoint identity are not exposed by these public records. UI observation gaps are not exact callback jitter or OS xrun telemetry.",
+    "No raw log, endpoint name, local path, credential, PCM/audio, binary or tape published. Main unchanged."
+  ]
+}
