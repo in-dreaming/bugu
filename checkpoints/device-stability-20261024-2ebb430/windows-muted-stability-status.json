@@ -1,6 +1,6 @@
 {
   "schema": "bugu.device-stability.windows-status/v1",
-  "phase": "HARDWARE_CYCLE_2_RUNNING",
+  "phase": "HARDWARE_PASSED_FINAL_PRESERVATION_CHECK",
   "source_commit": "b48f2297f0dfa749c473b42d6a2d0e0dc12892ef",
   "source_tree": "2ebb430eb44e267d9fd96e22c7f546a71d57d9bf",
   "plan_sha256": "e90630e81d65b2d5ab9c6510f7c558a4a3f7ec931c3af0575456bf09b03259de",
@@ -36,7 +36,7 @@
     "bytes": 8613376,
     "sha256": "f501a916f5733354efc42bb34e8589314a2b02eeac139f43b8f07279a33f3a1d"
   },
-  "elapsed_seconds_observed": 532.7813998,
+  "elapsed_seconds_observed": 603.4689956,
   "actual_config_observed": {
     "mode": "system",
     "total_active_seconds": 600,
@@ -70,5 +70,27 @@
       "discontinuities": 0,
       "fallback": 0
     }
-  ]
+  ],
+  "hardware_result": {
+    "returncode": 0,
+    "passed": 12,
+    "failed": 0,
+    "total_active_ns": "600018114900",
+    "lifecycle_wall_ns": "601214232200",
+    "closed_cycles": 2,
+    "all_hosts_destroyed": true,
+    "first_fault": null,
+    "peak_after": [
+      0,
+      0
+    ],
+    "stream_faults": [
+      0,
+      0
+    ],
+    "diagnostic_samples": 602,
+    "diagnostic_capacity": 610,
+    "diagnostic_overflow": false,
+    "owned_remaining": 0
+  }
 }
