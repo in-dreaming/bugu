@@ -36,7 +36,7 @@
     "bytes": 8613376,
     "sha256": "f501a916f5733354efc42bb34e8589314a2b02eeac139f43b8f07279a33f3a1d"
   },
-  "elapsed_seconds_observed": 412.3657811,
+  "elapsed_seconds_observed": 532.7813998,
   "actual_config_observed": {
     "mode": "system",
     "total_active_seconds": 600,
