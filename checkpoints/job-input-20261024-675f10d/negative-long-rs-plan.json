@@ -1,0 +1,125 @@
+{
+  "source_commit": "8c92e7d7b912d0d73120591057c5b337200f1631",
+  "source_tree": "675f10d4011635700f7d9567950737707e7b7849",
+  "identities": {
+    "executable": {
+      "bytes": 40732608,
+      "sha256": "92b3daf40217232c9a49d77c5258ba8f95331b90e8b687a63c8078e71c51ed13"
+    },
+    "bank": {
+      "bytes": 1283976,
+      "sha256": "558609800513d7734313d842245b19b7d6ff4e6039aa170b4824b2ba20a6c224"
+    },
+    "history": {
+      "bytes": 48498479,
+      "sha256": "3f1162e730513205f18f95bcd4f352e5d70560a16b9b6d90f0f7e4dba7f716a6"
+    }
+  },
+  "runner_sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+  "bounds": {
+    "seconds": 180,
+    "minimum_start_free_bytes": 3355443200,
+    "stop_below_free_bytes": 2281701376,
+    "timeout": "TERM process group, 10 second grace then KILL. A timeout does not prove native cleanup."
+  },
+  "limits": [
+    "Original long minimum32768 frames, not physical-device long-duration stability.",
+    "No natural cross-frame tick witness in this recording; do not imply one. Real-atomic predicate crossings qualified separately.",
+    "Debug recording overflow and original wire3 long strict rejection remain retained.",
+    "No Windows or physical devices; no binary/raw uploads; main unchanged."
+  ],
+  "schema": "bugu.job-input-v4.negative-plan/v1",
+  "status": "FROZEN_NOT_RUN",
+  "purpose": "Two bounded independent negative executions against the first successfully replayed strict notified wire4 original long tape. No production source changes and no recording.",
+  "parameters": {
+    "REPO": "Exact clean source",
+    "ELF": "Exact original ReleaseSafe executable",
+    "ORIGINAL": "Original immutable tape directory",
+    "NEGATIVE": "New local mutation directory",
+    "OUTPUT": "New guard output directory per case",
+    "MUTATOR": "Frozen adjacent mutate_pcm_reference.py",
+    "RUN_GUARDED": "Original runner"
+  },
+  "mutator": {
+    "bytes": 2656,
+    "sha256": "175ba9972ac644b5e5aa28ef9ae66f5be52a7bf7270581a8af72e45018512a44"
+  },
+  "environment": {
+    "unset_prefixes": [
+      "SME_"
+    ],
+    "unset_exact": [
+      "PYTHONOPTIMIZE"
+    ],
+    "set": {
+      "NO_COLOR": "1",
+      "SME_LIVE_SEMANTIC_MODE": "replay",
+      "SME_LIVE_SEMANTIC_WORKLOAD": "long",
+      "SME_LIVE_SEMANTIC_ADMISSION": "ordered_job_scans"
+    }
+  },
+  "sequence": [
+    {
+      "id": "wrong-pacing",
+      "set": {
+        "SME_LIVE_SEMANTIC_DIR": "<ORIGINAL>",
+        "SME_LIVE_SEMANTIC_PACING": "legacy_poll"
+      },
+      "argv": [
+        "python3",
+        "<RUN_GUARDED>",
+        "--repo",
+        "<REPO>",
+        "--out",
+        "<OUTPUT>/wrong-pacing",
+        "--seconds",
+        "180",
+        "--",
+        "<ELF>"
+      ],
+      "expected": "One actual integration fails WrongLaunch before Host/native owners; report running/retained false, matched counts zero, host joined/destroyed false because no Host created. Other9 tests pass."
+    },
+    {
+      "id": "prepare-reference-negative",
+      "argv": [
+        "python3",
+        "<MUTATOR>",
+        "--original",
+        "<ORIGINAL>",
+        "--output",
+        "<NEGATIVE>"
+      ],
+      "seconds": 60,
+      "expected": "Create distinct negative file with one finite nonzero submitted PCM reference sample low bit changed; recompute its frame SHA and whole file SHA only. Preserve INPUT frames and original hashes. Record exact mutation/hash."
+    },
+    {
+      "id": "reference-mismatch",
+      "set": {
+        "SME_LIVE_SEMANTIC_DIR": "<NEGATIVE>",
+        "SME_LIVE_SEMANTIC_PACING": "notified_v1"
+      },
+      "argv": [
+        "python3",
+        "<RUN_GUARDED>",
+        "--repo",
+        "<REPO>",
+        "--out",
+        "<OUTPUT>/reference-mismatch",
+        "--seconds",
+        "180",
+        "--",
+        "<ELF>"
+      ],
+      "expected": "Strict preflight admitted before owners, actual native PCM comparison rejects with ReplayMismatch at mutated reference. Real Host joins/destroys with retained false; no treating reference as execution input. Other9 tests pass."
+    }
+  ],
+  "checks": [
+    "Before each case exact source/ELF/original bank+history hash, clean tree. After both original hashes unchanged and16fixtures verify-only.",
+    "Read actual error/failure coordinates and cleanup report. Nonzero exit alone is not proof of expected rejection or cleanup.",
+    "If framing/preflight rejects unexpectedly, preserve it as unexpected, not a successful reference-comparison test.",
+    "Each command once. Stop dependent steps on unexpected outcome or timeout, retain evidence; no retry/re-record.",
+    "Original replay-result.json already exists and must remain unchanged. Expected failures never reach successful report writing; do not remove or overwrite original artifacts.",
+    "Fresh long success summary must be archived first. Mutation script changed only pinned history/bank hashes and wire version3 to4 from previously reviewed original; framing/PCM layout remains actual current source."
+  ],
+  "publication": "Only script, plan and sanitized outcome; no raw logs, local paths, audio, ELF or tape. No Windows; main unchanged."
+}
