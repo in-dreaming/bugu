@@ -1,0 +1,57 @@
+{
+  "schema": "bugu.job-input-v4.native-long-result/v1",
+  "status": "HARNESS_DIRECTORY_PRECONDITION_FAILED_NOT_RECORDING_QUALIFICATION",
+  "source_commit": "8c92e7d7b912d0d73120591057c5b337200f1631",
+  "source_tree": "675f10d4011635700f7d9567950737707e7b7849",
+  "plan_sha256": "388bec865abd00c9abf26331a34b56d10385da31615b3e832ed1d241976a00b4",
+  "guard": {
+    "exit": 1,
+    "stop_reason": null,
+    "elapsed_seconds": 160.17203578499993,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 28394926080
+  },
+  "tests": {
+    "passed": 9,
+    "failed": 1,
+    "skipped": 0,
+    "integration": "failed without output; actual error name not emitted"
+  },
+  "build": {
+    "ReleaseSafe_process_executable": "passed",
+    "ReleaseSafe_production_archive": "passed"
+  },
+  "executable": {
+    "bytes": 40732608,
+    "sha256": "92b3daf40217232c9a49d77c5258ba8f95331b90e8b687a63c8078e71c51ed13"
+  },
+  "cause_evidence": [
+    "Execution supplied an absolute output path whose tape directory was not created. The tape directory is still absent after the run.",
+    "The test entry opens that existing directory with openDirAbsolute before calling recordProcess; it does not create it. The build/run does not create that directory either.",
+    "Therefore this invocation cannot reach recordProcess on the observed missing-directory setup. This is a harness prerequisite failure, not a demonstrated runtime, capture or admission failure. No specific OS error name is asserted because the test runner omitted it."
+  ],
+  "recording": {
+    "tape_directory_exists": false,
+    "sealed_tape": false,
+    "admitted_history": false,
+    "fresh_replay": "not run; no tape",
+    "host_cleanup": "not applicable to this integration invocation before recordProcess; no native owner created by that path"
+  },
+  "fixtures_before": {
+    "scope": "authored-input-source-only",
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "fixtures_after": {
+    "scope": "authored-input-source-only",
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "limits": [
+    "Preserve this failed first invocation and all earlier failures. No repeated native timing trial occurred.",
+    "Next plan must explicitly create and check a fresh empty output directory before the bounded invocation, without source/capacity/oracle changes.",
+    "No main change, Windows run, physical audio, raw log or binary upload."
+  ]
+}
