@@ -2,6 +2,7 @@
     .schema_version = 1,
     .task_id = "TASK-027",
     .modules = .{
+        .{ .name = "sme-live-semantic-job-gate", .root_source_file = "tools/sme_authoring/core/live_semantic_job_gate.zig" },
         .{ .name = "sme-live-semantic-job-schedule", .root_source_file = "tools/sme_authoring/core/live_semantic_job_schedule.zig" },
     },
     .checks = .{
