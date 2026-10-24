@@ -1,0 +1,44 @@
+{
+  "schema": "bugu.job-input-gate.focused-result/v1",
+  "status": "BUILD_GRAPH_FAILED_ZERO_TESTS_NOT_INTEGRATION_PROOF",
+  "source_commit": "a93565646d02e33716ed93d1831b6d54cbf4da76",
+  "source_tree": "e8e20c81f8c149c907246801742558dfbc284815",
+  "plan_commit": "ec4928b247d108888e0dc60e02d5c7b15c91eb2a",
+  "plan_sha256": "72dc5b97ea3338411ef26859c5b3ba3a790459cabda3734f4c84af45a7a50e4a",
+  "guard": {
+    "exit": 1,
+    "stop_reason": null,
+    "elapsed_seconds": 7.062323633000005,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 29493768192
+  },
+  "tests_executed": 0,
+  "failure": {
+    "phase": "Build graph registration, before target compilation/test execution",
+    "error": "UnregisteredSmeTestModuleSource",
+    "location": "build_support/sme_steps.zig:207",
+    "effect": "Build runner panicked; Zig reported its build command terminated with signal ABRT. This is not a native Host crash or a completed test run.",
+    "cause": "The new tools/sme_authoring/core/live_semantic_job_gate.zig source-local test target was listed as a check but omitted from the named-module registration. Existing build graph requires tools/src test roots to be registered modules.",
+    "narrow_next_change": "Add only the named module registration for the same gate source, retaining both targets, all assertions and runtime code; freeze a new source/plan before another execution."
+  },
+  "fixture_verification_before": {
+    "scope": "authored-input-source-only",
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "fixture_verification_after": {
+    "scope": "authored-input-source-only",
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "native_recording_started": false,
+  "native_replay_started": false,
+  "raw_logs_uploaded": false,
+  "limits": [
+    "New wire4 integration remains unverified. Prior pure-model pass and old short replay do not replace this failed build.",
+    "Original wire3 long strict rejection retained; stage3 not started.",
+    "Guard wrapper returned0 but actual child exit1 is authoritative; no timeout or source drift."
+  ]
+}
