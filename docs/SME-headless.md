@@ -67,3 +67,12 @@ strict 先验证完整全局 marker、scan grammar、载荷和既有其它重叠
 `SME_DEVICE_STABILITY_SECONDS` 是明确限定的真实 Play 墙钟秒数，system 最多 600 秒，云端 null 检查最多 5 秒；可选 `SME_DEVICE_STABILITY_CYCLES` 最多 4 轮，且活动秒数加每轮 80 秒生命周期预算不得超过 840 秒。每轮实际 Play→Stop→Close→销毁，再建立新的 Host，不能称为同一 transport 的 Pause/Resume。控制轮询约 10ms，每秒保留固定容量快照；进度空档是 UI 观测估计，不是精确 OS xrun 或 callback jitter。命令和关闭各有界，外层 guard 超时不证明资源已释放。
 
 静音真实设备运行只验证软件产生非零数据、实际驱动回调/消费进展和清理，不验证扬声器、声压或听感断音。当前 Host 没有用户级 Pause/Resume、device ID 选择或定向切换接口；已有 restart_at_bar 故障恢复也不能冒充物理设备切换。本阶段先验证最小默认设备路径，尚未执行的硬件与功能覆盖必须明确保留。
+
+
+## Debug 录制吞吐诊断（待本轮验证）
+
+测试可执行文件显式设置 SME_LIVE_SEMANTIC_COLLECTOR_PROFILE=1 时，只有 record、stream、long、notified_v1、ordered_job_scans 且无时序干预/注入组合可用；回放拒绝该选项。生产构建没有此 collector 绑定。它不修改 wire 4、真实任务扫描、PCM 或原 long 至少 32768 帧门槛，也不扩大四个 4 MiB lane 与各自 16384 个描述符。
+
+计时仅位于非实时收集器及测试文件写入适配器。分角色固定种子抽样保留实际覆盖率；pop/observe、编码和 append 的样本墙钟不是 CPU 时间。append 样本包含散列、缓冲和可能嵌套的原始写入，但 raw 是全量计时且包含 append 外的最终 flush，因此两类总量不能直接比较或相加；sync/close 不在 raw 时间内。每族字节、计数、现有原子计数器与峰值只构成有界观测，不是多线程一致快照。首次错误固定保存，后续清理不得覆盖前因；完整最终 stats 仅在真实 join/destroy 后读取。
+
+输出 collector-profile.json 也保留失败与不完整状态，未取得终态不得宣布吞吐修复。仪表本身会增加 collector 开销，报告时必须同时说明采样数、时钟调用数、容量及溢出标志；不根据一次带仪表结果推断旧失败的 CPU、磁盘或操作系统原因。未来优化必须无损保留每次真实 occurrence、INPUT/reference 与严格回放拒绝，不能删除 false scan 或靠更大缓冲通过。

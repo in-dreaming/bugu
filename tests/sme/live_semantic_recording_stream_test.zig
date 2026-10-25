@@ -205,3 +205,89 @@ test "Recorder explicit pacing is pinned before Session init and legacy wrappers
         }
     }
 }
+
+test "test collector profiling preserves exact canonical stream and native return" {
+    const plain = try makeRecorder();
+    defer t.allocator.destroy(plain);
+    const profiled = try makeRecorder();
+    defer t.allocator.destroy(profiled);
+    const profile = try t.allocator.create(recording.collector_profile.Profile);
+    defer t.allocator.destroy(profile);
+    profile.* = .init(t.io);
+    var left: Sink = .{};
+    var right: Sink = .{};
+    try plain.initStreaming(identity(), left.binding(), f.max_file_bytes, @sizeOf(Sink));
+    try profiled.initStreaming(identity(), right.binding(), f.max_file_bytes, @sizeOf(Sink) + @sizeOf(recording.collector_profile.Profile));
+    try t.expect(profiled.test_collector_profile == null);
+    profiled.test_collector_profile = profile;
+    const cut: codec.Native(codec.Cut) = .{ .occurrence = 1, .value = .{ .role = .control, .site = .runtime_load_state_read, .edge = .before, .index = 0, .generation = 0 } };
+    for (.{ plain, profiled }) |recorder| {
+        try t.expect(recorder.capture.lane(.control).push(@intFromEnum(codec.Family.cut), .input, std.mem.asBytes(&cut), &.{}));
+        try t.expect(try recorder.drainStreaming());
+        try t.expect(!try recorder.drainStreaming());
+        try t.expect(recorder.healthy());
+        try t.expect(recorder.session.host == null);
+    }
+    try t.expectEqualSlices(u8, left.bytes[0..left.used], right.bytes[0..right.used]);
+    try t.expectEqual(@as(u64, 1), profile.report.roles[0].metrics.records);
+    try t.expectEqual(@as(u64, 1), profile.report.roles[0].metrics.appended_records);
+    try t.expectEqual(@as(u64, right.used - f.header_size), profile.report.roles[0].metrics.framed_wire_bytes);
+    try t.expectEqual(@as(u64, 2), profile.report.successful_passes);
+}
+
+test "profiled drain retains original sink failure and pins first failure through cleanup" {
+    const recorder = try makeRecorder();
+    defer t.allocator.destroy(recorder);
+    const profile = try t.allocator.create(recording.collector_profile.Profile);
+    defer t.allocator.destroy(profile);
+    profile.* = .init(t.io);
+    var sink: Sink = .{};
+    try recorder.initStreaming(identity(), sink.binding(), f.max_file_bytes, @sizeOf(Sink) + @sizeOf(recording.collector_profile.Profile));
+    recorder.test_collector_profile = profile;
+    const cut: codec.Native(codec.Cut) = .{ .occurrence = 1, .value = .{ .role = .control, .site = .runtime_load_state_read, .edge = .before, .index = 0, .generation = 0 } };
+    try t.expect(recorder.capture.lane(.control).push(@intFromEnum(codec.Family.cut), .input, std.mem.asBytes(&cut), &.{}));
+    sink.reject = true;
+    try t.expectError(error.DiskUnavailable, recorder.drainStreaming());
+    try t.expectEqual(error.DiskUnavailable, recorder.first_output_error.?);
+    try t.expect(!recorder.healthy());
+    try t.expect(recorder.streaming_writer.?.failed);
+    try t.expectEqual(@as(u64, 1), profile.report.roles[0].metrics.append.errors);
+    const failure = profile.report.first_failure.?;
+    for (0..4) |_| try t.expectError(error.Poisoned, recorder.drainStreaming());
+    try t.expectEqualDeep(failure, profile.report.first_failure.?);
+    try t.expectEqual(@as(u64, 5), profile.report.failed_passes);
+    try t.expectEqual(@as(usize, f.header_size), sink.used);
+    try t.expect(recorder.session.host == null);
+}
+
+test "profiled observe and encode failures preserve original rejection" {
+    inline for (.{ false, true }) |enabled| {
+        inline for (.{ false, true }) |observe_failure| {
+            const recorder = try makeRecorder();
+            defer t.allocator.destroy(recorder);
+            const profile = try t.allocator.create(recording.collector_profile.Profile);
+            defer t.allocator.destroy(profile);
+            profile.* = .init(t.io);
+            var sink: Sink = .{};
+            try recorder.initStreaming(identity(), sink.binding(), f.max_file_bytes, @sizeOf(Sink) + @sizeOf(recording.collector_profile.Profile));
+            if (enabled) recorder.test_collector_profile = profile;
+            if (observe_failure) {
+                const event: codec.Native(recording.semantic.WorkerEvent) = .{ .occurrence = 1, .value = .{ .started = 1 } };
+                try t.expect(recorder.capture.lane(.worker).push(@intFromEnum(codec.Family.worker_event), .reference, std.mem.asBytes(&event), &.{}));
+                try t.expect(try recorder.drainStreaming());
+                try t.expect(recorder.capture.lane(.worker).push(@intFromEnum(codec.Family.worker_event), .reference, std.mem.asBytes(&event), &.{}));
+                try t.expectError(error.InvalidOrder, recorder.drainStreaming());
+                if (enabled) try t.expectEqual(@as(u64, 1), profile.report.roles[1].observe_errors);
+            } else {
+                try t.expect(recorder.capture.lane(.control).push(@intFromEnum(codec.Family.point_packet_input), .input, &.{}, &.{}));
+                try t.expectError(error.InvalidLength, recorder.drainStreaming());
+                if (enabled) try t.expectEqual(@as(u64, 1), profile.report.roles[0].metrics.encode.errors);
+            }
+            try t.expect(!recorder.healthy());
+            try t.expect(recorder.first_output_error == null);
+            try t.expect(recorder.streaming_writer.?.failed);
+            try t.expectError(error.Poisoned, recorder.drainStreaming());
+            try t.expect(recorder.session.host == null);
+        }
+    }
+}

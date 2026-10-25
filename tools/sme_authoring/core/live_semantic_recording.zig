@@ -3,6 +3,8 @@
 //! finish only after genuine Host.join and Host.destroy. Framing completion is
 //! NOT semantic replay admission; no expected value is a runtime input here.
 const std = @import("std");
+const builtin = @import("builtin");
+pub const collector_profile = @import("live_semantic_collector_profile.zig");
 const audio = @import("bugu_audio");
 pub const codec = @import("live_semantic_codec.zig");
 pub const semantic = codec.semantic;
@@ -89,6 +91,9 @@ const GateBuffer = struct {
 pub const gate_packet_storage_bytes = 2 * @sizeOf(GateBuffer);
 pub const Recorder = struct {
     address: ?*Recorder = null,
+    /// Test-only consumer diagnostics; attach after successful init and retain
+    /// externally owned storage until genuine join. Production is null-only.
+    test_collector_profile: collector_profile.Pointer = null,
     capture: format.Capture = undefined,
     session: semantic.Session = .{},
     writer: format.Writer = undefined,
@@ -117,6 +122,7 @@ pub const Recorder = struct {
     }
     pub fn initWithPacing(self: *Recorder, identity: format.Identity, corpus: []u8, pacing: semantic.PacingMode) Error!void {
         if (self.address != null) return error.InvalidState;
+        self.test_collector_profile = null;
         const total = std.math.add(usize, @sizeOf(Recorder), corpus.len) catch return error.CaptureBudgetExceeded;
         if (total > format.max_capture_bytes) return error.CaptureBudgetExceeded;
         self.writer = try format.Writer.init(corpus, identity, codec.validate);
@@ -133,6 +139,7 @@ pub const Recorder = struct {
     }
     pub fn initStreamingWithPacing(self: *Recorder, identity: format.Identity, sink: format.StreamSink, byte_cap: u64, resident_staging_bytes: usize, pacing: semantic.PacingMode) !void {
         if (self.address != null) return error.InvalidState;
+        self.test_collector_profile = null;
         const total = std.math.add(usize, @sizeOf(Recorder), resident_staging_bytes) catch return error.CaptureBudgetExceeded;
         if (total > format.max_capture_bytes) return error.CaptureBudgetExceeded;
         self.allocation_bytes = total;
@@ -516,6 +523,7 @@ pub const Recorder = struct {
         return self.drainMode(true);
     }
     fn drainMode(self: *Recorder, comptime streaming: bool) !bool {
+        if (comptime builtin.is_test) if (self.test_collector_profile) |profile| return self.drainModeProfiled(streaming, profile);
         if (self.address != self or self.finished) return error.InvalidState;
         if (!self.healthy()) {
             self.poisonOutput();
@@ -541,6 +549,81 @@ pub const Recorder = struct {
             }
             progressed = true;
         }
+        return progressed;
+    }
+    /// Mirrors the unchanged production path above. Timers are completed on
+    /// errors as well as successes; they never change returned errors, poison
+    /// behavior, wire bytes, round-robin order, or capture admission.
+    fn drainModeProfiled(self: *Recorder, comptime streaming: bool, profile: *collector_profile.Profile) !bool {
+        profile.beginPass();
+        var success = false;
+        var progressed = false;
+        defer profile.endPass(success, progressed);
+        if (self.address != self or self.finished) return error.InvalidState;
+        profile.snapshot(&self.capture, .start);
+        profile.snapshot(&self.capture, .periodic);
+        errdefer profile.snapshot(&self.capture, .first_failure);
+        if (!self.healthy()) {
+            self.poisonOutput();
+            return error.Poisoned;
+        }
+        errdefer {
+            self.fail();
+            self.poisonOutput();
+        }
+        for (&self.capture.lanes, 0..) |*lane, role| {
+            const sampled = profile.sample(role);
+            var popped: ?format.NativeRecord = null;
+            {
+                const token = profile.start(sampled);
+                var completed = false;
+                defer if (popped) |record| profile.accountRecord(role, record.family, .pop_observe, record.bytes.len);
+                defer profile.complete(role, if (popped) |r| r.family else null, .pop_observe, token, completed, if (popped) |r| r.bytes.len else 0);
+                popped = lane.pop(&self.native_scratch) catch |err| {
+                    profile.popError(role);
+                    return err;
+                };
+                const record = popped orelse {
+                    profile.empty(role);
+                    completed = true;
+                    continue;
+                };
+                self.observe(record) catch |err| {
+                    profile.observeError(role);
+                    return err;
+                };
+                completed = true;
+            }
+            const record = popped.?;
+            const payload = blk: {
+                const token = profile.start(sampled);
+                var completed = false;
+                var bytes: u64 = 0;
+                defer profile.complete(role, record.family, .encode, token, completed, bytes);
+                const encoded = try codec.encodeNative(record, &self.wire_scratch);
+                bytes = encoded.len;
+                completed = true;
+                break :blk encoded;
+            };
+            profile.accountRecord(role, record.family, .encode, payload.len);
+            {
+                const token = profile.start(sampled);
+                var completed = false;
+                defer profile.complete(role, record.family, .append, token, completed, payload.len);
+                if (comptime streaming) {
+                    self.streaming_writer.?.append(record.role, record.ordinal, record.family, record.class, payload) catch |err| {
+                        if (self.first_output_error == null) self.first_output_error = err;
+                        return err;
+                    };
+                } else {
+                    try self.writer.append(record.role, record.ordinal, record.family, record.class, payload);
+                }
+                completed = true;
+            }
+            profile.accountRecord(role, record.family, .append, payload.len + format.frame_header_size);
+            progressed = true;
+        }
+        success = true;
         return progressed;
     }
     fn observe(self: *Recorder, r: format.NativeRecord) Error!void {
@@ -749,5 +832,9 @@ pub const Recorder = struct {
     }
 };
 comptime {
+    if (collector_profile.role_count != format.role_count) @compileError("collector role schema drift");
+    const families = std.meta.fields(codec.Family);
+    if (families.len != collector_profile.family_codes.len) @compileError("collector family schema drift");
+    for (families, collector_profile.family_codes) |family, code| if (family.value != code) @compileError("collector family schema drift");
     if (@sizeOf(Recorder) + default_corpus_bytes > format.max_capture_bytes) @compileError("profile 9 recorder allocation exceeds 64 MiB");
 }

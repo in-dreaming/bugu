@@ -543,15 +543,38 @@ const FileStream = struct {
     written: u64 = 0,
     fail_after: ?u64 = null,
     output: live.semantic_file.BufferedSink,
+    profile: ?*recording.collector_profile.Profile = null,
+    raw_requested_bytes: u64 = 0,
+    raw_clock_calls: u64 = 0,
+    raw_counter_overflow: bool = false,
     fn init(self: *@This(), file: std.Io.File, fail_after: ?u64) void {
         self.file = file;
         self.closed = false;
         self.written = 0;
         self.fail_after = fail_after;
+        self.profile = null;
+        self.raw_requested_bytes = 0;
+        self.raw_clock_calls = 0;
+        self.raw_counter_overflow = false;
         self.output = live.semantic_file.BufferedSink.init(.{ .context = self, .write = rawWrite });
     }
     fn rawWrite(raw: *anyopaque, bytes: []const u8) !usize {
         const self: *@This() = @ptrCast(@alignCast(raw));
+        const started = if (self.profile != null) std.Io.Clock.awake.now(t.io) else null;
+        var acknowledged: u64 = 0;
+        var succeeded = false;
+        defer if (self.profile) |profile| {
+            const elapsed = started.?.durationTo(std.Io.Clock.awake.now(t.io)).nanoseconds;
+            profile.report.raw_write.observe(elapsed, succeeded, acknowledged);
+            self.raw_requested_bytes = std.math.add(u64, self.raw_requested_bytes, bytes.len) catch overflow: {
+                self.raw_counter_overflow = true;
+                break :overflow std.math.maxInt(u64);
+            };
+            self.raw_clock_calls = std.math.add(u64, self.raw_clock_calls, 2) catch overflow: {
+                self.raw_counter_overflow = true;
+                break :overflow std.math.maxInt(u64);
+            };
+        };
         if (self.closed) return error.StreamFileClosed;
         var count = bytes.len;
         if (self.fail_after) |bound| {
@@ -560,6 +583,8 @@ const FileStream = struct {
         }
         const n = try self.file.writeStreaming(t.io, &.{}, &.{bytes[0..count]}, 1);
         self.written += n;
+        acknowledged = n;
+        succeeded = true;
         return n;
     }
     fn write(raw: *anyopaque, bytes: []const u8) !usize {
@@ -577,6 +602,12 @@ const FileStream = struct {
         self.closed = true;
     }
 };
+fn collectorProfilingEnabled(value: ?[]const u8, streaming: bool, scenario: Workload, pacing: live.semantic_recording.semantic.PacingMode, policy: recording.codec.AdmissionPolicy, controlled: bool, fail_text: ?[]const u8) !bool {
+    const text = value orelse return false;
+    if (!std.mem.eql(u8, text, "1")) return error.InvalidCollectorProfileMode;
+    if (!streaming or scenario != .long or pacing != .notified_v1 or policy != .ordered_job_scans or controlled or fail_text != null) return error.UnsupportedCollectorProfileScope;
+    return true;
+}
 fn recordProcess(directory: std.Io.Dir) !void {
     const scenario = try workload();
     const pacing = try requestedPacing();
@@ -592,6 +623,7 @@ fn recordProcess(directory: std.Io.Dir) !void {
     if (scenario == .retry and (!streaming or controlled or fail_text != null)) return error.UnsupportedRetryWorkloadScope;
     if (scenario == .short_play and (!streaming or controlled or fail_text != null)) return error.UnsupportedShortPlayScope;
 
+    const profiling = try collectorProfilingEnabled(std.process.Environ.getPosix(t.environ, "SME_LIVE_SEMANTIC_COLLECTOR_PROFILE"), streaming, scenario, pacing, policy, controlled, fail_text);
     const bytes = try buildBank();
     defer allocator.free(bytes);
     const memory = try allocator.create(live.TestAllocator);
@@ -626,6 +658,54 @@ fn recordProcess(directory: std.Io.Dir) !void {
             allocator.destroy(sink);
         }
     };
+    const profile = if (profiling) try allocator.create(recording.collector_profile.Profile) else null;
+    var profile_owned = true;
+    defer if (profile_owned) if (profile) |value| allocator.destroy(value);
+    if (profile) |value| value.* = .init(t.io);
+    var profile_started = false;
+    var profile_joined = false;
+    var profile_complete = false;
+    var profile_status: ?live.Status = null;
+    // Registered before Host cleanup; runs after cleanup and before borrowed
+    // Recorder/FileStream/Profile destruction on both success and failure.
+    defer if (profile) |value| {
+        if (profile_joined) value.snapshot(&recorder.capture, .joined);
+        const report = std.json.Stringify.valueAlloc(allocator, .{
+            .schema = "bugu.collector-profile/v1",
+            .host_started = profile_started,
+            .host_joined_destroyed = profile_joined,
+            .recording_complete = profile_complete,
+            .cleanup = if (profile_status) |status| .{
+                .closed = status.phase == .closed,
+                .worker_joined = status.worker_joined,
+                .first_error = if (status.first_error) |err| @errorName(err) else null,
+                .cleanup_error = if (status.cleanup_error) |err| @errorName(err) else null,
+                .provider_opened = status.provider.opened,
+                .provider_closed = status.provider.closed,
+                .provider_live = status.provider.live,
+                .sample_leases = status.sample_leases,
+                .live_instances = status.live_instances,
+                .play_executed = status.play_executed,
+                .stop_executed = status.stop_executed,
+            } else null,
+            .stats = if (profile_joined) recorder.finalStats() else @as(?recording.Stats, null),
+            .collector = value.report,
+            .raw_requested_bytes = if (file_stream) |sink| sink.raw_requested_bytes else 0,
+            .raw_clock_calls = if (file_stream) |sink| sink.raw_clock_calls else 0,
+            .raw_counter_overflow = if (file_stream) |sink| sink.raw_counter_overflow else false,
+            .append_may_include_raw_write = true,
+            .raw_coverage = "all_attempts_including_final_flush",
+            .append_coverage = "sampled_records",
+            .raw_write_excludes_sync_close = true,
+            .wall_time_is_not_cpu_time = true,
+        }, .{}) catch null;
+        if (report) |bytes_report| {
+            defer allocator.free(bytes_report);
+            if (writeFile(directory, "collector-profile.json", bytes_report)) |_| {
+                std.debug.print("COLLECTOR_PROFILE joined={} complete={} bytes={d}\n", .{ profile_joined, profile_complete, bytes_report.len });
+            } else |err| std.debug.print("COLLECTOR_PROFILE_REPORT_FAILED {s}\n", .{@errorName(err)});
+        } else std.debug.print("COLLECTOR_PROFILE_REPORT_FAILED OutOfMemory\n", .{});
+    };
     if (streaming) {
         const fail_after = if (fail_text) |text| try std.fmt.parseInt(u64, text, 10) else null;
         const sink = try allocator.create(FileStream);
@@ -635,11 +715,13 @@ fn recordProcess(directory: std.Io.Dir) !void {
         };
         sink.init(file, fail_after);
         file_stream = sink;
-        try recorder.initStreamingWithPacing(try identity(bytes), .{ .context = sink, .write = FileStream.write }, format.max_file_bytes, @sizeOf(FileStream) + (if (controlled) @sizeOf(ControlledCrossFrame) else @as(usize, 0)) + (if (scenario == .retry) @sizeOf(RetryWorkload) else @as(usize, 0)), pacing);
+        sink.profile = profile;
+        try recorder.initStreamingWithPacing(try identity(bytes), .{ .context = sink, .write = FileStream.write }, format.max_file_bytes, @sizeOf(FileStream) + (if (profiling) @sizeOf(recording.collector_profile.Profile) else @as(usize, 0)) + (if (controlled) @sizeOf(ControlledCrossFrame) else @as(usize, 0)) + (if (scenario == .retry) @sizeOf(RetryWorkload) else @as(usize, 0)), pacing);
     } else {
         corpus = try allocator.alloc(u8, recording.default_corpus_bytes);
         try recorder.initWithPacing(try identity(bytes), corpus.?, pacing);
     }
+    recorder.test_collector_profile = profile;
     if (controlled) {
         const context = try allocator.create(ControlledCrossFrame);
         context.* = .{ .recorder = recorder, .audio = recorder.session.config.audio };
@@ -654,6 +736,7 @@ fn recordProcess(directory: std.Io.Dir) !void {
         recorder.session.config.output = .{ .context = context, .input = RetryWorkload.onInput, .schedule = RetryWorkload.onSchedule, .invalidate = RetryWorkload.invalidate };
     }
     const host = try live.Host.createWithTestAllocator(memory, launch(bytes), .{ .io = t.io, .device = .{ .backend = .null_backend }, .semantic = &recorder.session, .test_retry_workload = if (retry_context) |context| .{ .context = context, .call = RetryWorkload.event } else null, .test_after_live_acceptance = if (cross_frame) |context| .{ .context = context, .call = ControlledCrossFrame.afterAcceptance } else null });
+    profile_started = true;
     var host_alive = true;
     var receipts: ReceiptLog = .{};
     defer if (host_alive) {
@@ -664,12 +747,15 @@ fn recordProcess(directory: std.Io.Dir) !void {
         }
         const cleanup = closeActual(host, recorder, &receipts);
         if (cleanup) |closed| {
+            profile_joined = true;
+            profile_status = closed;
             if (retry_context) |context| context.report(directory) catch |err| std.debug.print("SEMANTIC_RETRY_REPORT_FAILED {s}\n", .{@errorName(err)});
             if (cross_frame) |context| context.report(directory, recorder.finalStats().multi_frame_ticks) catch |err| std.debug.print("SEMANTIC_CONTROLLED_REPORT_FAILED {s}\n", .{@errorName(err)});
             std.debug.print("SEMANTIC_REJECTED_CAPTURE healthy={any} stats={any} cleanup_worker_joined={any} provider={any} leases={d} instances={d}\n", .{ recorder.healthy(), recorder.finalStats(), closed.worker_joined, closed.provider, closed.sample_leases, closed.live_instances });
         } else |err| {
             std.debug.print("SEMANTIC_REJECTED_CAPTURE cleanup_pending={s}\n", .{@errorName(err)});
             // A deadline/failure never grants permission to free retained roles.
+            profile_owned = false;
             memory_owned = false;
             recorder_owned = false;
             corpus_owned = false;
@@ -747,6 +833,8 @@ fn recordProcess(directory: std.Io.Dir) !void {
     }
     const status = try closeActual(host, recorder, &receipts);
     host_alive = false;
+    profile_joined = true;
+    profile_status = status;
     try t.expect(status.worker_joined and status.phase == .closed);
     try t.expectEqual(@as(usize, 0), status.provider.live);
     try t.expectEqual(status.provider.opened, status.provider.closed);
@@ -828,6 +916,7 @@ fn recordProcess(directory: std.Io.Dir) !void {
     defer allocator.free(report);
     try writeFile(directory, "record-result.json", report);
     std.debug.print("SEMANTIC_RECORD {s}", .{report});
+    profile_complete = true;
     _ = admission_result catch |err| {
         std.debug.print("SEMANTIC_RECORD_NOT_ADMITTED reason={s}\n", .{@errorName(err)});
         return err;
@@ -835,6 +924,7 @@ fn recordProcess(directory: std.Io.Dir) !void {
 }
 
 fn replayProcess(directory: std.Io.Dir) !void {
+    if (std.process.Environ.getPosix(t.environ, "SME_LIVE_SEMANTIC_COLLECTOR_PROFILE") != null) return error.CollectorProfileForbiddenDuringReplay;
     if (std.process.Environ.getPosix(t.environ, "SME_LIVE_SEMANTIC_CONTROLLED_CROSS_FRAME") != null) return error.ControlledPauseForbiddenDuringReplay;
     const scenario = try workload();
     const pacing = try requestedPacing();
@@ -1064,4 +1154,47 @@ test "retry attempt diagnostic writes actual flat fields and propagates truncate
     var tiny: [8]u8 = undefined;
     var fixed: std.Io.Writer = .fixed(&tiny);
     try t.expectError(error.WriteFailed, RetryWorkload.writeAttempt(&fixed, "second", value, false, 4864));
+}
+
+test "collector profiling is explicit long notified strict streaming scope only" {
+    try t.expect(!try collectorProfilingEnabled(null, false, .short_ui, .legacy_poll, .native_attempt, false, null));
+    try t.expect(try collectorProfilingEnabled("1", true, .long, .notified_v1, .ordered_job_scans, false, null));
+    try t.expectError(error.InvalidCollectorProfileMode, collectorProfilingEnabled("0", true, .long, .notified_v1, .ordered_job_scans, false, null));
+    try t.expectError(error.UnsupportedCollectorProfileScope, collectorProfilingEnabled("1", false, .long, .notified_v1, .ordered_job_scans, false, null));
+    inline for (.{ Workload.short_ui, Workload.short_play, Workload.retry }) |scenario| {
+        try t.expectError(error.UnsupportedCollectorProfileScope, collectorProfilingEnabled("1", true, scenario, .notified_v1, .ordered_job_scans, false, null));
+    }
+    try t.expectError(error.UnsupportedCollectorProfileScope, collectorProfilingEnabled("1", true, .long, .legacy_poll, .ordered_job_scans, false, null));
+    try t.expectError(error.UnsupportedCollectorProfileScope, collectorProfilingEnabled("1", true, .long, .notified_v1, .native_attempt, false, null));
+    try t.expectError(error.UnsupportedCollectorProfileScope, collectorProfilingEnabled("1", true, .long, .notified_v1, .ordered_job_scans, true, null));
+    try t.expectError(error.UnsupportedCollectorProfileScope, collectorProfilingEnabled("1", true, .long, .notified_v1, .ordered_job_scans, false, "13"));
+}
+
+test "collector raw profile preserves real partial write and sticky failure" {
+    var tmp = t.tmpDir(.{});
+    defer tmp.cleanup();
+    const profile = try allocator.create(recording.collector_profile.Profile);
+    defer allocator.destroy(profile);
+    profile.* = .init(t.io);
+    var sink: FileStream = undefined;
+    sink.init(try tmp.dir.createFile(t.io, "profile-partial.bin", .{ .exclusive = true }), 13);
+    defer sink.close();
+    sink.profile = profile;
+    const payload = "bounded profiler observes original partial write";
+    try t.expectEqual(payload.len, try FileStream.write(&sink, payload));
+    try t.expectEqual(@as(u64, 0), profile.report.raw_write.population);
+    try t.expectError(error.InjectedStreamIoFailure, sink.flush());
+    try t.expectEqual(@as(u64, 2), profile.report.raw_write.population);
+    try t.expectEqual(@as(u64, 2), profile.report.raw_write.sample_count);
+    try t.expectEqual(@as(u64, 1), profile.report.raw_write.errors);
+    try t.expectEqual(@as(u64, 13), profile.report.raw_write.bytes);
+    try t.expectEqual(@as(u64, 4), sink.raw_clock_calls);
+    try t.expect(!sink.raw_counter_overflow);
+    try t.expectEqual(@as(u64, payload.len * 2 - 13), sink.raw_requested_bytes);
+    try t.expectError(error.InjectedStreamIoFailure, sink.flush());
+    try t.expectEqual(@as(u64, 2), profile.report.raw_write.population);
+    sink.close();
+    const actual = try tmp.dir.readFileAlloc(t.io, "profile-partial.bin", allocator, .limited(payload.len));
+    defer allocator.free(actual);
+    try t.expectEqualSlices(u8, payload[0..13], actual);
 }
