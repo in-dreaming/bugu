@@ -7,6 +7,7 @@
         .{ .name = "sme-live-semantic-job-schedule", .root_source_file = "tools/sme_authoring/core/live_semantic_job_schedule.zig" },
     },
     .checks = .{
+        .{ .name = "sme-live-integrity-hash-check", .tests = .{"tests/sme/live_integrity_hash_test.zig"} },
         .{ .name = "sme-live-semantic-collector-profile-check", .tests = .{"tools/sme_authoring/core/live_semantic_collector_profile.zig"} },
         .{ .name = "sme-author-live-device-stability-test", .tests = .{"tests/sme/author_live_device_stability_test.zig"} },
         .{ .name = "sme-live-semantic-job-gate-check", .tests = .{"tools/sme_authoring/core/live_semantic_job_gate.zig"} },

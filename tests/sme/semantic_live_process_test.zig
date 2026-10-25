@@ -21,7 +21,7 @@ fn executableHash() !format.Hash {
     const file = try std.Io.Dir.openFileAbsolute(t.io, path[0..length], .{ .mode = .read_only });
     defer file.close(t.io);
     var buffer: [65536]u8 = undefined;
-    var digest = std.crypto.hash.sha2.Sha256.init(.{});
+    var digest = format.IntegrityHasher.init(.{});
     var offset: u64 = 0;
     while (true) {
         const count = try file.readPositionalAll(t.io, &buffer, offset);

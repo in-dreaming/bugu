@@ -3,7 +3,9 @@
 //! The Host must separately validate the finite semantic schema and lifecycle.
 //! No legacy profile, test fixture, runtime, IO, or allocator is imported here.
 const std = @import("std");
-const Sha256 = std.crypto.hash.sha2.Sha256;
+pub const IntegrityHash = @import("live_integrity_hash.zig");
+pub const IntegrityHasher = IntegrityHash.Sha256;
+const Sha256 = IntegrityHasher;
 
 pub const profile_id: u16 = 9;
 // v4 adds explicit native job-scan eligibility INPUT. Older tapes require

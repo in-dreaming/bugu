@@ -92,7 +92,7 @@ fn executableHash(io: std.Io) !format.Hash {
     const file = try std.Io.Dir.openFileAbsolute(io, path[0..len], .{ .mode = .read_only });
     defer file.close(io);
     var buffer: [65536]u8 = undefined;
-    var sha = std.crypto.hash.sha2.Sha256.init(.{});
+    var sha = format.IntegrityHasher.init(.{});
     var offset: u64 = 0;
     while (true) {
         const n = try file.readPositionalAll(io, &buffer, offset);

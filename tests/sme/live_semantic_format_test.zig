@@ -514,3 +514,77 @@ test "v3 rejects three-role header mask and wrong UI counter" {
     reseal(output[0..bytes.len]);
     try t.expectError(error.CountMismatch, f.Reader.preflight(bytes, identity(), valid));
 }
+
+// Independent old wire-4 fixture: literal field offsets/values and unmodified
+// std SHA-256, not the candidate Encoder, hash helper or memory Writer.
+fn referenceWire4(out: []u8) []const u8 {
+    @memset(out, 0);
+    @memcpy(out[0..8], "SMELSB01");
+    std.mem.writeInt(u16, out[8..10], 9, .little);
+    std.mem.writeInt(u16, out[10..12], 4, .little);
+    std.mem.writeInt(u16, out[12..14], 192, .little);
+    std.mem.writeInt(u64, out[16..24], out.len, .little);
+    std.mem.writeInt(u32, out[24..28], 65536, .little);
+    std.mem.writeInt(u16, out[28..30], 4, .little);
+    @memset(out[32..64], 1);
+    @memset(out[64..96], 2);
+    @memset(out[96..128], 3);
+    @memset(out[128..160], 4);
+    std.crypto.hash.sha2.Sha256.hash(out[0..160], out[160..192], .{});
+    const Event = struct { role: u8, class: u8, family: u16, ordinal: u64, payload: []const u8 };
+    const events = [_]Event{
+        .{ .role = 0, .class = 0, .family = 1, .ordinal = 1, .payload = "command" },
+        .{ .role = 2, .class = 1, .family = 100, .ordinal = 1, .payload = "pcm" },
+        .{ .role = 0, .class = 1, .family = 101, .ordinal = 2, .payload = "result" },
+        .{ .role = 1, .class = 0, .family = 2, .ordinal = 1, .payload = "source" },
+        .{ .role = 0, .class = 0, .family = 1, .ordinal = 3, .payload = "close" },
+        .{ .role = 3, .class = 0, .family = 1, .ordinal = 1, .payload = "submit" },
+        .{ .role = 3, .class = 1, .family = 101, .ordinal = 2, .payload = "submitted" },
+    };
+    var offset: usize = 192;
+    for (events) |event| {
+        const header = out[offset..][0..64];
+        @memcpy(header[0..4], "EVT1");
+        std.mem.writeInt(u32, header[4..8], @intCast(64 + event.payload.len), .little);
+        header[8] = event.role;
+        header[9] = event.class;
+        std.mem.writeInt(u16, header[10..12], event.family, .little);
+        std.mem.writeInt(u64, header[16..24], event.ordinal, .little);
+        std.mem.writeInt(u32, header[24..28], @intCast(event.payload.len), .little);
+        std.crypto.hash.sha2.Sha256.hash(event.payload, header[32..64], .{});
+        @memcpy(out[offset + 64 ..][0..event.payload.len], event.payload);
+        offset += 64 + event.payload.len;
+    }
+    const trailer = out[offset..][0..184];
+    @memcpy(trailer[0..8], "SMELEND1");
+    trailer[8] = 1;
+    trailer[9] = 15;
+    std.mem.writeInt(u32, trailer[12..16], 184, .little);
+    const total = offset + 184;
+    std.mem.writeInt(u64, trailer[16..24], total, .little);
+    std.mem.writeInt(u64, trailer[24..32], 7, .little);
+    const counts = [_]u64{ 3, 1, 1, 2, 2, 1, 0, 1, 1, 0, 1, 1 };
+    for (counts, 0..) |count, i| std.mem.writeInt(u64, trailer[32 + i * 8 ..][0..8], count, .little);
+    std.mem.writeInt(u64, trailer[128..136], offset - 192, .little);
+    std.crypto.hash.sha2.Sha256.hash(out[0 .. total - 32], out[total - 32 ..][0..32], .{});
+    return out[0..total];
+}
+
+test "SHA lane fix keeps old std-hash wire fixture exact and rejects corrupted payload" {
+    var baseline: [2048]u8 = undefined;
+    const expected = referenceWire4(&baseline);
+    for ([_]usize{ 1, 31, 64, 192, 2048 }) |chunk| {
+        var actual: [2048]u8 = undefined;
+        var sink: StreamTestSink = .{ .bytes = &actual, .max_write = chunk };
+        var writer = try f.StreamingWriter.init(sink.sink(), actual.len, identity(), valid);
+        const seal = try streamCorpus(&writer);
+        try t.expectEqualSlices(u8, expected, actual[0..sink.used]);
+        try t.expectEqualSlices(u8, expected[expected.len - 32 ..], &seal.hash);
+        _ = try f.Reader.preflight(actual[0..sink.used], identity(), valid);
+        // Repair only the outer tape digest with the independent old std hash;
+        // the changed payload must still fail its original per-record SHA.
+        actual[192 + 64] ^= 1;
+        std.crypto.hash.sha2.Sha256.hash(actual[0 .. sink.used - 32], actual[sink.used - 32 ..][0..32], .{});
+        try t.expectError(error.HashMismatch, f.Reader.preflight(actual[0..sink.used], identity(), valid));
+    }
+}
