@@ -221,7 +221,7 @@ test "test collector profiling preserves exact canonical stream and native retur
     try t.expect(profiled.test_collector_profile == null);
     profiled.test_collector_profile = profile;
     const cut: codec.Native(codec.Cut) = .{ .occurrence = 1, .value = .{ .role = .control, .site = .runtime_load_state_read, .edge = .before, .index = 0, .generation = 0 } };
-    for (.{ plain, profiled }) |recorder| {
+    for ([_]*recording.Recorder{ plain, profiled }) |recorder| {
         try t.expect(recorder.capture.lane(.control).push(@intFromEnum(codec.Family.cut), .input, std.mem.asBytes(&cut), &.{}));
         try t.expect(try recorder.drainStreaming());
         try t.expect(!try recorder.drainStreaming());

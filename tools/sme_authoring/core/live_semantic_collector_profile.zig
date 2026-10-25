@@ -147,7 +147,7 @@ pub const Sampler = struct {
 
 /// Production has no profiler object or optional-pointer field storage.
 pub const Profile = if (builtin.is_test) TestProfile else struct {};
-pub const Pointer = if (builtin.is_test) ?*Profile else @TypeOf(null);
+pub const Pointer = if (builtin.is_test) ?*Profile else void;
 const Timestamp = @TypeOf(std.Io.Clock.awake.now(@as(std.Io, undefined)));
 pub const Token = struct { started: ?Timestamp = null };
 const TestProfile = struct {

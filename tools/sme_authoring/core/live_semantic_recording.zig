@@ -93,7 +93,7 @@ pub const Recorder = struct {
     address: ?*Recorder = null,
     /// Test-only consumer diagnostics; attach after successful init and retain
     /// externally owned storage until genuine join. Production is null-only.
-    test_collector_profile: collector_profile.Pointer = null,
+    test_collector_profile: collector_profile.Pointer = if (builtin.is_test) null else {},
     capture: format.Capture = undefined,
     session: semantic.Session = .{},
     writer: format.Writer = undefined,
@@ -122,7 +122,7 @@ pub const Recorder = struct {
     }
     pub fn initWithPacing(self: *Recorder, identity: format.Identity, corpus: []u8, pacing: semantic.PacingMode) Error!void {
         if (self.address != null) return error.InvalidState;
-        self.test_collector_profile = null;
+        if (comptime builtin.is_test) self.test_collector_profile = null;
         const total = std.math.add(usize, @sizeOf(Recorder), corpus.len) catch return error.CaptureBudgetExceeded;
         if (total > format.max_capture_bytes) return error.CaptureBudgetExceeded;
         self.writer = try format.Writer.init(corpus, identity, codec.validate);
@@ -139,7 +139,7 @@ pub const Recorder = struct {
     }
     pub fn initStreamingWithPacing(self: *Recorder, identity: format.Identity, sink: format.StreamSink, byte_cap: u64, resident_staging_bytes: usize, pacing: semantic.PacingMode) !void {
         if (self.address != null) return error.InvalidState;
-        self.test_collector_profile = null;
+        if (comptime builtin.is_test) self.test_collector_profile = null;
         const total = std.math.add(usize, @sizeOf(Recorder), resident_staging_bytes) catch return error.CaptureBudgetExceeded;
         if (total > format.max_capture_bytes) return error.CaptureBudgetExceeded;
         self.allocation_bytes = total;
