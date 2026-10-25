@@ -1,0 +1,406 @@
+{
+  "schema": "bugu.collector-profile.native-result/v1",
+  "status": "FAILED_CONTROL_LANE_OVERFLOW_DIAGNOSTICS_VALID",
+  "source_commit": "a1698885495fac701ced86c44c517109db6349b8",
+  "source_tree": "09fcfb4a1c2a415ac4eff3b30e8ef1da74b81a27",
+  "plan_sha256": "fc9604e4eb75cfca41216128319cd3c2995179386ca767b212aa6f66f45b1309",
+  "executable_sha256": "99e0584cc5e063731a484a425b1461eaa1043f5ed6705f8310393e34539a91f9",
+  "guard": {
+    "exit": 1,
+    "stop_reason": null,
+    "elapsed_seconds": 92.05907699199997,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 28991197184
+  },
+  "tests": {
+    "passed": 11,
+    "failed": 1,
+    "skipped": 0,
+    "actual_failure": "Poisoned",
+    "native_attempts": 1
+  },
+  "mode": {
+    "optimize": "Debug",
+    "pacing": "notified_v1",
+    "admission": "ordered_job_scans",
+    "workload": "long",
+    "streaming": true,
+    "collector_profile": true,
+    "lane_bytes": 4194304,
+    "lane_descriptors": 16384
+  },
+  "capture_stats": {
+    "allocation_bytes": 19368024,
+    "corpus_bytes": 7093683,
+    "occurrences": 120587,
+    "lanes": [
+      {
+        "produced": 36532,
+        "consumed": 23681,
+        "queued_bytes": 4194268,
+        "peak_bytes": 4194268,
+        "peak_records": 12851,
+        "poison": "overflow",
+        "closed": false
+      },
+      {
+        "produced": 16447,
+        "consumed": 16447,
+        "queued_bytes": 0,
+        "peak_bytes": 598004,
+        "peak_records": 1941,
+        "poison": "none",
+        "closed": false
+      },
+      {
+        "produced": 6557,
+        "consumed": 4787,
+        "queued_bytes": 1197492,
+        "peak_bytes": 1203766,
+        "peak_records": 1771,
+        "poison": "none",
+        "closed": false
+      },
+      {
+        "produced": 15258,
+        "consumed": 15258,
+        "queued_bytes": 0,
+        "peak_bytes": 2752,
+        "peak_records": 28,
+        "poison": "none",
+        "closed": false
+      }
+    ],
+    "pcm_samples": [
+      29184,
+      0,
+      0
+    ],
+    "submitted_frames": 14592,
+    "generated_frames": 14592,
+    "discarded_pending_frames": 0,
+    "discarded_generated_frames": 0,
+    "multi_frame_ticks": 0,
+    "control_thread_id": 23,
+    "worker_thread_id": 24,
+    "callback_thread_id": 26,
+    "ui_calls": 1386,
+    "command_submitted": 1,
+    "command_terminal": 0,
+    "terminal_acknowledged": 0
+  },
+  "actual_cleanup": {
+    "closed": true,
+    "worker_joined": true,
+    "first_error": null,
+    "cleanup_error": null,
+    "provider_opened": 16,
+    "provider_closed": 16,
+    "provider_live": 0,
+    "sample_leases": 0,
+    "live_instances": 0,
+    "play_executed": false,
+    "stop_executed": false
+  },
+  "diagnostics": {
+    "parsed_json": true,
+    "inspection_errors": [],
+    "report_overflow": false,
+    "unknown_families": 0,
+    "invalid_timestamps": 0,
+    "timeline_retained": 52,
+    "timeline_overwrites": 0,
+    "first_failure": {
+      "pass": 53507,
+      "elapsed_ns": 2469419408,
+      "lanes": [
+        {
+          "record_write": 36532,
+          "record_read": 23681,
+          "peak_bytes": 4194268,
+          "peak_records": 12851
+        },
+        {
+          "record_write": 16447,
+          "record_read": 16447,
+          "peak_bytes": 598004,
+          "peak_records": 1941
+        },
+        {
+          "record_write": 6557,
+          "record_read": 4787,
+          "peak_bytes": 1203766,
+          "peak_records": 1771
+        },
+        {
+          "record_write": 15258,
+          "record_read": 15258,
+          "peak_bytes": 2752,
+          "peak_records": 28
+        }
+      ]
+    },
+    "joined_elapsed_ns": 2496867924,
+    "collector_clock_calls": 10435,
+    "raw_clock_calls": 216,
+    "record_samples_with_both_encode_append": 930,
+    "observed_stage_wall_ns": {
+      "pop_observe": 962418,
+      "encode": 2109986,
+      "append": 14134697
+    },
+    "raw_write": {
+      "population": 108,
+      "errors": 0,
+      "bytes": 7077888,
+      "sample_count": 108,
+      "sample_errors": 0,
+      "sample_bytes": 7077888,
+      "total_ns": 3105277,
+      "min_ns": 19997,
+      "max_ns": 130953,
+      "invalid_durations": 0,
+      "overflow": false
+    },
+    "role_metrics": [
+      {
+        "attempted_pops": 53506,
+        "sampled_attempts": 849,
+        "empty_pops": 29825,
+        "pop_errors": 0,
+        "observe_errors": 0,
+        "metrics": {
+          "records": 23681,
+          "native_bytes": 5447052,
+          "encoded_records": 23681,
+          "wire_bytes": 891874,
+          "appended_records": 23681,
+          "framed_wire_bytes": 2407458,
+          "pop_observe": {
+            "population": 53506,
+            "errors": 0,
+            "bytes": 5447052,
+            "sample_count": 849,
+            "sample_errors": 0,
+            "sample_bytes": 89432,
+            "total_ns": 309617,
+            "min_ns": 156,
+            "max_ns": 4310,
+            "invalid_durations": 0,
+            "overflow": false
+          },
+          "encode": {
+            "population": 23681,
+            "errors": 0,
+            "bytes": 891874,
+            "sample_count": 392,
+            "sample_errors": 0,
+            "sample_bytes": 16307,
+            "total_ns": 978628,
+            "min_ns": 312,
+            "max_ns": 364875,
+            "invalid_durations": 0,
+            "overflow": false
+          },
+          "append": {
+            "population": 23681,
+            "errors": 0,
+            "bytes": 891874,
+            "sample_count": 392,
+            "sample_errors": 0,
+            "sample_bytes": 16307,
+            "total_ns": 5124256,
+            "min_ns": 8669,
+            "max_ns": 533805,
+            "invalid_durations": 0,
+            "overflow": false
+          }
+        }
+      },
+      {
+        "attempted_pops": 53506,
+        "sampled_attempts": 854,
+        "empty_pops": 37059,
+        "pop_errors": 0,
+        "observe_errors": 0,
+        "metrics": {
+          "records": 16447,
+          "native_bytes": 2392680,
+          "encoded_records": 16447,
+          "wire_bytes": 692897,
+          "appended_records": 16447,
+          "framed_wire_bytes": 1745505,
+          "pop_observe": {
+            "population": 53506,
+            "errors": 0,
+            "bytes": 2392680,
+            "sample_count": 854,
+            "sample_errors": 0,
+            "sample_bytes": 39244,
+            "total_ns": 245826,
+            "min_ns": 156,
+            "max_ns": 13657,
+            "invalid_durations": 0,
+            "overflow": false
+          },
+          "encode": {
+            "population": 16447,
+            "errors": 0,
+            "bytes": 692897,
+            "sample_count": 251,
+            "sample_errors": 0,
+            "sample_bytes": 11049,
+            "total_ns": 439042,
+            "min_ns": 313,
+            "max_ns": 92258,
+            "invalid_durations": 0,
+            "overflow": false
+          },
+          "append": {
+            "population": 16447,
+            "errors": 0,
+            "bytes": 692897,
+            "sample_count": 251,
+            "sample_errors": 0,
+            "sample_bytes": 11049,
+            "total_ns": 3369516,
+            "min_ns": 8676,
+            "max_ns": 205998,
+            "invalid_durations": 0,
+            "overflow": false
+          }
+        }
+      },
+      {
+        "attempted_pops": 53506,
+        "sampled_attempts": 788,
+        "empty_pops": 48719,
+        "pop_errors": 0,
+        "observe_errors": 0,
+        "metrics": {
+          "records": 4787,
+          "native_bytes": 3239016,
+          "encoded_records": 4787,
+          "wire_bytes": 1006367,
+          "appended_records": 4787,
+          "framed_wire_bytes": 1312735,
+          "pop_observe": {
+            "population": 53506,
+            "errors": 0,
+            "bytes": 3239016,
+            "sample_count": 788,
+            "sample_errors": 0,
+            "sample_bytes": 37714,
+            "total_ns": 170891,
+            "min_ns": 154,
+            "max_ns": 1298,
+            "invalid_durations": 0,
+            "overflow": false
+          },
+          "encode": {
+            "population": 4787,
+            "errors": 0,
+            "bytes": 1006367,
+            "sample_count": 59,
+            "sample_errors": 0,
+            "sample_bytes": 13407,
+            "total_ns": 516341,
+            "min_ns": 351,
+            "max_ns": 96118,
+            "invalid_durations": 0,
+            "overflow": false
+          },
+          "append": {
+            "population": 4787,
+            "errors": 0,
+            "bytes": 1006367,
+            "sample_count": 59,
+            "sample_errors": 0,
+            "sample_bytes": 13407,
+            "total_ns": 2541133,
+            "min_ns": 8678,
+            "max_ns": 377056,
+            "invalid_durations": 0,
+            "overflow": false
+          }
+        }
+      },
+      {
+        "attempted_pops": 53506,
+        "sampled_attempts": 839,
+        "empty_pops": 38248,
+        "pop_errors": 0,
+        "observe_errors": 0,
+        "metrics": {
+          "records": 15258,
+          "native_bytes": 1752352,
+          "encoded_records": 15258,
+          "wire_bytes": 651281,
+          "appended_records": 15258,
+          "framed_wire_bytes": 1627793,
+          "pop_observe": {
+            "population": 53506,
+            "errors": 0,
+            "bytes": 1752352,
+            "sample_count": 839,
+            "sample_errors": 0,
+            "sample_bytes": 29048,
+            "total_ns": 236084,
+            "min_ns": 155,
+            "max_ns": 1796,
+            "invalid_durations": 0,
+            "overflow": false
+          },
+          "encode": {
+            "population": 15258,
+            "errors": 0,
+            "bytes": 651281,
+            "sample_count": 228,
+            "sample_errors": 0,
+            "sample_bytes": 10331,
+            "total_ns": 175975,
+            "min_ns": 312,
+            "max_ns": 19484,
+            "invalid_durations": 0,
+            "overflow": false
+          },
+          "append": {
+            "population": 15258,
+            "errors": 0,
+            "bytes": 651281,
+            "sample_count": 228,
+            "sample_errors": 0,
+            "sample_bytes": 10331,
+            "total_ns": 3099792,
+            "min_ns": 8677,
+            "max_ns": 113076,
+            "invalid_durations": 0,
+            "overflow": false
+          }
+        }
+      }
+    ]
+  },
+  "local_artifact_identities_only": {
+    "history.incomplete.bin": {
+      "bytes": 7077888,
+      "sha256": "02be0265ea3f1859c1c278cf82640d6a4748594d95d6ccadcc81e2d4163f8ee4"
+    },
+    "collector-profile.json": {
+      "bytes": 142324,
+      "sha256": "b1cd87d88139768f6a890d11ea45d8a53209b50f68208b5170a61b5f007ca2ff"
+    }
+  },
+  "sealed_history": false,
+  "strict_admission_executed": false,
+  "fresh_replay_started": false,
+  "limits": [
+    "First failure after2469419408ns from first collector snapshot. Whole process92.059sec also includes startup/bank/executable identity and selftests; no direct per-function startup measurement.",
+    "Control byte peak4194268 leaves36bytes while12851 descriptors are below16384. Capture rejects rather than drops or expands.",
+    "Encode/append durations cover the same930 selected records. Pop includes empty pops and a different population; no exact CPU or population extrapolation.",
+    "Raw write timing is all108 attempts, not the sampled append population; includes actual synchronous raw writes only, not fsync/close/OS durability. No write error observed.",
+    "Instrumentation itself adds overhead; this is a current wire4 instrumented Debug failure, not proof of historical wire3 cause.",
+    "No record-result/bank/sealed tape; incomplete bytes and unconsumed queues preserved locally. Prior positive ReleaseSafe evidence unchanged.",
+    "Diagnostics report actual close/join and resource zero, not successful Play/Stop. No timing reroll; use evidence for a separately reviewed lossless repair."
+  ]
+}
