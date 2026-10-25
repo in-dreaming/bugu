@@ -1,0 +1,127 @@
+{
+  "schema": "bugu.sha-object.native-result/v1",
+  "status": "ACTUAL_LONG_CAPTURE_FAILED_NO_SEALED_TAPE",
+  "source_commit": "d2ea6c7cb4b20580688e00d6331dca3dbaaeb871",
+  "target_tree": "0d60949abb0f828731ecc564a4570aa082cd3e44",
+  "plan_sha256": "2732106982e9241bddf22d1c4e9b42de2c8385070e782ee198f6c95a4d2271ff",
+  "build_label": "Debug engine/frontend + isolated ReleaseSafe official SHA",
+  "run": {
+    "exit": 1,
+    "stop_reason": null,
+    "elapsed_seconds": 42.2528933020003,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 28116598784
+  },
+  "tests": {
+    "self_pass": 11,
+    "host_fail": 1,
+    "skip": 0
+  },
+  "actual": {
+    "pacing": "notified_v1",
+    "policy": "ordered_job_scans",
+    "workload": "long",
+    "collector_profile_enabled": false,
+    "healthy": false,
+    "error": "Poisoned",
+    "allocation_bytes": 19302352,
+    "corpus_bytes": 17307222,
+    "occurrences": 248991,
+    "submitted_frames": 48640,
+    "generated_frames": 48640,
+    "pcm_samples": [
+      97280,
+      0,
+      0
+    ],
+    "discarded_pending_frames": 0,
+    "discarded_generated_frames": 0,
+    "multi_frame_ticks": 0,
+    "ui_calls": 2499,
+    "command_submitted": 1,
+    "command_terminal": 1,
+    "terminal_acknowledged": 1
+  },
+  "lanes": [
+    {
+      "role": "control",
+      "produced": 62954,
+      "consumed": 62852,
+      "queued_bytes": 30368,
+      "peak_bytes": 86512,
+      "peak_records": 277,
+      "poison": "none",
+      "closed": false
+    },
+    {
+      "role": "worker",
+      "produced": 20387,
+      "consumed": 20385,
+      "queued_bytes": 388,
+      "peak_bytes": 141530,
+      "peak_records": 467,
+      "poison": "none",
+      "closed": false
+    },
+    {
+      "role": "render",
+      "produced": 15938,
+      "consumed": 15841,
+      "queued_bytes": 69916,
+      "peak_bytes": 167916,
+      "peak_records": 244,
+      "poison": "none",
+      "closed": false
+    },
+    {
+      "role": "ui",
+      "produced": 27501,
+      "consumed": 27501,
+      "queued_bytes": 0,
+      "peak_bytes": 3792,
+      "peak_records": 33,
+      "poison": "none",
+      "closed": false
+    }
+  ],
+  "cleanup": {
+    "worker_joined": true,
+    "open_attempts": 16,
+    "read_attempts": 60,
+    "close_attempts": 16,
+    "opened": 16,
+    "closed": 16,
+    "live_sources": 0,
+    "sample_leases": 0,
+    "instances": 0,
+    "basis": "Actual rejected-capture output after closeActual; individual Play/Stop executed, Hostdestroyed and cleanup_error fields not separately emitted here, not inferred."
+  },
+  "artifacts": {
+    "elf": {
+      "bytes": 189959046,
+      "sha256": "1d787c99f17b0a3ddb96fa391ab96761d4c621f263d788a1e1a525f7efae9b00"
+    },
+    "incomplete_tape": {
+      "bytes": 17301504,
+      "sha256": "9929c7d71e0e4f9608e14ddbaf3468aeb4edf9f17f35857ccae0c2715888a654"
+    },
+    "sealed_history_exists": false,
+    "bank_exists": false,
+    "record_result_exists": false
+  },
+  "read_only_prefix": {
+    "complete_records": 126550,
+    "valid_prefix_bytes": 17301233,
+    "trailing_incomplete_bytes": 271,
+    "all_complete_payload_sha_match": true,
+    "scope": "Direct read-only envelope scan, no full semantic admission or replay. Deferred lane/sink bytes not included."
+  },
+  "conclusions": [
+    "No lane byte/descriptor overflow occurred in this actual run; observed peaks below4MiB by a wide margin. This is finite evidence, not universal throughput qualification.",
+    "Recorder overall health failed for a currently undetermined reason. Guard can fail from Recorder.failed or Session.poisoned independently of lanes. Original failure output lacks first reason; pending buffers make tail inference insufficient.",
+    "Recording failed before sealing/strict admission. No fresh replay or negative continuation, no timing retry.",
+    "48640 submitted frames do not prove32768 post-Play frames; one terminal+ACK does not by itself establish executed Play or Stop."
+  ],
+  "next": "Preserve this failure, identify exact recorder/session rejection via bounded first-failure evidence and targeted tests before any new actual recording.",
+  "raw_log_sha256": "a3ca122b43b5148e98d9e3b92cf1b129fa50d5cfbf9071da711941c9d3d4bbf4"
+}
