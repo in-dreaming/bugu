@@ -1,0 +1,101 @@
+{
+  "schema": "bugu.sha-object.focused-result/v1",
+  "status": "PASS_NATIVE_PENDING",
+  "source_commit": "d2ea6c7cb4b20580688e00d6331dca3dbaaeb871",
+  "target_tree": "0d60949abb0f828731ecc564a4570aa082cd3e44",
+  "plan_sha256": "2732106982e9241bddf22d1c4e9b42de2c8385070e782ee198f6c95a4d2271ff",
+  "build_label": "Debug engine/frontend/tests + isolated ReleaseSafe official std SHA256",
+  "focused_run": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 40.123599424000076,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 28200624128
+  },
+  "focused_tests": {
+    "pass": 109,
+    "skip": 2,
+    "fail": 0,
+    "build_steps_pass": 20,
+    "build_steps_total": 20
+  },
+  "archive_consumer_run": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 1.0851277889996709,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 28144697344
+  },
+  "archive_consumer_tests": {
+    "pass": 1,
+    "fail": 0
+  },
+  "offline": {
+    "bytes": 1048576,
+    "batches_per_implementation_per_path": 1,
+    "order": "standard,candidate",
+    "retries": 0,
+    "oneshot": {
+      "standard_wall_ns": 158170969,
+      "candidate_wall_ns": 920769,
+      "ratio": 0.005821352716123273
+    },
+    "stream_64_bytes": {
+      "updates_per_implementation": 16384,
+      "standard_wall_ns": 160038758,
+      "candidate_wall_ns": 1041175,
+      "ratio": 0.006505767809070351
+    },
+    "gate_both_max_ratio": 0.8,
+    "gate_pass": true,
+    "all_digests_match": true,
+    "sha256": "9b6dc216335356008d84c53159762fdb3cafc6d97fd22db00cacda405a08006f"
+  },
+  "actual_backend": {
+    "mode": "ReleaseSafe",
+    "abi_version": 1,
+    "state_size": 112,
+    "state_alignment": 8,
+    "official_std_state_size": 112,
+    "official_std_state_alignment": 16,
+    "signature": 5981184959788900456
+  },
+  "compile_and_symbol_evidence": {
+    "backend_release_safe_objects": 1,
+    "debug_consumer_commands": 6,
+    "exports_each_one": true,
+    "backend_undefined_symbols": [
+      "_DYNAMIC",
+      "__divti3",
+      "__zig_probe_stack",
+      "getauxval",
+      "memcpy",
+      "memmove",
+      "memset"
+    ],
+    "resolved_within_archive": [],
+    "inspection_note": "Initial read-only parser omitted direct inline compile argv and stopped an assertion; corrected parser handles both inline and response-file commands. No compilation or workload rerun."
+  },
+  "artifacts": {
+    "archive": {
+      "bytes": 93121710,
+      "sha256": "5c9802509f8ec672052216197442d5e0b9353e72210bdd5f000ae7457767f9ad"
+    },
+    "elf": {
+      "bytes": 189959046,
+      "sha256": "1d787c99f17b0a3ddb96fa391ab96761d4c621f263d788a1e1a525f7efae9b00"
+    }
+  },
+  "fixture": {
+    "verified_before_and_after": 16,
+    "bytes": 12288704
+  },
+  "native_started": false,
+  "limitations": [
+    "Wall measurements include ordering/cache/scheduling; neither universal CPU attribution nor a recorder throughput claim.",
+    "Production-check archive intentionally does not bundle compiler runtime: backend undefined __divti3/__zig_probe_stack plus libc/platform helpers resolved by this standalone Zig test linker. Existing real authoring archive bundling unchanged; arbitrary C/C++/Windows linking not qualified.",
+    "Caller CPU/backend labels refer only to Debug caller; backend actual mode established by runtime metadata and separate build-obj command.",
+    "Earlier pure-Debug shuffle correctness pass/performance failure and original overflow remain preserved.",
+    "No raw logs/tapes/PCM/binaries/local paths published."
+  ]
+}
