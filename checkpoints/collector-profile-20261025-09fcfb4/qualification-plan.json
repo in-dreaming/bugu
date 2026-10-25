@@ -1,0 +1,127 @@
+{
+  "schema": "bugu.collector-profile.qualification-plan/v1",
+  "status": "FROZEN_NOT_RUN",
+  "base_remote_commit": "34fec94666ba191fce76ec6453f83e5c0626815e",
+  "base_tree": "429ebd5c0e4970e30ee5e7107d27b05de2ee5901",
+  "purpose": "One diagnostic Debug original-long notified strict capture, after bounded self-tests. No throughput fix or universal qualification claimed from instrumentation alone.",
+  "environment": {
+    "location": "cloud Linux x86_64",
+    "clear_case_insensitive_prefixes": [
+      "SME_"
+    ],
+    "unset_exact": [
+      "PYTHONOPTIMIZE"
+    ],
+    "set": {
+      "NO_COLOR": "1"
+    }
+  },
+  "parameters": {
+    "REPO": "Exact clean frozen source plus fixed miniaudio/Ogg/Opus pins",
+    "ZIG": "Verified official Zig 0.16.0",
+    "RUN_GUARDED": "Existing SHA-pinned 2862-byte runner",
+    "OUTPUT": "New guard output directory outside source",
+    "ELF": "Unique actual Debug semantic_live_process_test produced by this frozen build, pin full SHA256 and size before native invocation",
+    "TAPE_DIRECTORY": "Exclusively created new absolute non-symlink empty directory outside source"
+  },
+  "runner_sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+  "sequence": [
+    {
+      "id": "fixture-prepare",
+      "argv": [
+        "python3",
+        "tools/sme/prepare_live_fixtures.py"
+      ],
+      "timeout_seconds": 60,
+      "expected": "Generate only sixteen original authored input WAVs from existing fixed generator; verify every existing SHA, never overwrite mismatch."
+    },
+    {
+      "id": "focused-debug-01",
+      "argv": [
+        "<ZIG>",
+        "build",
+        "sme-live-semantic-collector-profile-check",
+        "sme-live-semantic-streaming-check",
+        "sme-live-semantic-process-test",
+        "sme-author-live-production-check",
+        "-j1",
+        "-Doptimize=Debug",
+        "--summary",
+        "all"
+      ],
+      "guard": "<RUN_GUARDED>",
+      "timeout_seconds": 900,
+      "expected": "New profile unit tests, streaming compatibility, process self-tests and production compile. Native workload skips with mode unset. Any real failure stops dependent capture and remains evidence."
+    },
+    {
+      "id": "fixture-verify",
+      "argv": [
+        "python3",
+        "tools/sme/prepare_live_fixtures.py",
+        "--verify-only"
+      ],
+      "timeout_seconds": 60
+    },
+    {
+      "id": "native-debug-long-profile-01",
+      "argv": [
+        "<ELF>"
+      ],
+      "guard": "<RUN_GUARDED>",
+      "timeout_seconds": 180,
+      "environment": {
+        "SME_LIVE_SEMANTIC_MODE": "record",
+        "SME_LIVE_SEMANTIC_DIR": "<TAPE_DIRECTORY>",
+        "SME_LIVE_SEMANTIC_PACING": "notified_v1",
+        "SME_LIVE_SEMANTIC_ADMISSION": "ordered_job_scans",
+        "SME_LIVE_SEMANTIC_WRITER": "stream",
+        "SME_LIVE_SEMANTIC_WORKLOAD": "long",
+        "SME_LIVE_SEMANTIC_COLLECTOR_PROFILE": "1",
+        "NO_COLOR": "1"
+      },
+      "expected": "Exactly one actual recording attempt; preserve success or failure, no timing reroll. Full native cleanup and diagnostic integrity are inspected separately from exit status."
+    },
+    {
+      "id": "fixture-verify-after",
+      "argv": [
+        "python3",
+        "tools/sme/prepare_live_fixtures.py",
+        "--verify-only"
+      ],
+      "timeout_seconds": 60
+    }
+  ],
+  "preconditions": [
+    "Independent static review closed before publication; exact source and plan saved/read back before first build.",
+    "Native stage only after focused success and its separate result saved. Same frozen tree and pinned Debug ELF; no other SME variables or controlled hook, delay, fault injection, safety gain or hardware mode.",
+    "Create empty tape directory before invocation; verify unique ELF, dependencies, fixture hashes and source guard. Missing prerequisite is setup failure, never an actual capture attempt.",
+    "Fixed 4 MiB and 16384-descriptor lanes, original long >=32768 submitted frames, strict wire4 and finite max_generated_frames/file limits remain unchanged."
+  ],
+  "measurement_contract": [
+    "Instrumentation exclusively on test nonRT collector and test raw file adapter; no Audio/producer hook clocks, allocation, locks, logging or pacing changes.",
+    "Per-role deterministic 1/64 sampling reports observed coverage, population and clock-call counts; no fixed global stride assumptions or sampled-to-population exact CPU claims.",
+    "Stage wall durations are observed elapsed time, include scheduling. Append contains encoding-independent writer hash/buffer/raw work. Raw write time is an inclusive subset for sampled append calls, and includes final flush writes; never sum as disjoint totals. fsync/close excluded from raw time.",
+    "Only existing atomic record counters/peaks may be sampled live. Snapshots are not coherent global states. Final non-atomic byte counts only after genuine owner joins/destruction. First collector failure is pinned separately from later cleanup.",
+    "Bounded aggregate/timeline storage and explicit overflow/invalid clock indicators. Report attempted/completed/error counts and acknowledged versus requested write bytes. Failed/partial file remains incomplete, not a sealed replay history.",
+    "After actual owner cleanup, parse collector-profile.json as JSON; check sample_count <= population, errors/counters, phase/role/family totals and actual stats/cleanup consistency. Missing/truncated/overflowed diagnostics remain a measurement limitation, not a reason to rerun."
+  ],
+  "bounds": {
+    "compile_seconds": 900,
+    "single_native_seconds": 180,
+    "existing_inner_observation_seconds": 60,
+    "minimum_start_free_bytes": 3355443200,
+    "stop_below_free_bytes": 2281701376,
+    "termination": "Runner SIGTERM owned process group, up to10 seconds then SIGKILL; timeout never implies clean Host teardown."
+  },
+  "outcome": "Archive source/plan and sanitized independent results on existing project branches. Do not upload local paths, raw logs, PCM, tape or executable. If a valid sealed/admitted tape exists, freeze a separate same-ELF fresh replay plan; otherwise preserve failure and diagnose a minimal lossless fix before any new recording. No Windows, main, Pause/Resume or device selection changes.",
+  "local_source_commit": "ab53de6733d507d231163657cf032c06bf70fcf1",
+  "target_tree": "09fcfb4a1c2a415ac4eff3b30e8ef1da74b81a27",
+  "patch_sha256": "2a2ffb0f777c36dc30caa7e64b910c448f33710689039284d7debdfe581d9ae3",
+  "static_review": [
+    "Independent line-by-line review confirmed unchanged native drain order, original errors and poisoning; production pointer null-only and no producer/Audio edits.",
+    "First failure snapshot pinned; timeline freezes on error, full stats only after genuine join; post-join sealing/admission failure still reports diagnostics.",
+    "Fixed per-role sampling avoids global stride aliasing; measured coverage and wall-time limits explicit.",
+    "Unit tests written for exact enabled/disabled canonical bytes, original observe/encode/append failures, partial file write, sticky errors, JSON roundtrip, retention, explicit overflow and scope rejection. Not executed yet.",
+    "Independent review of five-line correction confirms runtime-storable zero-sized production void field, test-only assignment, same pointer iteration order; original compile failure retained, no change to wire or measurement."
+  ]
+}
