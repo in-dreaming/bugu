@@ -1,0 +1,46 @@
+{
+  "schema": "bugu.collector-profile.focused-result/v1",
+  "status": "PASS_FOCUSED_NATIVE_PENDING",
+  "source_commit": "a1698885495fac701ced86c44c517109db6349b8",
+  "source_tree": "09fcfb4a1c2a415ac4eff3b30e8ef1da74b81a27",
+  "plan_sha256": "fc9604e4eb75cfca41216128319cd3c2995179386ca767b212aa6f66f45b1309",
+  "guard": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 9.098582365000084,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 29018423296
+  },
+  "tests": {
+    "passed": 28,
+    "skipped": 1,
+    "failed": 0,
+    "collector_profile": 6,
+    "streaming": 11,
+    "process_selftests": 11,
+    "native_mode_unset_skip": 1,
+    "production_compile": true
+  },
+  "coverage": [
+    "Bounded profile aggregate/error/overflow/sampling/JSON/timeline tests.",
+    "Actual profiled/unprofiled Recorder canonical bytes and native return parity.",
+    "Observe/encode/append errors, sticky poison and pinned first failure retained.",
+    "Actual partial raw file write acknowledged bytes and failure timing, strict opt-in scope."
+  ],
+  "executable": {
+    "sha256": "99e0584cc5e063731a484a425b1461eaa1043f5ed6705f8310393e34539a91f9",
+    "bytes": 209616882,
+    "format": "ELF x86_64 Debug",
+    "provenance": "Unique semantic_live_process_test emitted within the successful frozen focused build window; not the earlier compile-failed tree executable."
+  },
+  "fixtures": {
+    "verified_before": 16,
+    "verified_after": 16,
+    "bytes": 12288704
+  },
+  "limits": [
+    "No native recording, admission or replay in this stage.",
+    "Original two compile-target failures retained separately.",
+    "Instrumentation costs remain unmeasured until the planned single native diagnostic."
+  ]
+}
