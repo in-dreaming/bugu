@@ -41,7 +41,7 @@ The added public `inline` pure helper has exactly the `@Vector(4, u32)` input an
 output type and consists of this expression, with no other logic:
 
 ```zig
-@shuffle(u32, w, @as(V4u32, @splat(0)), .{ 2, 3, ~@as(i32, 0), ~@as(i32, 1) })
+@shuffle(u32, w, @as(V4u32, @splat(0)), [4]i32{ 2, 3, -1, -2 })
 ```
 
 On x86_64's little-endian representation, both expressions yield all 128 bits

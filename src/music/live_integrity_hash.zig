@@ -19,7 +19,7 @@ pub const compilation_mode = builtin.mode;
 /// and bitcasting back: [w[2], w[3], 0, 0], including both unused upper lanes.
 pub inline fn shaNiSecondRoundWords(w: @Vector(4, u32)) @Vector(4, u32) {
     const V4u32 = @Vector(4, u32);
-    return @shuffle(u32, w, @as(V4u32, @splat(0)), .{ 2, 3, ~@as(i32, 0), ~@as(i32, 1) });
+    return @shuffle(u32, w, @as(V4u32, @splat(0)), [4]i32{ 2, 3, -1, -2 });
 }
 
 /// First thirty-two bits of the fractional parts of the square
