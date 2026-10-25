@@ -1,0 +1,60 @@
+{
+  "schema": "bugu.collector-profile.focused-result/v1",
+  "status": "FAILED_COMPILE_NOT_NATIVE",
+  "source_commit": "34fec94666ba191fce76ec6453f83e5c0626815e",
+  "source_tree": "429ebd5c0e4970e30ee5e7107d27b05de2ee5901",
+  "plan_sha256": "c40660d9b6479833cdb2f7a6b639d818c0d0729596f929745f523a63e8a7b389",
+  "command": [
+    "zig",
+    "build",
+    "sme-live-semantic-collector-profile-check",
+    "sme-live-semantic-streaming-check",
+    "sme-live-semantic-process-test",
+    "sme-author-live-production-check",
+    "-j1",
+    "-Doptimize=Debug",
+    "--summary",
+    "all"
+  ],
+  "guard": {
+    "exit": 1,
+    "stop_reason": null,
+    "elapsed_seconds": 127.17730962400003,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 29209337856
+  },
+  "tests": {
+    "passed": 17,
+    "skipped": 1,
+    "failed_tests": 0,
+    "compile_failed_targets": 2,
+    "collector_profile": {
+      "passed": 6
+    },
+    "process_selftests": {
+      "passed": 11,
+      "skipped_native": 1
+    },
+    "streaming_tests": "NOT_EXECUTED_COMPILE_FAILED",
+    "production_compile": "FAILED"
+  },
+  "failures": [
+    {
+      "target": "production-check",
+      "reason": "Production Pointer used comptime-only @TypeOf(null), invalid runtime assignment and @sizeOf; four compiler diagnostics from the same type issue."
+    },
+    {
+      "target": "streaming-check",
+      "reason": "New test loop used runtime tuple fields; compiler requires comptime tuple indexing or a homogeneous fixed array."
+    }
+  ],
+  "fixtures": {
+    "verified_before": 16,
+    "generated_before": 16,
+    "verified_after": 16,
+    "bytes": 12288704
+  },
+  "native_recording_started": false,
+  "tape": null,
+  "next": "Preserve this failure, make only production zero-sized void field/guard and fixed-array test-loop corrections; freeze new source and same-range plan before running. No capacity, oracle, native scheduling or wire changes."
+}
