@@ -1,0 +1,157 @@
+{
+  "schema": "bugu.sha-object.qualification-plan/v1",
+  "status": "FROZEN_NOT_RUN",
+  "base_remote_commit": "5b5c2c6fb549a21206c20fe4fe6827dfa714ac98",
+  "base_tree": "4014f711486263ad989e20f09b36e7215edbba12",
+  "purpose": "Lossless official std SHA in isolated ReleaseSafe object, with Debug engine/frontend/assertions. Explicit hybrid qualification, not all-Debug. Remove ineffective vendored algorithm experiment while preserving its results.",
+  "environment": {
+    "location": "cloud Linux x86_64",
+    "clear_case_insensitive_prefixes": [
+      "SME_"
+    ],
+    "unset_exact": [
+      "PYTHONOPTIMIZE"
+    ],
+    "set": {
+      "NO_COLOR": "1"
+    }
+  },
+  "parameters": {
+    "REPO": "Exact clean frozen source plus fixed miniaudio/Ogg/Opus pins",
+    "ZIG": "Verified official Zig 0.16.0",
+    "RUN_GUARDED": "Existing SHA-pinned 2862-byte runner",
+    "OUTPUT": "New guard output directory outside source",
+    "ELF": "Unique actual Debug semantic_live_process_test produced by this frozen build, pin full SHA256 and size before native invocation",
+    "TAPE_DIRECTORY": "Exclusively created new absolute non-symlink empty directory outside source",
+    "ARCHIVE": "Unique production archive emitted by this focused build, SHA/size pinned locally; ambiguous identity stops. No rebuilt source or substituted object."
+  },
+  "runner_sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+  "sequence": [
+    {
+      "id": "fixture-prepare",
+      "argv": [
+        "python3",
+        "tools/sme/prepare_live_fixtures.py"
+      ],
+      "timeout_seconds": 60,
+      "expected": "Generate only sixteen original authored input WAVs from existing fixed generator; verify every existing SHA, never overwrite mismatch."
+    },
+    {
+      "id": "focused-debug-01",
+      "argv": [
+        "<ZIG>",
+        "build",
+        "sme-live-integrity-hash-check",
+        "sme-live-semantic-format-check",
+        "sme-live-semantic-codec-check",
+        "sme-live-semantic-streaming-check",
+        "sme-live-semantic-process-test",
+        "sme-author-live-production-check",
+        "-j1",
+        "-Doptimize=Debug",
+        "--summary",
+        "all",
+        "--verbose"
+      ],
+      "guard": "<RUN_GUARDED>",
+      "timeout_seconds": 900,
+      "expected": "Five integrity tests including actual backend ABI/ReleaseSafe mode, known vectors, comptime-to-runtime state, splits/copies/unaligned, two fixed offline 1 MiB comparison paths; independent old-std wire fixture and corruption rejection; unchanged codec/short-write/error tests; process self-tests skip native; production archive compiles. Verbose commands prove engine Debug and separate backend build-obj ReleaseSafe."
+    },
+    {
+      "id": "fixture-verify",
+      "argv": [
+        "python3",
+        "tools/sme/prepare_live_fixtures.py",
+        "--verify-only"
+      ],
+      "timeout_seconds": 60
+    },
+    {
+      "id": "compile-and-archive-evidence",
+      "timeout_seconds": 60,
+      "operations": [
+        "Read verbose compile log and response files to verify engine/test/frontend -ODebug and independent official-std backend build-obj -OReleaseSafe, target unchanged.",
+        "Select unique emitted production archive within recorded build interval; pin size/SHA. Read nm -A --defined-only and nm -A -u; require exactly one strong definition for each of five sme_live_integrity_sha256_v1 exports and record unresolved compiler-runtime dependencies without claiming arbitrary C/Windows consumer support."
+      ],
+      "expected": "Missing/ambiguous mode/archive/symbol evidence is failed prerequisite, not assumed pass."
+    },
+    {
+      "id": "production-archive-consumer-01",
+      "argv": [
+        "<ZIG>",
+        "test",
+        "<ARCHIVE>",
+        "-lc",
+        "-ODebug",
+        "--dep",
+        "integrity_abi",
+        "-Mroot=tests/fixtures/sme/live_integrity_archive_probe.zig",
+        "-Mintegrity_abi=src/music/live_integrity_hash_abi.zig"
+      ],
+      "guard": "<RUN_GUARDED>",
+      "timeout_seconds": 180,
+      "expected": "Standalone Zig consumer imports only ABI and links production archive; actual backend mode/signature and abc digest match. No engine graph/module/backend source import. Failure stops native."
+    },
+    {
+      "id": "native-debug-long-01",
+      "argv": [
+        "<ELF>"
+      ],
+      "guard": "<RUN_GUARDED>",
+      "timeout_seconds": 180,
+      "environment": {
+        "SME_LIVE_SEMANTIC_MODE": "record",
+        "SME_LIVE_SEMANTIC_DIR": "<TAPE_DIRECTORY>",
+        "SME_LIVE_SEMANTIC_PACING": "notified_v1",
+        "SME_LIVE_SEMANTIC_ADMISSION": "ordered_job_scans",
+        "SME_LIVE_SEMANTIC_WRITER": "stream",
+        "SME_LIVE_SEMANTIC_WORKLOAD": "long",
+        "NO_COLOR": "1"
+      },
+      "expected": "Exactly one actual recording attempt; preserve success or failure, no timing reroll. Full native cleanup and diagnostic integrity are inspected separately from exit status."
+    },
+    {
+      "id": "fixture-verify-after",
+      "argv": [
+        "python3",
+        "tools/sme/prepare_live_fixtures.py",
+        "--verify-only"
+      ],
+      "timeout_seconds": 60
+    }
+  ],
+  "preconditions": [
+    "Independent static code, excerpt/license and original-std wire fixture review passed before publication. New source and plan must be stored/read back before build; static review is not runtime proof.",
+    "Native only after all focused correctness, actual ABI/mode, production archive symbols and independent consumer gates pass and their result is saved. Two one-batch 1 MiB paths (one-shot and 64-byte chunks), each standard first then candidate, must both match digests and show candidate wall <=0.8 baseline. This decision gate is not a statistical/universal speed claim. If unmet stop native, no retries. Engine/frontend/tests Debug; isolated official SHA ReleaseSafe. Profile env unset, no hooks/delays/injection/safety/hardware modes.",
+    "Create empty tape directory before invocation; verify unique ELF, dependencies, fixture hashes and source guard. Missing prerequisite is setup failure, never an actual capture attempt.",
+    "Fixed 4 MiB and 16384-descriptor lanes, original long >=32768 submitted frames, strict wire4 and finite max_generated_frames/file limits remain unchanged."
+  ],
+  "measurement_contract": [
+    "Two fixed offline paths on one deterministic 1 MiB input: one-shot, then64-byte-chunk streaming; each one standard-then-candidate batch. Allocation/printing outside intervals, all digests consumed/compared. No warmup/reroll/best-of-N. Wall time includes scheduling/order/cache effects; no CPU attribution.",
+    "CONFIG architecture/backend/feature fields explicitly refer to caller. Actual linked backend metadata reports ReleaseSafe mode, ABI size/align/offsets/signature, not assumed from caller CPU flags. Separate compile command establishes official std compilation boundary.",
+    "No custom SHA algorithm or vendor excerpt retained. Official std code unchanged; explicit extern logical state copy bridge avoids auto-layout casts; per-operation ABI checks precede access; compile-time init/hashing preserves official std path.",
+    "Native profile instrumentation disabled. Existing instrumented overflow and failed pure-Debug hypothesis remain independent evidence, not erased. Same lane/descriptor capacities, producer observations, digest checks and wire4 format.",
+    "Actual process elapsed is not collector/CPU/hash stage timing. Real sealed/admitted history, command outcomes, frame minimum and cleanup checked independently. No valid sealed/admitted tape means no fresh replay."
+  ],
+  "bounds": {
+    "compile_seconds": 900,
+    "single_native_seconds": 180,
+    "existing_inner_observation_seconds": 60,
+    "minimum_start_free_bytes": 3355443200,
+    "stop_below_free_bytes": 2281701376,
+    "termination": "Runner SIGTERM owned process group, up to10 seconds then SIGKILL; timeout never implies clean Host teardown.",
+    "archive_consumer_seconds": 180
+  },
+  "outcome": "Store source and sanitized separate results on existing project branches; no raw/tape/ELF/local paths. Preserve all prior failed evidence. On a sealed strictly admitted actual long tape, freeze same-ELF fresh and wrong-launch/PCM-reference negative plans using new identities. No Windows/main/API expansion.",
+  "local_source_commit": "38d69afab62cf943313e54b72c65421ada8dfa6f",
+  "target_tree": "0d60949abb0f828731ecc564a4570aa082cd3e44",
+  "patch_sha256": "6a46ff36ffe8a4773d8007cb8908e8d33f0a7d29d2bbe483183161bca8246fc2",
+  "static_review": [
+    "Independent ABI review confirms four logical state fields, initialized inactive buffer, no automatic-layout casts, signature checked before state access, value copy/peek, comptime initialization crossing into runtime.",
+    "Build review verified independent target-matched ReleaseSafe object direct insertion into production archive and preserved dependency when module graph cloned; no engine module optimize changes.",
+    "Archive consumer has no music/engine/backend source import; only private ABI and extern exported functions. It establishes Zig downstream linking, not arbitrary C or Windows environments.",
+    "Independent original-std wire fixture and all original corruption/short-write assertions remain. Caller feature labels corrected to avoid implying actual backend codegen metadata.",
+    "Seven changed files format clean except two existing unrelated blank lines in build_support/sme_steps.zig, left untouched. No build/test run before this plan publication.",
+    "Before any build, read-only artifact inspection showed the existing production-check only compiled without emitting a file. Four narrow build lines now request its getEmittedBin without installing it; standalone consumer links libc consistently with that original production target. Prior unpublished intermediate tree is not qualification evidence."
+  ]
+}
