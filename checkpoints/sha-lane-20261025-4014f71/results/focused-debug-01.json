@@ -1,0 +1,59 @@
+{
+  "schema": "bugu.sha-lane.result/v1",
+  "status": "CORRECTNESS_PASS_PERFORMANCE_GATE_FAILED_NATIVE_NOT_RUN",
+  "source_commit": "5b5c2c6fb549a21206c20fe4fe6827dfa714ac98",
+  "target_tree": "4014f711486263ad989e20f09b36e7215edbba12",
+  "plan_sha256": "4720d5431842eceac9fc9072c1d11b177539e7bde6c7d79efd9fa8d383d2ae59",
+  "run": {
+    "exit": 0,
+    "stop_reason": null,
+    "elapsed_seconds": 15.090287254000032,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 28637032448
+  },
+  "build_steps": {
+    "passed": 18,
+    "total": 18
+  },
+  "tests": {
+    "pass": 109,
+    "skip": 2,
+    "fail": 0
+  },
+  "targets": {
+    "integrity": 5,
+    "format": 20,
+    "codec": 62,
+    "streaming": 11,
+    "process_selftests": 11,
+    "production_compile": "pass"
+  },
+  "offline": {
+    "bytes": 1048576,
+    "batches": 1,
+    "order": "standard,candidate",
+    "retries": 0,
+    "standard_wall_ns": 141800411,
+    "candidate_wall_ns": 148757172,
+    "ratio": 1.0490602315673119,
+    "required_max_ratio": 0.8,
+    "gate_pass": false,
+    "digest_match": true,
+    "sha256": "9b6dc216335356008d84c53159762fdb3cafc6d97fd22db00cacda405a08006f",
+    "caller_mode": "Debug",
+    "integrity_mode": "Debug",
+    "backend": "stage2_x86_64",
+    "x86_sha": true,
+    "x86_avx2": true,
+    "sha_ni_eligible": true
+  },
+  "native_recording_started": false,
+  "next": "Preserve failed performance hypothesis; do not run dependent native or repeat offline batch. Review a narrowly isolated explicitly labeled ReleaseSafe hash module with Debug engine, unchanged SHA/wire/capacities, then freeze a new candidate.",
+  "limitations": [
+    "One fixed wall-time sample includes order/cache/scheduling effects and is not universal CPU attribution. Candidate was about4.9% slower in this sample.",
+    "Correctness success does not solve recorder overflow or establish native/fresh qualification.",
+    "Zig test runner printed failed command near successful test stderr; actual exit0, 18/18 build summary and individual test counts are authoritative; no test assertion failed.",
+    "Existing prior compile failure and recorder overflow remain separate immutable evidence."
+  ],
+  "raw_log_sha256": "9777d66b35206b777cec854bd7664efceced011f880032992ea4139cf110277e"
+}
