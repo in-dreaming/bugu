@@ -1,0 +1,126 @@
+{
+  "schema": "bugu.sha-lane.qualification-plan/v1",
+  "status": "FROZEN_NOT_RUN",
+  "base_remote_commit": "c4db9b7dc9efb5f7c63ef2f6dec6ad4e0fe8fb26",
+  "base_tree": "1b43dd1192506f29512e94d739b04b09f577612e",
+  "purpose": "Lossless pure-Debug SHA-NI lane codegen repair. Known vectors, independent wire parity, one fixed offline timing batch, then one unprofiled actual Debug original-long capture only if gates pass.",
+  "environment": {
+    "location": "cloud Linux x86_64",
+    "clear_case_insensitive_prefixes": [
+      "SME_"
+    ],
+    "unset_exact": [
+      "PYTHONOPTIMIZE"
+    ],
+    "set": {
+      "NO_COLOR": "1"
+    }
+  },
+  "parameters": {
+    "REPO": "Exact clean frozen source plus fixed miniaudio/Ogg/Opus pins",
+    "ZIG": "Verified official Zig 0.16.0",
+    "RUN_GUARDED": "Existing SHA-pinned 2862-byte runner",
+    "OUTPUT": "New guard output directory outside source",
+    "ELF": "Unique actual Debug semantic_live_process_test produced by this frozen build, pin full SHA256 and size before native invocation",
+    "TAPE_DIRECTORY": "Exclusively created new absolute non-symlink empty directory outside source"
+  },
+  "runner_sha256": "04caa3a52d7e8e283070032a02b157db83051277b21bf1178f31d91c8780b15a",
+  "sequence": [
+    {
+      "id": "fixture-prepare",
+      "argv": [
+        "python3",
+        "tools/sme/prepare_live_fixtures.py"
+      ],
+      "timeout_seconds": 60,
+      "expected": "Generate only sixteen original authored input WAVs from existing fixed generator; verify every existing SHA, never overwrite mismatch."
+    },
+    {
+      "id": "focused-debug-01",
+      "argv": [
+        "<ZIG>",
+        "build",
+        "sme-live-integrity-hash-check",
+        "sme-live-semantic-format-check",
+        "sme-live-semantic-codec-check",
+        "sme-live-semantic-streaming-check",
+        "sme-live-semantic-process-test",
+        "sme-author-live-production-check",
+        "-j1",
+        "-Doptimize=Debug",
+        "--summary",
+        "all"
+      ],
+      "guard": "<RUN_GUARDED>",
+      "timeout_seconds": 900,
+      "expected": "Known vectors, scalar comptime fallback, differential boundaries/unaligned/splits/copies/peek, independent original-std wire fixture and corruption rejection; existing short-write/error/codec tests; process self-tests and production compile. Native skips. All compilation remains Debug."
+    },
+    {
+      "id": "fixture-verify",
+      "argv": [
+        "python3",
+        "tools/sme/prepare_live_fixtures.py",
+        "--verify-only"
+      ],
+      "timeout_seconds": 60
+    },
+    {
+      "id": "native-debug-long-01",
+      "argv": [
+        "<ELF>"
+      ],
+      "guard": "<RUN_GUARDED>",
+      "timeout_seconds": 180,
+      "environment": {
+        "SME_LIVE_SEMANTIC_MODE": "record",
+        "SME_LIVE_SEMANTIC_DIR": "<TAPE_DIRECTORY>",
+        "SME_LIVE_SEMANTIC_PACING": "notified_v1",
+        "SME_LIVE_SEMANTIC_ADMISSION": "ordered_job_scans",
+        "SME_LIVE_SEMANTIC_WRITER": "stream",
+        "SME_LIVE_SEMANTIC_WORKLOAD": "long",
+        "NO_COLOR": "1"
+      },
+      "expected": "Exactly one actual recording attempt; preserve success or failure, no timing reroll. Full native cleanup and diagnostic integrity are inspected separately from exit status."
+    },
+    {
+      "id": "fixture-verify-after",
+      "argv": [
+        "python3",
+        "tools/sme/prepare_live_fixtures.py",
+        "--verify-only"
+      ],
+      "timeout_seconds": 60
+    }
+  ],
+  "preconditions": [
+    "Independent static code, excerpt/license and original-std wire fixture review passed before publication. New source and plan must be stored/read back before build; static review is not runtime proof.",
+    "Native only after focused success and separately saved result, matching Debug modes and eligible SHA-NI flags, matching offline digests, and candidate wall time <= 0.8 times baseline in the one fixed 1 MiB batch. This conservative decision gate is not a statistical or universal speed claim. If absent or unmet, stop dependent native rather than retry. Same frozen tree and pinned ELF; profile environment unset; no hooks/delays/injection/safety/hardware modes.",
+    "Create empty tape directory before invocation; verify unique ELF, dependencies, fixture hashes and source guard. Missing prerequisite is setup failure, never an actual capture attempt.",
+    "Fixed 4 MiB and 16384-descriptor lanes, original long >=32768 submitted frames, strict wire4 and finite max_generated_frames/file limits remain unchanged."
+  ],
+  "measurement_contract": [
+    "One fixed offline 1 MiB standard-then-candidate batch; allocation, data preparation and printing outside timing, digests consumed and compared. No warmup, retries or best-of-N. Wall times include scheduling and order/cache effects; not CPU measurements.",
+    "SHA-NI was already eligible; this changes only equivalent second-round input lane selection. Every SHA round, safety check, integrity pass and byte boundary remains. No ReleaseSafe module or build override.",
+    "Native production-path qualification intentionally leaves collector profiling disabled; retain original instrumented failure as distinct evidence, never claim controlled collector speed ratio across different runs.",
+    "Actual whole-process duration is not collector or executable-hash time. Read actual sealed/admission/frame/command/cleanup outputs separately from exit code; no sealed/admitted history means no fresh replay."
+  ],
+  "bounds": {
+    "compile_seconds": 900,
+    "single_native_seconds": 180,
+    "existing_inner_observation_seconds": 60,
+    "minimum_start_free_bytes": 3355443200,
+    "stop_below_free_bytes": 2281701376,
+    "termination": "Runner SIGTERM owned process group, up to10 seconds then SIGKILL; timeout never implies clean Host teardown."
+  },
+  "outcome": "Store source and sanitized separate results on existing project branches; no raw/tape/ELF/local paths. Preserve all prior failed evidence. On a sealed strictly admitted actual long tape, freeze same-ELF fresh and wrong-launch/PCM-reference negative plans using new identities. No Windows/main/API expansion.",
+  "local_source_commit": "89009a3db3ef1e171a2dc9a9eb036501f2035881",
+  "target_tree": "4014f711486263ad989e20f09b36e7215edbba12",
+  "patch_sha256": "fe7d138d0ad93a09f92b460a0006a65f04b1bade1437e9c426c0adce0d6f2665",
+  "static_review": [
+    "Independent normalized byte audit exactly matches Zig0.16 SHA256 excerpt after reversing one approved expression; MIT/source fingerprints retained.",
+    "Wire fixture uses literal wire4 fields and unchanged std SHA, not candidate Encoder/Writer; exact stream bytes and per-record corruption rejection checked.",
+    "No build mode, runtime safety, producer, queue capacity, ordering, sink or error behavior changed; format and two executable identity hash initializations use the helper.",
+    "zig fmt check differs only at the inherited final extra blank line, deliberately preserved for exact excerpt byte audit. Other changed Zig files format clean; diff whitespace check passed.",
+    "Prior attempt failed compilation before any tests because shuffle mask inferred tuple. Independent local Zig0.16 API review confirmed explicit [4]i32 mask; only helper and matching documentation changed, same lanes and all qualification bounds. Original failure preserved."
+  ]
+}
