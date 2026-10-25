@@ -107,6 +107,18 @@ fn loadModuleGraph(b: *std.Build, target: std.Build.ResolvedTarget, optimize: st
     try modules.put("bugu_audio", audio);
     const music = b.createModule(.{ .root_source_file = b.path("src/music/api.zig"), .target = target, .optimize = optimize });
     try modules.put("music", music);
+    // Hashing is a separate compilation unit: its official std SHA-256 is
+    // ReleaseSafe, while music/engine/tests keep the requested optimize mode.
+    // Link the object itself so production archives contain the implementation.
+    const integrity_object = b.addObject(.{
+        .name = "sme-live-integrity-sha256",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/music/live_integrity_hash_backend.zig"),
+            .target = target,
+            .optimize = .ReleaseSafe,
+        }),
+    });
+    music.addObject(integrity_object);
     configureResourceProfile(b, music, .baseline256);
     audio.addImport("music", music);
 
@@ -362,6 +374,10 @@ fn add(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.Op
                 .executable => b.addExecutable(.{ .name = item.name, .root_module = root }),
                 .static_library => b.addLibrary(.{ .name = item.name, .linkage = .static, .root_module = root }),
             };
+            // Preserve an actual production-check archive for independent
+            // downstream integrity-object linkage qualification (no install).
+            if (std.mem.eql(u8, item.name, "sme-author-live-production-check"))
+                _ = artifact.getEmittedBin();
             // The authoring archive is finally linked by the native C/C++
             // toolchain, so it must carry Zig's required runtime helpers.
             if (std.mem.eql(u8, item.name, "sme-authoring-build")) {
