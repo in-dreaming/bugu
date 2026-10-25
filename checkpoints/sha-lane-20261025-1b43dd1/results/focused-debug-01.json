@@ -1,0 +1,32 @@
+{
+  "schema": "bugu.sha-lane.result/v1",
+  "status": "COMPILE_FAILED_ZERO_TESTS",
+  "source_commit": "c4db9b7dc9efb5f7c63ef2f6dec6ad4e0fe8fb26",
+  "target_tree": "1b43dd1192506f29512e94d739b04b09f577612e",
+  "plan_sha256": "b752bb957fa4052e9b469167fe3cfb11ef65788dc644bc8fe11939a6b225ba86",
+  "run": {
+    "exit": 1,
+    "stop_reason": null,
+    "elapsed_seconds": 50.26867549899998,
+    "source_guard_equal": true,
+    "minimum_free_bytes": 28850941952
+  },
+  "build_steps_succeeded": 1,
+  "build_steps_total": 18,
+  "failed_compile_targets": 6,
+  "test_cases_executed": 0,
+  "offline_timing_executed": false,
+  "native_recording_started": false,
+  "diagnosis": "Zig0.16 @shuffle requires a vector or array mask; untyped tuple literal inferred as struct. All six targets fail at the same helper expression. No integrity/performance/runtime result.",
+  "next": "Only type mask as [4]i32{2,3,-1,-2}, update matching provenance text, re-freeze same scope. Preserve this real failure.",
+  "fixture": {
+    "verified_files": 16,
+    "generated_files": 0,
+    "bytes": 12288704
+  },
+  "raw_log_sha256": "f9f72736daafa2f1d3a7a90168a3061a15d169403139897063dfaaf83658602a",
+  "limitations": [
+    "Static review missed this typing error. No successful compilation, accelerated-hash claim or Host teardown claim.",
+    "No raw log, binary or local paths published."
+  ]
+}
