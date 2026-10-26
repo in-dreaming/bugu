@@ -1,0 +1,98 @@
+{
+  "source_tree": "1521f609dd10e4eaa53fd4f494121647c0f1489f",
+  "mode": "Debug engine/Recorder/queues; ReleaseSafe LLVM codec/wire encoder/SHA",
+  "scope": "one explicitly profiled long notified streaming baseline",
+  "result": "strict admission failed UnsupportedOverlap; full capture no poison, no replay claim",
+  "stats": {
+    "allocation_bytes": 19368000,
+    "corpus_bytes": 25896528,
+    "occurrences": 454874,
+    "lanes": [
+      {
+        "produced": 89197,
+        "consumed": 89197,
+        "queued_bytes": 0,
+        "peak_bytes": 751724,
+        "peak_records": 2271,
+        "poison": "none",
+        "closed": true
+      },
+      {
+        "produced": 63644,
+        "consumed": 63644,
+        "queued_bytes": 0,
+        "peak_bytes": 190642,
+        "peak_records": 782,
+        "poison": "none",
+        "closed": true
+      },
+      {
+        "produced": 11702,
+        "consumed": 11702,
+        "queued_bytes": 0,
+        "peak_bytes": 144668,
+        "peak_records": 211,
+        "poison": "none",
+        "closed": true
+      },
+      {
+        "produced": 7042,
+        "consumed": 7042,
+        "queued_bytes": 0,
+        "peak_bytes": 5056,
+        "peak_records": 44,
+        "poison": "none",
+        "closed": true
+      }
+    ],
+    "pcm_samples": [
+      71680,
+      0,
+      512
+    ],
+    "submitted_frames": 35840,
+    "generated_frames": 36096,
+    "discarded_pending_frames": 0,
+    "discarded_generated_frames": 256,
+    "multi_frame_ticks": 15,
+    "ui_calls": 638,
+    "command_submitted": 2,
+    "command_terminal": 2,
+    "terminal_acknowledged": 2
+  },
+  "host_active_cpu_observed": {
+    "collector": {
+      "observed_wall_s": 0.894659025999772,
+      "cpu_s_tick_delta": 0.73
+    },
+    "control": {
+      "observed_wall_s": 0.894659025999772,
+      "cpu_s_tick_delta": 0.35
+    },
+    "worker": {
+      "observed_wall_s": 0.8312822560001223,
+      "cpu_s_tick_delta": 0.23
+    },
+    "render": {
+      "observed_wall_s": 0.7373478770000474,
+      "cpu_s_tick_delta": 0.09
+    }
+  },
+  "cpu_note": "10ms process sampler;100Hz CPU ticks; samples approximate boundaries and are not latency guarantee",
+  "recording_tape_sha256": "7f3ae119336221664140194dc9e0ef585376428817305c43452168709f38e0e5",
+  "recording_tape_bytes": 25896528,
+  "raw_write": {
+    "population": 396,
+    "errors": 0,
+    "bytes": 25896528,
+    "sample_count": 396,
+    "sample_errors": 0,
+    "sample_bytes": 25896528,
+    "total_ns": 18099268,
+    "min_ns": 10035,
+    "max_ns": 2181097,
+    "invalid_durations": 0,
+    "overflow": false
+  },
+  "private_log_excluded": true
+}
