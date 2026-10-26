@@ -31,7 +31,7 @@ test "joint gate freezes crossed frame load before store and advances only actua
     var actual_frame = std.atomic.Value(u64).init(0);
     try t.expectEqual(@as(u64, 7), try g.completed(.control, .frame_read, 0, 0, null, actual_frame.load(.acquire)));
     try t.expect(try g.ready(.render, 3));
-    actual_frame.store(256, .release);
+    actual_frame.store(256, .monotonic);
     try t.expectEqual(@as(u64, 5), try g.completed(.render, .frame_store, 0, 0, null, actual_frame.load(.acquire)));
     try t.expect(try g.ready(.render, 6));
     _ = try g.completed(.render, .sequence_even, 0, 0, null, 2);

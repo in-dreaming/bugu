@@ -36,7 +36,7 @@ fn envelope(storage: []u8) ![]const u8 {
     var writer = try format.Writer.init(storage, identity(), codec.validate);
     try writer.append(.render, 1, @intFromEnum(codec.Family.pcm), .reference, payload[0..length]);
     const bytes = try writer.sealFraming(.{ .role_counts = .{ 0, 0, 1, 0 }, .closed_roles = .{ true, true, true, true }, .healthy = true });
-    try t.expectEqualSlices(u8, "SMELSB01\x09\x00\x02\x00", bytes[0..12]);
+    try t.expectEqualSlices(u8, "SMELSB01\x09\x00\x06\x00", bytes[0..12]);
     try t.expect(bytes.len >= causal.header_bytes);
     const reader = try format.Reader.preflight(bytes, identity(), codec.validate);
     try t.expectEqual(@as(u64, 1), reader.counts.total);

@@ -164,8 +164,9 @@ pub const Driver = struct {
             .{ codec.JobOperationCursor.init(reader, .control), codec.JobOperationCursor.init(reader, .worker) },
             preflight.job_schedule_operations,
         );
-        if (self.joint_reads) try self.joint_calendar.init(
+        if (self.joint_reads) try self.joint_calendar.initWithStreams(
             audio.runtime.streaming.release_profile.job_capacity,
+            audio.runtime.streaming.release_profile.max_streams,
             .{ codec.JointOperationCursor.init(reader, .control), codec.JointOperationCursor.init(reader, .worker), codec.JointOperationCursor.init(reader, .render) },
             preflight.joint_schedule_operations,
         );
@@ -814,8 +815,8 @@ pub const Driver = struct {
                     .ui => unreachable,
                 },
                 kind,
-                if (is_job) value.index else 0,
-                if (is_job) value.generation else 0,
+                if (codec.jointIndexedPoint(role, value.site)) value.index else 0,
+                if (codec.jointIndexedPoint(role, value.site)) value.generation else 0,
                 job_eligible,
                 if (is_job) null else value.value,
             ) catch |err| {
@@ -1409,6 +1410,55 @@ pub const Driver = struct {
         return self.report;
     }
 };
+/// Point-only mixed-domain native-atomic test facade. No Host claim is made.
+/// Production has no such entrypoint; all callbacks below are the real Driver.
+pub const JointObservationRegression = if (@import("builtin").is_test) struct {
+    pub const Progress = struct { marker: u64, joint_completed: u64, failed: bool };
+    pub fn initialize(driver: *Driver, reader: *const format.Reader) !void {
+        return initializeScope(driver, reader, 0);
+    }
+    pub fn initializeStreams(driver: *Driver, reader: *const format.Reader, streams: usize) !void {
+        if (streams == 0) return error.UnsupportedSlots;
+        return initializeScope(driver, reader, streams);
+    }
+    fn initializeScope(driver: *Driver, reader: *const format.Reader, streams: usize) !void {
+        driver.* = .{};
+        driver.io = std.testing.io;
+        driver.started_at = std.Io.Clock.awake.now(driver.io);
+        inline for (std.meta.fields(format.Role)) |field| {
+            const role: format.Role = @enumFromInt(field.value);
+            driver.lanes[field.value] = .{ .input = codec.InputCursor.init(reader, role), .comparison = .{ .cursor = codec.ComparisonCursor.init(reader, role) } };
+        }
+        driver.joint_reads = true;
+        const operations = if (streams == 0) try codec.JointScheduleRegression.validateScalarOnly(reader) else try codec.JointScheduleRegression.validateStreams(reader, streams);
+        const cursors = [3]codec.JointOperationCursor{ codec.JointOperationCursor.init(reader, .control), codec.JointOperationCursor.init(reader, .worker), codec.JointOperationCursor.init(reader, .render) };
+        if (streams == 0) try driver.joint_calendar.init(audio.runtime.streaming.release_profile.job_capacity, cursors, operations) else try driver.joint_calendar.initWithStreams(audio.runtime.streaming.release_profile.job_capacity, streams, cursors, operations);
+        try driver.initConsumedReads(reader);
+        try driver.initPublicationCalendar(reader);
+        try driver.initExclusionCalendar(reader);
+        try driver.clock.init(driver, Driver.onClock);
+        try driver.session.initReplay(driver.config(.notified_v1));
+    }
+    pub fn point(driver: *Driver, value: cuts.Point) void {
+        Driver.onPoint(driver, value);
+    }
+    pub fn cancel(driver: *Driver) void {
+        driver.fail(.{ .reason = error.Aborted, .role = .control, .occurrence = driver.turn.load(.acquire) });
+    }
+    pub fn progress(driver: *Driver) Progress {
+        return .{ .marker = driver.turn.load(.acquire), .joint_completed = driver.joint_calendar.turn.load(.acquire), .failed = driver.failed.load(.acquire) };
+    }
+    pub fn finish(driver: *Driver) !void {
+        if (driver.failed.load(.acquire)) return error.ReplayMismatch;
+        for (&driver.lanes) |*lane_| {
+            try lane_.input.finish();
+            try lane_.comparison.cursor.finish();
+        }
+        try driver.joint_calendar.finish();
+        if (!driver.publication_calendar.complete() or !driver.exclusion_calendar.complete() or driver.consumed_retired.load(.acquire) != driver.consumed_read_count) return error.Incomplete;
+    }
+} else struct {};
+
 /// Deterministic component test facade. A synthetic point-only tape is NOT a
 /// complete Host history and intentionally cannot replace full admission or
 /// native fresh-process qualification. This exposes no production test hook.

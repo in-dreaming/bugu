@@ -41,7 +41,7 @@ fn reheader(bytes: []u8) void {
 test "live semantic profile has independent fixed identity and separate read capabilities" {
     var out: [2048]u8 = undefined;
     const bytes = try corpus(&out);
-    try t.expectEqualSlices(u8, "SMELSB01\x09\x00\x04\x00", bytes[0..12]);
+    try t.expectEqualSlices(u8, "SMELSB01\x09\x00\x06\x00", bytes[0..12]);
     const r = try f.Reader.preflight(bytes, identity(), valid);
     try t.expectEqual(@as(u64, 7), r.counts.total);
     try t.expectEqualSlices(u64, &.{ 3, 1, 1, 2 }, &r.counts.roles);
@@ -74,15 +74,15 @@ test "live semantic profile has independent fixed identity and separate read cap
     try ui_reference.finish();
 }
 
-test "profile9 v4 rejects resealed v2 and v3 envelopes without inferring missing input" {
+test "profile9 v6 rejects resealed v2 through v5 envelopes without inferring missing input" {
     var output: [2048]u8 = undefined;
     const bytes = try corpus(&output);
     try t.expectEqual(@as(u16, 9), f.profile_id);
-    try t.expectEqual(@as(u16, 4), f.wire_version);
+    try t.expectEqual(@as(u16, 6), f.wire_version);
     _ = try f.Reader.preflight(bytes, identity(), valid);
     // This is a framing-only legacy-version specimen, not a converted history.
     // Rehash both envelopes so rejection cannot be attributed to stale digests.
-    for ([_]u16{ 2, 3 }) |old_version| {
+    for ([_]u16{ 2, 3, 4, 5 }) |old_version| {
         std.mem.writeInt(u16, output[10..12], old_version, .little);
         reheader(output[0..bytes.len]);
         try t.expectError(error.UnsupportedVersion, f.Reader.preflight(bytes, identity(), valid));
@@ -490,7 +490,7 @@ test "fourth UI producer must be independently drained and excluded" {
     try t.expect(!capture.lane(.ui).push(1, .input, "late", ""));
 }
 
-test "v1 empty header rejects by version before v4 trailer interpretation" {
+test "v1 empty header rejects by version before v6 trailer interpretation" {
     var bytes: [352]u8 = @splat(0); // The old minimum192+160 byte envelope.
     @memcpy(bytes[0..8], f.magic);
     std.mem.writeInt(u16, bytes[8..10], f.profile_id, .little);
@@ -515,13 +515,13 @@ test "v3 rejects three-role header mask and wrong UI counter" {
     try t.expectError(error.CountMismatch, f.Reader.preflight(bytes, identity(), valid));
 }
 
-// Independent old wire-4 fixture: literal field offsets/values and unmodified
+// Independent framing fixture: literal field offsets/values and unmodified
 // std SHA-256, not the candidate Encoder, hash helper or memory Writer.
-fn referenceWire4(out: []u8) []const u8 {
+fn referenceWire(out: []u8, version: u16) []const u8 {
     @memset(out, 0);
     @memcpy(out[0..8], "SMELSB01");
     std.mem.writeInt(u16, out[8..10], 9, .little);
-    std.mem.writeInt(u16, out[10..12], 4, .little);
+    std.mem.writeInt(u16, out[10..12], version, .little);
     std.mem.writeInt(u16, out[12..14], 192, .little);
     std.mem.writeInt(u64, out[16..24], out.len, .little);
     std.mem.writeInt(u32, out[24..28], 65536, .little);
@@ -570,9 +570,11 @@ fn referenceWire4(out: []u8) []const u8 {
     return out[0..total];
 }
 
-test "SHA lane fix keeps old std-hash wire fixture exact and rejects corrupted payload" {
+test "wire6 SHA matches independent std-hash framing and rejects oldwire and corrupt payload" {
     var baseline: [2048]u8 = undefined;
-    const expected = referenceWire4(&baseline);
+    const old = referenceWire(&baseline, 5);
+    try t.expectError(error.UnsupportedVersion, f.Reader.preflight(old, identity(), valid));
+    const expected = referenceWire(&baseline, 6);
     for ([_]usize{ 1, 31, 64, 192, 2048 }) |chunk| {
         var actual: [2048]u8 = undefined;
         var sink: StreamTestSink = .{ .bytes = &actual, .max_write = chunk };

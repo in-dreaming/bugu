@@ -301,3 +301,54 @@ test "joint current author Live rejects valid crossfade configuration before own
     try t.expectError(error.UnsupportedCapability, config.validate());
     try t.expectError(error.UnsupportedCapability, admission.validateConfig(config));
 }
+
+test "real detached readiness cannot masquerade as control consumed projection" {
+    const source_text = try std.mem.replaceOwned(u8, a, f.authored_source, "max_chunk_bytes=262144", "max_chunk_bytes=65536");
+    defer a.free(source_text);
+    const bytes = try f.buildSource(.a, source_text, null);
+    defer a.free(bytes);
+    var bank = try f.bank.MusicBank.load(a, bytes);
+    defer bank.deinit();
+    const sound = bank.tables.sounds[0];
+    var source: Source = .{ .bytes = bank.tables.blob[@intCast(sound.blob_offset)..][0..@intCast(sound.blob_length)] };
+    const service = try stream.Service.create(a, .{ .max_streams = 2, .max_channels = 2, .job_capacity = 2, .completion_capacity = 2, .max_encoded_chunk_bytes = 65536 });
+    defer service.destroy() catch @panic("retained service");
+    var probe: Probe = .{ .service = service };
+    const hooks: stream.LiveSemanticHooks = .{ .cuts = .{ .context = &probe, .point = Probe.point, .boundary = Probe.boundary } };
+    try service.attachLiveSemanticQuiescent(hooks);
+    defer service.detachLiveSemanticQuiescent(hooks) catch @panic("retained binding");
+    var asset = try service.prepareAsset(.{ .sound_index = 0, .sound = sound, .codec = bank.tables.codecs[sound.codec], .chunks = bank.tables.chunks[sound.chunks.first..][0..sound.chunks.count], .seeks = bank.tables.seeks[sound.seeks.first..][0..sound.seeks.count], .source = .{ .context = &source, .length = source.bytes.len, .read_at = Source.read } });
+    defer asset.retire();
+    const handle = try service.open(&asset, .{ .generation = 1, .transport_epoch = 1, .group = 1, .layer = 1 });
+    defer service.close(handle) catch @panic("retained stream");
+    var observed: Read.QueryRead = .{};
+    var deferred: ?stream.LiveObservationDeferV1 = null;
+    probe.len = 0;
+    _ = try query(service, handle, 0, &observed, &deferred);
+    try t.expect(!observed.attached and observed.has(.consumed));
+    var raw_edges: usize = 0;
+    for (probe.points[0..probe.len]) |point_value| {
+        try t.expect(point_value.site != .service_readiness_consumed);
+        if (point_value.site == .service_readiness_raw_consumed) {
+            raw_edges += 1;
+            try t.expect(!stream.live_semantic.allowedPoint(point_value));
+            if (point_value.edge == .after) try t.expectEqual(@as(?u64, observed.consumed), point_value.value);
+        }
+    }
+    try t.expectEqual(@as(usize, 2), raw_edges);
+    try service.attachRuntime();
+    defer service.detachRuntimeQuiescent() catch @panic("retained runtime");
+    probe.len = 0;
+    _ = try query(service, handle, 0, &observed, &deferred);
+    try t.expect(observed.attached and observed.has(.consumed));
+    var projection_edges: usize = 0;
+    for (probe.points[0..probe.len]) |point_value| {
+        try t.expect(point_value.site != .service_readiness_raw_consumed);
+        if (point_value.site == .service_readiness_consumed) {
+            projection_edges += 1;
+            try t.expect(stream.live_semantic.allowedPoint(point_value));
+            if (point_value.edge == .after) try t.expectEqual(@as(?u64, observed.consumed), point_value.value);
+        }
+    }
+    try t.expectEqual(@as(usize, 2), projection_edges);
+}

@@ -64,6 +64,9 @@ pub const Site = enum(u8) {
     runtime_load_state_claim = 0x3E,
     runtime_worker_service_read = 0x3F,
     runtime_worker_service_publish = 0xC0,
+    // Explicit unsupported semantic domain: detached readiness reads raw Ring
+    // consumed, not the completed-DSP control_consumed projection.
+    service_readiness_raw_consumed = 0xC1,
     service_availability_readiness_sequence_before = 0x40,
     service_availability_readiness_frame = 0x41,
     service_availability_readiness_control_consumed = 0x42,

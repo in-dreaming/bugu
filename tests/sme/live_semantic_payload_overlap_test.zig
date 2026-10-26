@@ -43,3 +43,14 @@ test "payload malformed brackets do not hide missing after or changed identity" 
     try t.expectError(error.InvalidOrder, v.observe(cut(.control, .service_readiness_consumed, .after, 2, 9)));
     try t.expectError(error.Incomplete, v.finish());
 }
+
+test "wire5 joint deferral only removes frame exclusion and preserves consumed identity rejection" {
+    var v: overlap.Validator = .{ .defer_frame_to_joint = true };
+    try v.observe(cut(.control, .service_readiness_frame, .before, 9, 17));
+    try v.observe(cut(.render, .service_stream_observation_frame, .before, 0, 0));
+    try v.observe(cut(.render, .service_stream_observation_frame, .after, 0, 0));
+    try v.observe(cut(.control, .service_readiness_frame, .after, 9, 17));
+    try v.finish();
+    try v.observe(cut(.control, .service_readiness_consumed, .before, 2, 8));
+    try t.expectError(error.UnsupportedOverlap, v.observe(cut(.render, .service_render_consumed, .before, 2, 8)));
+}

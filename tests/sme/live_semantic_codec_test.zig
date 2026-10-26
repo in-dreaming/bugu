@@ -223,7 +223,9 @@ test "finite Service grammar requires complete ordered slot reads and consumed g
     var failed_claim = claim;
     failed_claim.index = 1;
     try grammar.point(failed_claim);
-    try grammar.point(end(failed_claim));
+    var failed_after = end(failed_claim);
+    failed_after.publication_prefix = 2;
+    try grammar.point(failed_after);
     after = render;
     after.edge = .after;
     try grammar.boundary(after);
@@ -350,7 +352,7 @@ test "Service sequence publication coordinates have finite site role and edge sh
             }
         }
     }
-    for ([_]codec.cuts.Site{ .service_availability_readiness_control_consumed, .service_availability_readiness_produced, .service_render_consumed, .ring_produced }) |site| {
+    for ([_]codec.cuts.Site{ .service_availability_readiness_produced, .ring_produced }) |site| {
         try t.expect(!codec.serviceSequenceRead(site));
         try t.expect(!codec.serviceSequencePublication(site));
         for ([_]f.Role{ .control, .worker, .render, .ui }) |role| {
@@ -840,8 +842,8 @@ fn launchDescriptorFixture() codec.LaunchDescriptor {
     return .{ .document_id = uiIdentity().document_id, .revision = uiIdentity().revision, .draft_hash = uiIdentity().draft_hash, .state = uiIdentity().state, .device = .{ .backend = .null_backend } };
 }
 
-test "v4 launch pacing roundtrips both canonical INPUT and independent started reference" {
-    try t.expectEqual(@as(u16, 5), codec.schema_version);
+test "v6 launch pacing roundtrips both canonical INPUT and independent started reference" {
+    try t.expectEqual(@as(u16, 6), codec.schema_version);
     try t.expectEqual(f.wire_version, codec.schema_version);
     try t.expectEqual(codec.semantic.PacingMode.legacy_poll, launchDescriptorFixture().pacing);
     inline for (.{ codec.semantic.PacingMode.legacy_poll, codec.semantic.PacingMode.notified_v1 }) |pacing| {
@@ -2524,5 +2526,157 @@ test "wire5 Service frame observations are explicit AFTER inputs with closed rol
         for ([_]f.Role{ .control, .worker, .render, .ui }) |role| if (role != owner) {
             try t.expectError(error.UnsupportedValue, codec.validatePublicationPrefix(role, site, .after, 0));
         };
+    }
+}
+
+test "joint scalar normalization cannot erase forged native stream coordinates" {
+    var global: codec.Cut = .{ .role = .control, .site = .service_readiness_frame, .edge = .after, .index = 0, .generation = 0, .publication_prefix = 256 };
+    try codec.validateJointScalarCoordinates(global);
+    global.generation = 1;
+    try t.expectError(error.InvalidGeneration, codec.validateJointScalarCoordinates(global));
+    global.generation = 0;
+    global.index = 1;
+    try t.expectError(error.InvalidGeneration, codec.validateJointScalarCoordinates(global));
+    var scoped: codec.Cut = .{ .role = .control, .site = .service_availability_readiness_frame, .edge = .after, .index = 0, .generation = 1, .publication_prefix = 256 };
+    try codec.validateJointScalarCoordinates(scoped);
+    scoped.generation = 0;
+    try t.expectError(error.InvalidGeneration, codec.validateJointScalarCoordinates(scoped));
+    scoped.generation = 1;
+    scoped.index = std.math.maxInt(u64);
+    try t.expectError(error.InvalidSlot, codec.validateJointScalarCoordinates(scoped));
+}
+
+test "wire6 consumed and guard INPUT is original AFTER observation with closed domain shape" {
+    const Entry = struct { site: codec.cuts.Site, role: f.Role, value: u64 };
+    const entries = [_]Entry{
+        .{ .site = .service_availability_readiness_control_consumed, .role = .control, .value = 37 },
+        .{ .site = .service_availability_acceptance_control_consumed, .role = .control, .value = 37 },
+        .{ .site = .service_readiness_consumed, .role = .control, .value = 37 },
+        .{ .site = .service_render_consumed, .role = .render, .value = 37 },
+        .{ .site = .service_slot_guard_open, .role = .control, .value = 0 },
+        .{ .site = .service_slot_guard_close, .role = .control, .value = 1 },
+        .{ .site = .service_slot_guard_render_claim, .role = .render, .value = 2 },
+        .{ .site = .service_slot_guard_render_release, .role = .render, .value = 0 },
+    };
+    var scratch: [256]u8 = undefined;
+    for (entries) |e| {
+        try t.expect(!codec.publicationPrefixPoint(e.role, e.site, .before));
+        try t.expect(codec.publicationPrefixPoint(e.role, e.site, .after));
+        const raw = try codec.encode(@as(codec.Native(codec.Cut), .{ .occurrence = 1, .value = .{ .role = e.role, .site = e.site, .edge = .after, .index = 2, .generation = if (e.site == .service_slot_guard_render_claim) 0 else 3, .publication_prefix = e.value } }), .input, &scratch);
+        const decoded = try codec.decodeInput(codec.Cut, .{ .role = e.role, .ordinal = 1, .family = @intFromEnum(codec.Family.cut), .bytes = raw }, .cut);
+        try t.expectEqual(e.value, decoded.value.publication_prefix);
+        for ([_]f.Role{ .control, .worker, .render, .ui }) |role| if (role != e.role) {
+            try t.expectError(error.UnsupportedValue, codec.validatePublicationPrefix(role, e.site, .after, e.value));
+        };
+        try t.expectError(error.Noncanonical, codec.validatePublicationPrefix(e.role, e.site, .before, 1));
+    }
+    try t.expectError(error.Noncanonical, codec.validatePublicationPrefix(.control, .service_slot_guard_close, .after, 2));
+    try t.expectError(error.Noncanonical, codec.validatePublicationPrefix(.render, .service_slot_guard_render_claim, .after, 1));
+    try t.expectError(error.Noncanonical, codec.validatePublicationPrefix(.render, .service_slot_guard_render_release, .after, 1));
+}
+
+test "wire6 guard grammar cannot infer a failed CAS from missing consumed publication" {
+    const boundary: codec.Boundary = .{ .role = .render, .site = .service_render_consumed_prefix, .edge = .before, .index = 64, .generation = 1 };
+    var grammar: codec.ServiceScanGrammar = .{ .jobs = 1, .streams = 1 };
+    try grammar.boundary(boundary);
+    const claim = point(.service_slot_guard_render_claim, .render, .before, 0, 0);
+    try grammar.point(claim);
+    try grammar.point(end(claim)); // Actual success 0 cannot be silently skipped.
+    var boundary_after = boundary;
+    boundary_after.edge = .after;
+    try t.expectError(error.Incomplete, grammar.boundary(boundary_after));
+    grammar = .{ .jobs = 1, .streams = 1 };
+    try grammar.boundary(boundary);
+    try grammar.point(claim);
+    var failure = end(claim);
+    failure.publication_prefix = 2;
+    try grammar.point(failure);
+    try t.expectError(error.InvalidOrder, grammar.point(point(.service_render_consumed, .render, .before, 0, 1)));
+    try grammar.boundary(boundary_after);
+    try grammar.finish();
+}
+
+test "wire6 rejects detached readiness raw domain rather than normalizing it" {
+    var scratch: [256]u8 = undefined;
+    try t.expect(!codec.cuts.allowedSite(.service_readiness_raw_consumed));
+    try t.expect(codec.jointOperationKind(.control, .service_readiness_raw_consumed) == null);
+    for ([_]codec.cuts.Edge{ .before, .after }) |edge| {
+        try t.expectError(error.UnsupportedValue, codec.encodePointInputs(.control, &.{.{ .occurrence = 1, .site = .service_readiness_raw_consumed, .edge = edge, .index = 0, .generation = 1 }}, &scratch));
+    }
+}
+
+test "wire6 scan interval pairs real failed guard claim without erasing coordinates" {
+    for ([_]bool{ false, true }) |joint| {
+        var intervals: codec.ScanIntervals = .{ .defer_guard_to_joint = joint };
+        const before = point(.service_slot_guard_render_claim, .render, .before, 7, 0);
+        try intervals.point(before);
+        var after = end(before);
+        after.publication_prefix = 2;
+        var invalid = after;
+        invalid.publication_prefix = 1;
+        try t.expectError(error.Noncanonical, intervals.point(invalid));
+        invalid = after;
+        invalid.role = .control;
+        try t.expectError(error.UnsupportedValue, intervals.point(invalid));
+        invalid = after;
+        invalid.index = 8;
+        try t.expectError(error.InvalidOrder, intervals.point(invalid));
+        invalid = after;
+        invalid.generation = 1;
+        try t.expectError(error.InvalidOrder, intervals.point(invalid));
+        invalid = after;
+        invalid.site = .service_slot_guard_render_release;
+        invalid.publication_prefix = 0;
+        try t.expectError(error.InvalidOrder, intervals.point(invalid));
+        try intervals.point(after);
+        try intervals.finish();
+    }
+}
+
+test "opt-in immutable wire6 INPUT admission audit does not construct replay owners" {
+    const path = std.process.Environ.getPosix(t.environ, "SME_IMMUTABLE_INPUT_TAPE") orelse return error.SkipZigTest;
+    const expected_hex = std.process.Environ.getPosix(t.environ, "SME_IMMUTABLE_INPUT_SHA256") orelse return error.MissingExpectedDigest;
+    var expected_digest: [32]u8 = undefined;
+    _ = try std.fmt.hexToBytes(&expected_digest, expected_hex);
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(t.io, path, t.allocator, .limited(f.max_file_bytes));
+    defer t.allocator.free(bytes);
+    try t.expectEqualSlices(u8, &expected_digest, &f.hash(bytes));
+    if (bytes.len < f.header_size) return error.Truncated;
+    // This is a parser/model audit of a separately frozen failed capture. Its
+    // header identity is NOT an executable identity override: no Driver/Host is
+    // constructed and this result is never offered as native replay evidence.
+    const contract: f.Identity = .{ .build = bytes[32..64].*, .bank = bytes[64..96].*, .config = bytes[96..128].*, .source = bytes[128..160].* };
+    const reader = try f.Reader.preflight(bytes, contract, codec.validate);
+    const result = try codec.validateInputsWithPolicy(&reader, contract, .joint_service_reads);
+    try t.expect(result.joint_schedule_operations != 0);
+    std.debug.print("IMMUTABLE_INPUT_ADMISSION passed=true owner_created=false joint_operations={d} bytes={d}\n", .{ result.joint_schedule_operations, bytes.len });
+}
+
+test "wire6 publication interval pairs failed Control close without erasing identity" {
+    for ([_]bool{ false, true }) |joint| {
+        var intervals: codec.ScanIntervals = .{ .defer_guard_to_joint = joint };
+        const before = point(.service_slot_guard_close, .control, .before, 7, 12);
+        try codec.validatePublicationPrefix(before.role, before.site, before.edge, before.publication_prefix);
+        try intervals.point(before);
+        var after = end(before);
+        after.publication_prefix = 1;
+        try codec.validatePublicationPrefix(after.role, after.site, after.edge, after.publication_prefix);
+        try t.expectError(error.Noncanonical, codec.validatePublicationPrefix(after.role, after.site, after.edge, 2));
+        var invalid = after;
+        invalid.role = .render;
+        try t.expectError(error.UnsupportedValue, codec.validatePublicationPrefix(invalid.role, invalid.site, invalid.edge, invalid.publication_prefix));
+        try t.expectError(error.InvalidOrder, intervals.point(invalid));
+        invalid = after;
+        invalid.site = .service_slot_guard_open;
+        invalid.publication_prefix = 0;
+        try t.expectError(error.InvalidOrder, intervals.point(invalid));
+        invalid = after;
+        invalid.index += 1;
+        try t.expectError(error.InvalidOrder, intervals.point(invalid));
+        invalid = after;
+        invalid.generation += 1;
+        try t.expectError(error.InvalidOrder, intervals.point(invalid));
+        try intervals.point(after);
+        try intervals.finish();
     }
 }

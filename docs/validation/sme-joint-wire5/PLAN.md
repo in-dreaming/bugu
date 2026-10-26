@@ -23,3 +23,11 @@ Status: implementation checkpoint, NOT end-to-end qualified. This work addresses
 6. Final Debug engine + existing ReleaseSafe SHA and ReleaseSafe regression results, source/tree/ELF/input identities, and independent integration review.
 
 Render collector throughput and original physical-device qualification remain separately evidenced. The current headless import excludes the full GPU authoring panel/debugger; this is not a waiver of original TASK-018/019/024 product requirements.
+
+## Deterministic actual-Host overlap fixture
+
+The first uninstrumented wire5 long recording and same-ELF fresh replay passed, but the same tape also passed old ordered_job_scans admission. Therefore it is NOT evidence of the newly admitted overlap.
+
+A separate explicit test-only controlled workload now pauses Control after an original Service frame load but before its AFTER marker. It waits for two actual Render even notifications, avoiding a delayed notification from a store already completed before the load. No Recorder callback waits, no load result changes, and non-test compilation removes the seam. Timeout, cancellation or unhealthy capture makes the fixture fail; a final post-wake check prevents a delayed wake from masquerading as an in-budget success.
+
+After genuine joins, an independent INPUT cursor scan must find read.before < store.before < store.after < read.after with actual_store > actual_read, matching the recorded loaded frame. The untouched tape must fail old ordered_job_scans admission with UnsupportedOverlap and pass joint_service_reads. Fresh same-ELF replay forbids the workload option and must reproduce actual reads and all outputs without the capture pause. This controlled run remains separate from the uninstrumented natural sample; no repeated recording to hunt a favorable interleaving.

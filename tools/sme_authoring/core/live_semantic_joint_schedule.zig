@@ -3,12 +3,16 @@
 //! frame/sequence. Only copied INPUT observations constrain this pure model;
 //! the executor must perform and compare actual operations, never install reads.
 //! Caller validates global marker uniqueness and original site/role coordinates.
-//! Scalar coordinates here are normalized to index/generation zero. Consumed,
-//! guard, lifecycle and other domains require separate strict overlap rejection.
+//! Global scalar coordinates normalize to zero; stream coordinates retain their
+//! incarnation. Stream mode requires attached-runtime control_consumed reads.
+//! Raw consumed/PCM, lease counts, descriptor-to-job binding and Scheduler scans
+//! are not proved here. Consumed store values are actual captured publications,
+//! not a claimed bracket around their earlier raw-consumed load.
 const std = @import("std");
 pub const hard_slot_cap = 48;
+pub const hard_stream_cap = 64;
 pub const Role = enum(u8) { control, worker, render };
-pub const Kind = enum { scan, queued, running, completed, free, frame_read, frame_store, sequence_read, sequence_odd, sequence_even };
+pub const Kind = enum { scan, queued, running, completed, free, frame_read, frame_store, sequence_read, sequence_odd, sequence_even, consumed_read, consumed_store, slot_open, slot_close, guard_claim, guard_release };
 pub const State = enum { free, queued, running, completed };
 pub const Error = error{ InvalidState, InvalidOrder, InvalidOperation, InvalidGeneration, InvalidSlot, UnsupportedSlots, MissingHead, ImpossibleSchedule, Incomplete, CounterOverflow };
 pub const Operation = struct {
@@ -24,12 +28,18 @@ pub const Operation = struct {
 };
 pub const Selection = struct { op: Operation, ordinal: u64 };
 const Slot = struct { state: State = .free, generation: u64 = 0 };
+const StreamSlot = struct { guard: u8 = 2, generation: u64 = 0, consumed: u64 = 0, published: bool = false };
 const RoleState = struct { head: ?Operation = null, eof: bool = false, last_after: u64 = 0 };
 pub const Scheduler = struct {
     initialized: bool = false,
     finished: bool = false,
     job_slots: usize = 0,
     slots: [hard_slot_cap]Slot = @splat(.{}),
+    stream_slots: usize = 0,
+    streams: [hard_stream_cap]StreamSlot = @splat(.{}),
+    last_open_generation: u64 = 0,
+    render_next_slot: usize = 0,
+    held_slot: ?usize = null,
     roles: [3]RoleState = @splat(.{}),
     frame: u64 = 0,
     sequence: u64 = 0,
@@ -42,6 +52,14 @@ pub const Scheduler = struct {
         if (count == 0 or count > hard_slot_cap) return error.UnsupportedSlots;
         self.* = .{ .initialized = true, .job_slots = count };
     }
+    /// Production stream-aware admission must use the exact recorded capacity.
+    /// init() intentionally retains the old no-stream test/model profile only.
+    pub fn initWithStreams(self: *Scheduler, jobs: usize, streams: usize) Error!void {
+        if (self.initialized) return error.InvalidState;
+        if (streams == 0 or streams > hard_stream_cap) return error.UnsupportedSlots;
+        try self.init(jobs);
+        self.stream_slots = streams;
+    }
     fn active(self: *const Scheduler) Error!void {
         if (!self.initialized or self.finished) return error.InvalidState;
     }
@@ -51,8 +69,15 @@ pub const Scheduler = struct {
             else => false,
         };
     }
-    fn isRead(kind: Kind) bool {
-        return kind == .scan or kind == .frame_read or kind == .sequence_read;
+    fn isStream(kind: Kind) bool {
+        return switch (kind) {
+            .consumed_read, .consumed_store, .slot_open, .slot_close, .guard_claim, .guard_release => true,
+            else => false,
+        };
+    }
+    fn isRead(op: Operation) bool {
+        return op.kind == .scan or op.kind == .frame_read or op.kind == .sequence_read or op.kind == .consumed_read or
+            ((op.kind == .slot_close or op.kind == .guard_claim) and op.value != null and op.value.? != 0);
     }
     pub fn push(self: *Scheduler, op: Operation) Error!void {
         try self.active();
@@ -69,9 +94,23 @@ pub const Scheduler = struct {
                 if (op.eligible != null or op.role != (if (op.kind == .queued or op.kind == .free) Role.control else Role.worker)) return error.InvalidOperation;
                 if (op.generation == 0 or op.generation == std.math.maxInt(u64) or (op.kind == .queued and op.generation <= self.last_queued_generation)) return error.InvalidGeneration;
             }
+        } else if (isStream(op.kind)) {
+            if (op.index >= self.stream_slots) return error.InvalidSlot;
+            if (op.value == null or op.eligible != null) return error.InvalidOperation;
+            const control = op.kind == .consumed_read or op.kind == .slot_open or op.kind == .slot_close;
+            if (op.role != (if (control) Role.control else Role.render)) return error.InvalidOperation;
+            if (op.kind == .guard_claim) {
+                if (op.generation != 0) return error.InvalidGeneration;
+                if (op.value.? != 0 and op.value.? != 2) return error.InvalidOperation;
+            } else {
+                if (op.generation == 0 or op.generation == std.math.maxInt(u64)) return error.InvalidGeneration;
+                if (op.kind == .slot_open and op.generation <= self.last_open_generation) return error.InvalidGeneration;
+                if ((op.kind == .slot_open or op.kind == .guard_release) and op.value.? != 0) return error.InvalidOperation;
+                if (op.kind == .slot_close and op.value.? > 1) return error.InvalidOperation;
+            }
         } else {
             if (op.value == null or op.eligible != null or op.index != 0 or op.generation != 0) return error.InvalidOperation;
-            if (op.role != (if (isRead(op.kind)) Role.control else Role.render)) return error.InvalidOperation;
+            if (op.role != (if (isRead(op)) Role.control else Role.render)) return error.InvalidOperation;
         }
         role.head = op;
         role.last_after = op.after;
@@ -95,10 +134,24 @@ pub const Scheduler = struct {
                 else => unreachable,
             };
         }
+        if (isStream(op.kind)) {
+            const slot = self.streams[@intCast(op.index)];
+            const live = slot.guard != 2 and slot.generation == op.generation;
+            const held = self.held_slot == @as(?usize, @intCast(op.index)) and slot.guard == 1 and slot.generation == op.generation;
+            return switch (op.kind) {
+                .slot_open => slot.guard == 2 and op.generation > self.last_open_generation,
+                .slot_close => live and slot.guard == op.value.?,
+                .guard_claim => self.sequence % 2 == 1 and !self.frame_published and self.held_slot == null and op.index == self.render_next_slot and slot.guard == op.value.?,
+                .consumed_read => live and slot.consumed == op.value.?,
+                .consumed_store => held and self.sequence % 2 == 1 and !slot.published and op.value.? >= slot.consumed,
+                .guard_release => held and slot.published,
+                else => unreachable,
+            };
+        }
         return switch (op.kind) {
             .frame_read => self.frame == op.value.?,
             .sequence_read => self.sequence == op.value.?,
-            .frame_store => self.sequence % 2 == 1 and !self.frame_published and op.value.? >= self.frame,
+            .frame_store => self.sequence % 2 == 1 and !self.frame_published and self.held_slot == null and self.render_next_slot == self.stream_slots and op.value.? >= self.frame,
             .sequence_odd => self.sequence % 2 == 0 and self.sequence < std.math.maxInt(u64) and op.value.? == self.sequence + 1,
             .sequence_even => self.sequence % 2 == 1 and self.frame_published and self.sequence < std.math.maxInt(u64) and op.value.? == self.sequence + 1,
             else => unreachable,
@@ -106,7 +159,31 @@ pub const Scheduler = struct {
     }
     fn apply(self: *Scheduler, op: Operation) void {
         switch (op.kind) {
-            .scan, .frame_read, .sequence_read => {},
+            .scan, .frame_read, .sequence_read, .consumed_read => {},
+            .slot_open => {
+                self.streams[@intCast(op.index)] = .{ .guard = 0, .generation = op.generation };
+                self.last_open_generation = op.generation;
+            },
+            .slot_close => if (op.value.? == 0) {
+                self.streams[@intCast(op.index)].guard = 2;
+            },
+            .guard_claim => {
+                if (op.value.? == 0) {
+                    self.streams[@intCast(op.index)].guard = 1;
+                    self.streams[@intCast(op.index)].published = false;
+                    self.held_slot = @intCast(op.index);
+                } else self.render_next_slot += 1;
+            },
+            .consumed_store => {
+                self.streams[@intCast(op.index)].consumed = op.value.?;
+                self.streams[@intCast(op.index)].published = true;
+            },
+            .guard_release => {
+                self.streams[@intCast(op.index)].guard = 0;
+                self.streams[@intCast(op.index)].published = false;
+                self.held_slot = null;
+                self.render_next_slot += 1;
+            },
             .queued => self.slots[@intCast(op.index)] = .{ .state = .queued, .generation = op.generation },
             .running => self.slots[@intCast(op.index)].state = .running,
             .completed => self.slots[@intCast(op.index)].state = .completed,
@@ -116,6 +193,7 @@ pub const Scheduler = struct {
                 self.frame_published = true;
             },
             .sequence_odd, .sequence_even => {
+                if (op.kind == .sequence_odd) self.render_next_slot = 0;
                 self.sequence = op.value.?;
                 self.frame_published = false;
             },
@@ -146,7 +224,7 @@ pub const Scheduler = struct {
             var destructive = false;
             for (self.roles, 0..) |other, j| {
                 if (j == r) continue;
-                if (other.head) |read| if (isRead(read.kind) and @max(self.frontier, read.before) < op.after and self.enabled(read) and !after.enabled(read)) {
+                if (other.head) |read| if (isRead(read) and @max(self.frontier, read.before) < op.after and self.enabled(read) and !after.enabled(read)) {
                     destructive = true;
                 };
             }
@@ -167,6 +245,8 @@ pub const Scheduler = struct {
         try self.active();
         for (self.roles) |role| if (!role.eof or role.head != null) return error.Incomplete;
         for (self.slots[0..self.job_slots]) |slot| if (slot.state != .free) return error.Incomplete;
+        for (self.streams[0..self.stream_slots]) |slot| if (slot.guard != 2) return error.Incomplete;
+        if (self.held_slot != null) return error.Incomplete;
         if (self.sequence % 2 != 0 or self.frame_published) return error.Incomplete;
         self.finished = true;
     }

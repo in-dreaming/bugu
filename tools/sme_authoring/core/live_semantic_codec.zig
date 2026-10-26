@@ -13,7 +13,7 @@ pub const payload_overlap = @import("live_semantic_payload_overlap.zig");
 pub const job_schedule = @import("sme-live-semantic-job-schedule");
 pub const joint_schedule = @import("sme-live-semantic-joint-schedule");
 pub const Error = joint_schedule.Error || format.Error || payload_overlap.Error || job_schedule.Error || error{ UnsupportedValue, BorrowedValue, InvalidEnum, InvalidBoolean, ErrorInput, CrossedScan };
-pub const schema_version: u16 = 5;
+pub const schema_version: u16 = 6;
 pub const Family = enum(u16) {
     cut = 1,
     boundary = 2,
@@ -192,7 +192,31 @@ pub fn serviceFrameRead(site: cuts.Site) bool {
 pub fn serviceFramePublication(site: cuts.Site) bool {
     return site == .service_stream_observation_frame;
 }
+/// Wire6 copies only original AFTER observations. This is the completed-DSP
+/// control projection, never the raw per-sample Ring consumed counter.
+pub fn serviceConsumedRead(site: cuts.Site) bool {
+    return switch (site) {
+        .service_availability_readiness_control_consumed, .service_availability_acceptance_control_consumed, .service_readiness_consumed => true,
+        else => false,
+    };
+}
+pub fn jointStreamKind(role: format.Role, site: cuts.Site) ?joint_schedule.Kind {
+    if (role == .control) {
+        if (serviceConsumedRead(site)) return .consumed_read;
+        if (site == .service_slot_guard_open) return .slot_open;
+        if (site == .service_slot_guard_close) return .slot_close;
+    } else if (role == .render) {
+        if (site == .service_render_consumed) return .consumed_store;
+        if (site == .service_slot_guard_render_claim) return .guard_claim;
+        if (site == .service_slot_guard_render_release) return .guard_release;
+    }
+    return null;
+}
+pub fn jointIndexedPoint(role: format.Role, site: cuts.Site) bool {
+    return jobOperationKind(role, site) != null or jointStreamKind(role, site) != null;
+}
 pub fn jointOperationKind(role: format.Role, site: cuts.Site) ?joint_schedule.Kind {
+    if (jointStreamKind(role, site)) |kind| return kind;
     if (jobOperationKind(role, site)) |kind| return switch (kind) {
         .scan => .scan,
         .queued => .queued,
@@ -212,10 +236,23 @@ pub fn jointOperationKind(role: format.Role, site: cuts.Site) ?joint_schedule.Ki
 }
 pub fn publicationPrefixPoint(role: format.Role, site: cuts.Site, edge: cuts.Edge) bool {
     if (edge != .after) return false;
+    if (jointStreamKind(role, site) != null) return true;
     return (role == .control and (rawConsumedRead(site) or serviceSequenceRead(site) or serviceFrameRead(site) or runtimePublicationRead(site) != null)) or
         (role == .render and (serviceSequencePublication(site) or serviceFramePublication(site) or runtimePublicationStore(site) != null));
 }
 pub fn validatePublicationPrefix(role: format.Role, site: cuts.Site, edge: cuts.Edge, prefix: u64) Error!void {
+    const stream_role: ?format.Role = switch (site) {
+        .service_availability_readiness_control_consumed, .service_availability_acceptance_control_consumed, .service_readiness_consumed, .service_slot_guard_open, .service_slot_guard_close => .control,
+        .service_render_consumed, .service_slot_guard_render_claim, .service_slot_guard_render_release => .render,
+        else => null,
+    };
+    if (stream_role) |expected| if (role != expected) return error.UnsupportedValue;
+    if (edge == .after) switch (site) {
+        .service_slot_guard_open, .service_slot_guard_render_release => if (prefix != 0) return error.Noncanonical,
+        .service_slot_guard_close => if (prefix > 1) return error.Noncanonical,
+        .service_slot_guard_render_claim => if (prefix != 0 and prefix != 2) return error.Noncanonical,
+        else => {},
+    };
     if (((rawConsumedRead(site) or serviceSequenceRead(site) or serviceFrameRead(site) or runtimePublicationRead(site) != null) and role != .control) or
         ((serviceSequencePublication(site) or serviceFramePublication(site) or runtimePublicationStore(site) != null) and role != .render)) return error.UnsupportedValue;
     if (!publicationPrefixPoint(role, site, edge) and prefix != 0) return error.Noncanonical;
@@ -1731,7 +1768,7 @@ pub const AdmissionPolicy = enum {
     /// Prove INPUT-only job scheduling before owners; all other conflict
     /// domains retain their original rejection and canonical checks.
     ordered_job_scans,
-    /// Explicit wire5 observed Service frame/sequence/job joint schedule.
+    /// Explicit wire6 observed Service frame/sequence/job/consumed/guard schedule.
     /// Unsupported consumed/guard and Scheduler overlaps still reject.
     joint_service_reads,
 };
@@ -2024,9 +2061,10 @@ pub fn validateInputsWithPolicy(reader: *const format.Reader, identity: format.I
     var intervals: ScanIntervals = .{
         .allow_unresolved_job_reads = policy == .native_attempt,
         .defer_job_reads_to_planner = policy != .native_attempt,
+        .defer_guard_to_joint = policy == .joint_service_reads,
     };
     var grammar: ServiceScanGrammar = .{};
-    var payload_intervals: payload_overlap.Validator = .{ .defer_frame_to_joint = policy == .joint_service_reads };
+    var payload_intervals: payload_overlap.Validator = .{ .defer_frame_to_joint = policy == .joint_service_reads, .defer_consumed_to_joint = policy == .joint_service_reads };
     var ui_invocation_active = false;
     while (true) {
         var selected: ?usize = null;
@@ -2163,6 +2201,21 @@ pub const JobOperationCursor = struct {
 };
 
 /// Three-role INPUT-only cursor for the jointly scheduled atomic domains.
+/// Preserve native coordinates before normalizing Service-wide scalar keys.
+/// Direct readiness and Render scalar sites are emitted as (0,0); availability
+/// sites carry one occupied stream incarnation, never an alternative counter.
+pub fn validateJointScalarCoordinates(cut: Cut) Error!void {
+    const availability = switch (cut.site) {
+        .service_availability_readiness_sequence_before, .service_availability_readiness_sequence_after, .service_availability_acceptance_sequence_before, .service_availability_acceptance_sequence_after, .service_availability_readiness_frame, .service_availability_acceptance_frame => true,
+        .service_readiness_sequence, .service_readiness_final_sequence, .service_readiness_frame, .service_render_sequence_odd, .service_render_sequence_even, .service_stream_observation_frame => false,
+        else => return error.UnsupportedValue,
+    };
+    if (availability) {
+        if (cut.index >= audio.runtime.streaming.release_profile.max_streams) return error.InvalidSlot;
+        if (cut.generation == 0 or cut.generation == std.math.maxInt(u64)) return error.InvalidGeneration;
+    } else if (cut.index != 0 or cut.generation != 0) return error.InvalidGeneration;
+}
+
 pub const JointOperationCursor = struct {
     input: InputCursor,
     role: format.Role,
@@ -2193,6 +2246,14 @@ pub const JointOperationCursor = struct {
                 continue;
             };
             const job = jobOperationKind(cut.role, cut.site) != null;
+            const stream_kind = jointStreamKind(cut.role, cut.site);
+            if (!job and stream_kind == null) try validateJointScalarCoordinates(cut);
+            if (stream_kind) |stream_op| {
+                if (cut.index >= audio.runtime.streaming.release_profile.max_streams) return error.InvalidSlot;
+                if (stream_op == .guard_claim) {
+                    if (cut.generation != 0) return error.InvalidGeneration;
+                } else if (cut.generation == 0 or cut.generation == std.math.maxInt(u64)) return error.InvalidGeneration;
+            }
             if (job and cut.index >= slots) return error.InvalidSlot;
             if (kind == .scan) {
                 if (cut.generation != 0) return error.InvalidGeneration;
@@ -2212,8 +2273,8 @@ pub const JointOperationCursor = struct {
                     .kind = kind,
                     .before = begin.occurrence,
                     .after = event.occurrence,
-                    .index = if (job) cut.index else 0,
-                    .generation = if (job) cut.generation else 0,
+                    .index = if (job or stream_kind != null) cut.index else 0,
+                    .generation = if (job or stream_kind != null) cut.generation else 0,
                     .value = if (job) null else cut.publication_prefix,
                     .eligible = cut.job_scan_eligible,
                 };
@@ -2257,8 +2318,21 @@ pub fn validateJobSchedule(reader: *const format.Reader) Error!u64 {
 }
 
 pub fn validateJointSchedule(reader: *const format.Reader) Error!u64 {
+    return validateJointScheduleImpl(reader, audio.runtime.streaming.release_profile.max_streams);
+}
+/// Explicit scalar-only synthetic tests, never production admission.
+pub const JointScheduleRegression = if (@import("builtin").is_test) struct {
+    pub fn validateScalarOnly(reader: *const format.Reader) Error!u64 {
+        return validateJointScheduleImpl(reader, 0);
+    }
+    pub fn validateStreams(reader: *const format.Reader, streams: usize) Error!u64 {
+        if (streams == 0) return error.UnsupportedSlots;
+        return validateJointScheduleImpl(reader, streams);
+    }
+} else struct {};
+fn validateJointScheduleImpl(reader: *const format.Reader, streams: usize) Error!u64 {
     var planner: joint_schedule.Scheduler = .{};
-    try planner.init(try jobSlotCount());
+    if (streams == 0) try planner.init(try jobSlotCount()) else try planner.initWithStreams(try jobSlotCount(), streams);
     var inputs = [_]JointOperationCursor{ JointOperationCursor.init(reader, .control), JointOperationCursor.init(reader, .worker), JointOperationCursor.init(reader, .render) };
     var need_head = [_]bool{ true, true, true };
     var eof = [_]bool{ false, false, false };
@@ -2307,14 +2381,11 @@ pub const ServiceScanGrammar = struct {
             if (entry.* != null) return error.InvalidOrder;
             entry.* = .{ .boundary = value };
         } else {
-            var span = entry.* orelse return error.InvalidOrder;
+            const span = entry.* orelse return error.InvalidOrder;
             var end = span.boundary;
             end.edge = .after;
             if (!std.meta.eql(end, value)) return error.InvalidOrder;
-            if (value.role == .render and span.phase == 2) {
-                span.slot += 1;
-                span.phase = 0;
-            }
+
             if (span.phase != 0 or span.slot != (if (value.role == .render) self.streams else self.jobs)) return error.Incomplete;
             entry.* = null;
         }
@@ -2335,10 +2406,6 @@ pub const ServiceScanGrammar = struct {
             }
             // A failed claim advances directly to the next slot. A successful
             // claim necessarily has the consumed publication and guard release.
-            if (span.phase == 2 and value.site == .service_slot_guard_render_claim) {
-                span.slot += 1;
-                span.phase = 0;
-            }
             if (value.index != span.slot or value.index >= self.streams) return error.InvalidOrder;
             const expected_site: cuts.Site = switch (span.phase) {
                 0, 1 => .service_slot_guard_render_claim,
@@ -2351,7 +2418,10 @@ pub const ServiceScanGrammar = struct {
             if (span.phase < 2) {
                 if (value.generation != 0) return error.InvalidOrder;
             } else if (span.phase == 2) span.generation = value.generation else if (value.generation != span.generation) return error.InvalidOrder;
-            if (span.phase == 5) {
+            if (span.phase == 1 and value.publication_prefix == 2) {
+                span.slot += 1;
+                span.phase = 0;
+            } else if (span.phase == 5) {
                 span.slot += 1;
                 span.phase = 0;
             } else span.phase += 1;
@@ -2383,8 +2453,10 @@ pub const ScanIntervals = struct {
     operations: [3]?Cut = @splat(null),
     allow_unresolved_job_reads: bool = false,
     defer_job_reads_to_planner: bool = false,
+    defer_guard_to_joint: bool = false,
     unresolved_scalar_overlaps: u64 = 0,
     fn scalarOverlap(self: *ScanIntervals, read_cut: Cut) Error!void {
+        if (self.defer_guard_to_joint and (read_cut.site == .service_slot_guard_render_claim or read_cut.site == .service_slot_guard_render_release)) return;
         if (read_cut.site != .service_worker_scan and read_cut.site != .service_acceptance_scan) return error.CrossedScan;
         if (self.defer_job_reads_to_planner) return;
         if (!self.allow_unresolved_job_reads) return error.CrossedScan;
@@ -2401,6 +2473,7 @@ pub const ScanIntervals = struct {
     }
     fn operation(self: *ScanIntervals, value: Cut) Error!void {
         try validateJobInput(value.role, value.site, value.edge, value.job_scan_eligible);
+        try validatePublicationPrefix(value.role, value.site, value.edge, value.publication_prefix);
         const active = &self.operations[@intFromEnum(value.role)];
         const expected: format.Role = switch (value.site) {
             .service_worker_scan => .worker,
@@ -2421,6 +2494,10 @@ pub const ScanIntervals = struct {
             var expected_end = active.* orelse return error.InvalidOrder;
             expected_end.edge = .after;
             expected_end.job_scan_eligible = value.job_scan_eligible;
+            // Wire6 failed Render claim carries its original observed 2 only
+            // on AFTER. This is an observation, not a changed source identity.
+            // validatePublicationPrefix above admits exactly 0 or 2 here.
+            if (value.site == .service_slot_guard_render_claim) expected_end.publication_prefix = value.publication_prefix;
             if (!std.meta.eql(expected_end, value)) return error.InvalidOrder;
             active.* = null;
         }

@@ -65,9 +65,16 @@ pub fn Gate(comptime Cursor: type) type {
         /// planners begin with identical copies of ALL cursors. Space is
         /// independent of total_operations; there is no operation array/cap.
         pub fn init(self: *Self, job_slots: usize, cursors: [3]Cursor, total_operations: u64) Error!void {
+            return self.initScope(job_slots, 0, cursors, total_operations);
+        }
+        pub fn initWithStreams(self: *Self, job_slots: usize, stream_slots: usize, cursors: [3]Cursor, total_operations: u64) Error!void {
+            if (stream_slots == 0) return error.UnsupportedSlots;
+            return self.initScope(job_slots, stream_slots, cursors, total_operations);
+        }
+        fn initScope(self: *Self, job_slots: usize, stream_slots: usize, cursors: [3]Cursor, total_operations: u64) Error!void {
             if (self.address != null) return error.InvalidState;
             var planner: joint_schedule.Scheduler = .{};
-            try planner.init(job_slots);
+            if (stream_slots == 0) try planner.init(job_slots) else try planner.initWithStreams(job_slots, stream_slots);
             self.* = .{
                 .address = self,
                 .total_operations = total_operations,

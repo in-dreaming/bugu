@@ -8,6 +8,7 @@ const Access = struct { kind: Kind, site: u64, index: u64, generation: u64 };
 pub const Validator = struct {
     /// Only the mandatory wire5 joint planner may discharge frame overlap.
     defer_frame_to_joint: bool = false,
+    defer_consumed_to_joint: bool = false,
     read: ?Access = null,
     publication: ?Access = null,
     /// Accept codec.Cut or an equivalent owned source-coordinate value. There
@@ -37,7 +38,7 @@ pub const Validator = struct {
                 // observation_frame belongs to the Service, independent of the
                 // source's diagnostic stream label. control_consumed belongs
                 // to exactly one slot incarnation.
-                if (active.kind == access.kind and (frame or (active.index == access.index and active.generation == access.generation)) and !(frame and self.defer_frame_to_joint)) return error.UnsupportedOverlap;
+                if (active.kind == access.kind and (frame or (active.index == access.index and active.generation == access.generation)) and !(if (frame) self.defer_frame_to_joint else self.defer_consumed_to_joint)) return error.UnsupportedOverlap;
             }
             own.* = access;
         } else if (std.mem.eql(u8, @tagName(cut.edge), "after")) {

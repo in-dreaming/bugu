@@ -122,6 +122,76 @@ const ControlledCrossFrame = struct {
         std.debug.print("SEMANTIC_CONTROLLED_CROSS_FRAME {s}", .{bytes});
     }
 };
+/// One deterministic true Service read/store bracket overlap. Recorder callbacks
+/// remain passive; only this explicit test seam pauses Control after its load.
+const ControlledFrameOverlap = struct {
+    recorder: *recording.Recorder,
+    even_count: std.atomic.Value(u64) = .init(0),
+    cancelled: std.atomic.Value(bool) = .init(false),
+    used: bool = false, // Control-only, read only after genuine joins.
+    frame: u64 = 0,
+    before: u64 = 0,
+    after: u64 = 0,
+    succeeded: bool = false,
+    consumed_used: bool = false,
+    consumed_index: u64 = 0,
+    consumed_generation: u64 = 0,
+    consumed_value: u64 = 0,
+    consumed_before: u64 = 0,
+    consumed_after: u64 = 0,
+    consumed_succeeded: bool = false,
+    fn event(raw: *anyopaque, value: fixture.rt.streaming.stream.TestRetryWorkloadEvent) void {
+        const self: *ControlledFrameOverlap = @ptrCast(@alignCast(raw));
+        switch (value) {
+            .render_even => {
+                _ = self.even_count.fetchAdd(1, .release);
+            },
+            .frame_loaded => |frame| {
+                if (self.used or frame == 0 or self.cancelled.load(.acquire)) return;
+                self.used = true;
+                self.frame = frame;
+                self.before = self.even_count.load(.acquire);
+                const start = std.Io.Clock.awake.now(t.io);
+                // Two completions exclude a pre-load store whose AFTER callback was
+                // already emitted but whose separate test notification was delayed.
+                while (self.even_count.load(.acquire) - self.before < 2) {
+                    if (self.cancelled.load(.acquire) or !self.recorder.healthy() or start.durationTo(std.Io.Clock.awake.now(t.io)).nanoseconds >= std.time.ns_per_s) return;
+                    std.Io.sleep(t.io, .fromMilliseconds(1), .awake) catch return;
+                }
+                // A delayed wake must not turn a crossed deadline/cancellation
+                // into a success merely because progress became visible too.
+                if (self.cancelled.load(.acquire) or !self.recorder.healthy() or start.durationTo(std.Io.Clock.awake.now(t.io)).nanoseconds >= std.time.ns_per_s) return;
+                self.after = self.even_count.load(.acquire);
+                self.succeeded = true;
+            },
+            .consumed_loaded => |sample| {
+                // This event exists only for the actual attached-runtime
+                // control_consumed acquire, after the native load returned.
+                if (!self.succeeded or self.consumed_used or sample.value == 0 or self.cancelled.load(.acquire)) return;
+                self.consumed_used = true;
+                self.consumed_index = sample.index;
+                self.consumed_generation = sample.generation;
+                self.consumed_value = sample.value;
+                self.consumed_before = self.even_count.load(.acquire);
+                const start = std.Io.Clock.awake.now(t.io);
+                while (self.even_count.load(.acquire) - self.consumed_before < 2) {
+                    if (self.cancelled.load(.acquire) or !self.recorder.healthy() or start.durationTo(std.Io.Clock.awake.now(t.io)).nanoseconds >= std.time.ns_per_s) return;
+                    std.Io.sleep(t.io, .fromMilliseconds(1), .awake) catch return;
+                }
+                if (self.cancelled.load(.acquire) or !self.recorder.healthy() or start.durationTo(std.Io.Clock.awake.now(t.io)).nanoseconds >= std.time.ns_per_s) return;
+                self.consumed_after = self.even_count.load(.acquire);
+                self.consumed_succeeded = true;
+            },
+            else => {},
+        }
+    }
+    fn report(self: *const ControlledFrameOverlap, directory: std.Io.Dir) !void {
+        const bytes = try std.json.Stringify.valueAlloc(allocator, .{ .classification = "controlled_actual_Service_frame_overlap", .used = self.used, .actual_loaded_frame = self.frame, .render_even_before = self.before, .render_even_after = self.after, .succeeded = self.succeeded, .consumed_used = self.consumed_used, .consumed_index = self.consumed_index, .consumed_generation = self.consumed_generation, .actual_loaded_consumed = self.consumed_value, .consumed_even_before = self.consumed_before, .consumed_even_after = self.consumed_after, .consumed_succeeded = self.consumed_succeeded }, .{});
+        defer allocator.free(bytes);
+        try writeFile(directory, "controlled-frame-overlap.json", bytes);
+    }
+};
+
 // One test-only native scheduling workload. Neither Recorder callback waits:
 // waiting is confined to the explicit test seam after the original operation.
 const RetryWorkload = struct {
@@ -221,6 +291,7 @@ const RetryWorkload = struct {
         const self: *RetryWorkload = @ptrCast(@alignCast(raw));
         if (!self.armed.load(.acquire) or self.cancelled.load(.acquire)) return;
         switch (value) {
+            .frame_loaded, .consumed_loaded => {},
             .queue_before => |queued| {
                 if (self.target.load(.acquire) == 0) self.target.store(queued.job, .release);
             },
@@ -608,6 +679,57 @@ fn collectorProfilingEnabled(value: ?[]const u8, streaming: bool, scenario: Work
     if (!streaming or scenario != .long or pacing != .notified_v1 or policy != .ordered_job_scans or controlled or fail_text != null) return error.UnsupportedCollectorProfileScope;
     return true;
 }
+const FrameOverlapWitness = struct {
+    read_before: u64,
+    read_after: u64,
+    store_before: u64,
+    store_after: u64,
+    actual_read: u64,
+    actual_store: u64,
+};
+/// Independent post-record interval/value witness, not a scheduling decision.
+/// Only explicit INPUT cursors; both values came from original native AFTERs.
+fn frameOverlapWitness(reader: *const format.Reader, loaded_frame: u64) !FrameOverlapWitness {
+    const codec = recording.codec;
+    var control = codec.JointOperationCursor.init(reader, .control);
+    while (try control.next()) |read| {
+        if (read.kind != .frame_read or read.value.? != loaded_frame) continue;
+        var render = codec.JointOperationCursor.init(reader, .render);
+        while (try render.next()) |store| {
+            if (store.before >= read.after) break;
+            if (store.kind == .frame_store and store.before > read.before and store.after < read.after and store.value.? > read.value.?) {
+                return .{ .read_before = read.before, .read_after = read.after, .store_before = store.before, .store_after = store.after, .actual_read = read.value.?, .actual_store = store.value.? };
+            }
+        }
+    }
+    return error.ControlledFrameOverlapProofMissing;
+}
+
+/// Separate INPUT-only same-incarnation projection witness. Neither cursor
+/// consults references, and publication values are not raw-load timestamps.
+fn consumedOverlapWitness(reader: *const format.Reader, context: *const ControlledFrameOverlap) !FrameOverlapWitness {
+    const codec = recording.codec;
+    var control = codec.JointOperationCursor.init(reader, .control);
+    while (try control.next()) |read| {
+        if (read.kind != .consumed_read or read.index != context.consumed_index or read.generation != context.consumed_generation or read.value.? != context.consumed_value) continue;
+        var render = codec.JointOperationCursor.init(reader, .render);
+        while (try render.next()) |store| {
+            if (store.before >= read.after) break;
+            if (store.kind == .consumed_store and store.index == read.index and store.generation == read.generation and store.before > read.before and store.after < read.after and store.value.? > read.value.?) {
+                return .{ .read_before = read.before, .read_after = read.after, .store_before = store.before, .store_after = store.after, .actual_read = read.value.?, .actual_store = store.value.? };
+            }
+        }
+    }
+    return error.ControlledConsumedOverlapProofMissing;
+}
+
+fn controlledFrameOverlapEnabled(value: ?[]const u8, streaming: bool, scenario: Workload, pacing: live.semantic_recording.semantic.PacingMode, policy: recording.codec.AdmissionPolicy, other_controlled: bool, fault: bool, profiling: bool) !bool {
+    const text = value orelse return false;
+    if (!std.mem.eql(u8, text, "1")) return error.InvalidControlledFrameOverlapMode;
+    if (!streaming or scenario != .long or pacing != .notified_v1 or policy != .joint_service_reads or other_controlled or fault or profiling) return error.UnsupportedControlledFrameOverlapScope;
+    return true;
+}
+
 fn recordProcess(directory: std.Io.Dir) !void {
     const scenario = try workload();
     const pacing = try requestedPacing();
@@ -622,6 +744,9 @@ fn recordProcess(directory: std.Io.Dir) !void {
     if (controlled and (!streaming or scenario != .long or fail_text != null)) return error.UnsupportedControlledCrossFrameScope;
     if (scenario == .retry and (!streaming or controlled or fail_text != null)) return error.UnsupportedRetryWorkloadScope;
     if (scenario == .short_play and (!streaming or controlled or fail_text != null)) return error.UnsupportedShortPlayScope;
+
+    const frame_overlap_text = std.process.Environ.getPosix(t.environ, "SME_LIVE_SEMANTIC_CONTROLLED_FRAME_OVERLAP");
+    const controlled_overlap = try controlledFrameOverlapEnabled(frame_overlap_text, streaming, scenario, pacing, policy, controlled, fail_text != null, std.process.Environ.getPosix(t.environ, "SME_LIVE_SEMANTIC_COLLECTOR_PROFILE") != null);
 
     const profiling = try collectorProfilingEnabled(std.process.Environ.getPosix(t.environ, "SME_LIVE_SEMANTIC_COLLECTOR_PROFILE"), streaming, scenario, pacing, policy, controlled, fail_text);
     const bytes = try buildBank();
@@ -647,6 +772,9 @@ fn recordProcess(directory: std.Io.Dir) !void {
     var retry_context: ?*RetryWorkload = null;
     var retry_owned = true;
     defer if (retry_owned) if (retry_context) |context| allocator.destroy(context);
+    var frame_overlap: ?*ControlledFrameOverlap = null;
+    var frame_overlap_owned = true;
+    defer if (frame_overlap_owned) if (frame_overlap) |context| allocator.destroy(context);
     var cross_frame: ?*ControlledCrossFrame = null;
     var cross_frame_owned = true;
     defer if (cross_frame_owned) if (cross_frame) |context| allocator.destroy(context);
@@ -716,12 +844,17 @@ fn recordProcess(directory: std.Io.Dir) !void {
         sink.init(file, fail_after);
         file_stream = sink;
         sink.profile = profile;
-        try recorder.initStreamingWithPacing(try identity(bytes), .{ .context = sink, .write = FileStream.write }, format.max_file_bytes, @sizeOf(FileStream) + (if (profiling) @sizeOf(recording.collector_profile.Profile) else @as(usize, 0)) + (if (controlled) @sizeOf(ControlledCrossFrame) else @as(usize, 0)) + (if (scenario == .retry) @sizeOf(RetryWorkload) else @as(usize, 0)), pacing);
+        try recorder.initStreamingWithPacing(try identity(bytes), .{ .context = sink, .write = FileStream.write }, format.max_file_bytes, @sizeOf(FileStream) + (if (profiling) @sizeOf(recording.collector_profile.Profile) else @as(usize, 0)) + (if (controlled) @sizeOf(ControlledCrossFrame) else @as(usize, 0)) + (if (scenario == .retry) @sizeOf(RetryWorkload) else @as(usize, 0)) + (if (controlled_overlap) @sizeOf(ControlledFrameOverlap) else @as(usize, 0)), pacing);
     } else {
         corpus = try allocator.alloc(u8, recording.default_corpus_bytes);
         try recorder.initWithPacing(try identity(bytes), corpus.?, pacing);
     }
     recorder.test_collector_profile = profile;
+    if (controlled_overlap) {
+        const context = try allocator.create(ControlledFrameOverlap);
+        context.* = .{ .recorder = recorder };
+        frame_overlap = context;
+    }
     if (controlled) {
         const context = try allocator.create(ControlledCrossFrame);
         context.* = .{ .recorder = recorder, .audio = recorder.session.config.audio };
@@ -735,11 +868,12 @@ fn recordProcess(directory: std.Io.Dir) !void {
         recorder.session.config.audio = .{ .context = context, .call = RetryWorkload.onAudio };
         recorder.session.config.output = .{ .context = context, .input = RetryWorkload.onInput, .schedule = RetryWorkload.onSchedule, .invalidate = RetryWorkload.invalidate };
     }
-    const host = try live.Host.createWithTestAllocator(memory, launch(bytes), .{ .io = t.io, .device = .{ .backend = .null_backend }, .semantic = &recorder.session, .test_retry_workload = if (retry_context) |context| .{ .context = context, .call = RetryWorkload.event } else null, .test_after_live_acceptance = if (cross_frame) |context| .{ .context = context, .call = ControlledCrossFrame.afterAcceptance } else null });
+    const host = try live.Host.createWithTestAllocator(memory, launch(bytes), .{ .io = t.io, .device = .{ .backend = .null_backend }, .semantic = &recorder.session, .test_retry_workload = if (retry_context) |context| .{ .context = context, .call = RetryWorkload.event } else if (frame_overlap) |context| .{ .context = context, .call = ControlledFrameOverlap.event } else null, .test_after_live_acceptance = if (cross_frame) |context| .{ .context = context, .call = ControlledCrossFrame.afterAcceptance } else null });
     profile_started = true;
     var host_alive = true;
     var receipts: ReceiptLog = .{};
     defer if (host_alive) {
+        if (frame_overlap) |context| context.cancelled.store(true, .release);
         if (cross_frame) |context| context.cancelled.store(true, .release);
         if (retry_context) |context| {
             context.cancelled.store(true, .release);
@@ -749,6 +883,7 @@ fn recordProcess(directory: std.Io.Dir) !void {
         if (cleanup) |closed| {
             profile_joined = true;
             profile_status = closed;
+            if (frame_overlap) |context| context.report(directory) catch |err| std.debug.print("SEMANTIC_FRAME_OVERLAP_REPORT_FAILED {s}\n", .{@errorName(err)});
             if (retry_context) |context| context.report(directory) catch |err| std.debug.print("SEMANTIC_RETRY_REPORT_FAILED {s}\n", .{@errorName(err)});
             if (cross_frame) |context| context.report(directory, recorder.finalStats().multi_frame_ticks) catch |err| std.debug.print("SEMANTIC_CONTROLLED_REPORT_FAILED {s}\n", .{@errorName(err)});
             std.debug.print("SEMANTIC_REJECTED_CAPTURE healthy={any} stats={any} cleanup_worker_joined={any} provider={any} leases={d} instances={d}\n", .{ recorder.healthy(), recorder.finalStats(), closed.worker_joined, closed.provider, closed.sample_leases, closed.live_instances });
@@ -762,6 +897,7 @@ fn recordProcess(directory: std.Io.Dir) !void {
             stream_owned = false;
             cross_frame_owned = false;
             retry_owned = false;
+            frame_overlap_owned = false;
         }
     };
     try t.expectEqual(pacing, host.pacingMode());
@@ -875,6 +1011,11 @@ fn recordProcess(directory: std.Io.Dir) !void {
         break :sealed storage;
     } else try recorder.finish();
     const stats = recorder.finalStats();
+    if (frame_overlap) |context| {
+        try context.report(directory);
+        if (!context.used or !context.succeeded or context.after < context.before + 2) return error.ControlledFrameOverlapUnwitnessed;
+        if (!context.consumed_used or !context.consumed_succeeded or context.consumed_after < context.consumed_before + 2) return error.ControlledConsumedOverlapUnwitnessed;
+    }
     if (cross_frame) |context| {
         try context.report(directory, stats.multi_frame_ticks);
         if (!context.used) return error.ControlledCrossFrameSeamUnreached;
@@ -896,6 +1037,19 @@ fn recordProcess(directory: std.Io.Dir) !void {
     }
     const readback = try format.Reader.preflight(sealed, recorder.identity, recording.codec.validate);
     try t.expect(readback.counts.total > 0);
+    if (frame_overlap) |context| {
+        const witness = try frameOverlapWitness(&readback, context.frame);
+        const proof = try std.json.Stringify.valueAlloc(allocator, witness, .{});
+        defer allocator.free(proof);
+        try writeFile(directory, "controlled-frame-overlap-witness.json", proof);
+        const consumed_witness = try consumedOverlapWitness(&readback, context);
+        const consumed_proof = try std.json.Stringify.valueAlloc(allocator, .{ .index = context.consumed_index, .generation = context.consumed_generation, .witness = consumed_witness }, .{});
+        defer allocator.free(consumed_proof);
+        try writeFile(directory, "controlled-consumed-overlap-witness.json", consumed_proof);
+        // Same untouched wire6 bytes remain unsupported under old admission;
+        // the new joint proof below is the sole authority to accept this case.
+        try t.expectError(error.UnsupportedOverlap, recording.codec.validateInputsWithPolicy(&readback, recorder.identity, .ordered_job_scans));
+    }
     const coverage = try referenceCoverage(&readback);
     if (scenario == .short_play and (coverage.public_inputs == 0 or coverage.schedules == 0 or coverage.nonzero_submitted_samples == 0)) return error.ShortPlayOutputWitnessMissing;
     std.debug.print("SEMANTIC_REFERENCE_COVERAGE public_inputs={d} schedules={d} submitted_samples={d} nonzero_submitted_samples={d}\n", .{ coverage.public_inputs, coverage.schedules, coverage.submitted_samples, coverage.nonzero_submitted_samples });
@@ -924,6 +1078,7 @@ fn recordProcess(directory: std.Io.Dir) !void {
 }
 
 fn replayProcess(directory: std.Io.Dir) !void {
+    if (std.process.Environ.getPosix(t.environ, "SME_LIVE_SEMANTIC_CONTROLLED_FRAME_OVERLAP") != null) return error.ControlledPauseForbiddenDuringReplay;
     if (std.process.Environ.getPosix(t.environ, "SME_LIVE_SEMANTIC_COLLECTOR_PROFILE") != null) return error.CollectorProfileForbiddenDuringReplay;
     if (std.process.Environ.getPosix(t.environ, "SME_LIVE_SEMANTIC_CONTROLLED_CROSS_FRAME") != null) return error.ControlledPauseForbiddenDuringReplay;
     const scenario = try workload();
@@ -1197,4 +1352,17 @@ test "collector raw profile preserves real partial write and sticky failure" {
     const actual = try tmp.dir.readFileAlloc(t.io, "profile-partial.bin", allocator, .limited(payload.len));
     defer allocator.free(actual);
     try t.expectEqualSlices(u8, payload[0..13], actual);
+}
+
+test "controlled frame overlap is explicit capture-only single workload scope" {
+    try t.expect(!try controlledFrameOverlapEnabled(null, false, .short_ui, .legacy_poll, .native_attempt, true, true, true));
+    try t.expect(try controlledFrameOverlapEnabled("1", true, .long, .notified_v1, .joint_service_reads, false, false, false));
+    try t.expectError(error.InvalidControlledFrameOverlapMode, controlledFrameOverlapEnabled("0", true, .long, .notified_v1, .joint_service_reads, false, false, false));
+    try t.expectError(error.UnsupportedControlledFrameOverlapScope, controlledFrameOverlapEnabled("1", false, .long, .notified_v1, .joint_service_reads, false, false, false));
+    try t.expectError(error.UnsupportedControlledFrameOverlapScope, controlledFrameOverlapEnabled("1", true, .short_ui, .notified_v1, .joint_service_reads, false, false, false));
+    try t.expectError(error.UnsupportedControlledFrameOverlapScope, controlledFrameOverlapEnabled("1", true, .long, .legacy_poll, .joint_service_reads, false, false, false));
+    try t.expectError(error.UnsupportedControlledFrameOverlapScope, controlledFrameOverlapEnabled("1", true, .long, .notified_v1, .ordered_job_scans, false, false, false));
+    try t.expectError(error.UnsupportedControlledFrameOverlapScope, controlledFrameOverlapEnabled("1", true, .long, .notified_v1, .joint_service_reads, true, false, false));
+    try t.expectError(error.UnsupportedControlledFrameOverlapScope, controlledFrameOverlapEnabled("1", true, .long, .notified_v1, .joint_service_reads, false, true, false));
+    try t.expectError(error.UnsupportedControlledFrameOverlapScope, controlledFrameOverlapEnabled("1", true, .long, .notified_v1, .joint_service_reads, false, false, true));
 }

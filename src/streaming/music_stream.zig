@@ -289,6 +289,9 @@ pub const TestRetryWorkloadEvent = union(enum) {
     after_attempt: struct { attempt: *const LiveAcceptanceAttemptV1, effective_frame: u64, finished: bool },
     render_odd: u64,
     render_even: u64,
+    /// Test capture rendezvous after the original frame load, before its AFTER marker.
+    frame_loaded: u64,
+    consumed_loaded: struct { index: u64, generation: u64, value: u64 },
 };
 pub const TestRetryWorkload = struct {
     context: *anyopaque,
@@ -1031,6 +1034,7 @@ pub const Service = struct {
         if (offline_availability) self.offline(sites[1], .before, index, generation, 0);
         self.orderCheckpoint(.control, sites[1], .before, index, generation, null);
         const frame = self.observation_frame.load(.acquire);
+        if (@import("builtin").is_test) self.testRetryWorkload(.{ .frame_loaded = frame });
         self.orderCheckpoint(.control, sites[1], .after, index, generation, frame);
         if (offline_availability) self.offline(sites[1], .after, index, generation, frame);
         if (observed) |value| value.frame = frame;
@@ -1042,6 +1046,7 @@ pub const Service = struct {
         if (offline_availability) self.offline(sites[2], .before, index, generation, 0);
         self.orderCheckpoint(.control, sites[2], .before, index, generation, null);
         const read = slot.pcm_ring.control_consumed.load(.acquire);
+        if (@import("builtin").is_test) self.testRetryWorkload(.{ .consumed_loaded = .{ .index = index, .generation = generation, .value = read } });
         self.orderCheckpoint(.control, sites[2], .after, index, generation, read);
         if (offline_availability) self.offline(sites[2], .after, index, generation, read);
         if (offline_availability) self.offline(sites[3], .before, index, generation, 0);
@@ -1548,8 +1553,12 @@ pub const Service = struct {
     /// The actual caller supplies its role; a site name never selects a lane.
     fn orderCheckpoint(self: *Service, role: order.Role, site: OfflineSite, edge: order.Edge, index: u64, generation: u64, value: ?u64) void {
         if (self.live_semantic_hooks) |hooks| {
-            const point: live_semantic.Point = .{ .role = role, .site = orderSite(site), .edge = edge, .index = index, .generation = generation, .value = value };
-            if (live_semantic.allowedPoint(point)) hooks.cuts.point(hooks.cuts.context, point);
+            const detached_consumed = site == .readiness_consumed and !self.runtime_attached;
+            const point: live_semantic.Point = .{ .role = role, .site = if (detached_consumed) .service_readiness_raw_consumed else orderSite(site), .edge = edge, .index = index, .generation = generation, .value = value };
+            // Do not silently omit or mislabel a real raw-domain load. The
+            // finite semantic recorder rejects this explicit unsupported site;
+            // the native operation and legacy prerequisite trace are unchanged.
+            if (detached_consumed or live_semantic.allowedPoint(point)) hooks.cuts.point(hooks.cuts.context, point);
         }
         if (self.prerequisite_order) |roles| roles.get(role).pointFor(role, orderSite(site), edge, index, generation, value);
     }
@@ -2187,6 +2196,7 @@ pub const Service = struct {
             self.offline(.readiness_frame, .before, 0, 0, 0);
             self.orderCheckpoint(.control, .readiness_frame, .before, 0, 0, null);
             const frame = self.observation_frame.load(.acquire);
+            if (@import("builtin").is_test) self.testRetryWorkload(.{ .frame_loaded = frame });
             observed_frame = frame;
             self.orderCheckpoint(.control, .readiness_frame, .after, 0, 0, frame);
             self.offline(.readiness_frame, .after, 0, 0, frame);
@@ -2204,6 +2214,7 @@ pub const Service = struct {
             self.offline(.readiness_consumed, .before, handle.index, handle.generation, 0);
             self.orderCheckpoint(.control, .readiness_consumed, .before, handle.index, handle.generation, null);
             const read_ordinal = if (self.runtime_attached) slot.pcm_ring.control_consumed.load(.acquire) else slot.pcm_ring.consumed.load(.acquire);
+            if (@import("builtin").is_test) if (self.runtime_attached) self.testRetryWorkload(.{ .consumed_loaded = .{ .index = handle.index, .generation = handle.generation, .value = read_ordinal } });
             self.orderCheckpoint(.control, .readiness_consumed, .after, handle.index, handle.generation, read_ordinal);
             self.offline(.readiness_consumed, .after, handle.index, handle.generation, read_ordinal);
             break :blk read_ordinal;

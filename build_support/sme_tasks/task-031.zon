@@ -1,5 +1,5 @@
 .{
     .schema_version = 1,
     .task_id = "TASK-031",
-    .checks = .{.{ .name = "sme-live-render-throughput-check", .tests = .{"tests/sme/live_render_throughput_test.zig"} }},
+    .checks = .{.{ .name = "sme-live-render-producer-cost-check", .tests = .{"tests/sme/live_render_producer_cost_test.zig"} }, .{ .name = "sme-live-render-throughput-check", .tests = .{"tests/sme/live_render_throughput_test.zig"} }},
 }

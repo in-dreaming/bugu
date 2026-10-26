@@ -8,7 +8,6 @@
   "exact_payload_roundtrip": true,
   "exact_append_frame_projection": true,
   "excluded_tail": 0,
-  "source_sha256": "ef86f75edb357923604dc3cbd48c363219382bf369c9c813ef92b3ce9c092a3e",
   "tape_sha256": "7f3ae119336221664140194dc9e0ef585376428817305c43452168709f38e0e5",
   "families": [
     {
@@ -171,6 +170,43 @@
     "Queue timing sequentially pushes then pops one record, not original backlog trajectory.",
     "Sum of stage medians is an isolated-work estimate, not concurrent end-to-end capacity.",
     "No admitted recording or replay success claimed.",
-    "Fixed three rounds only; no timing threshold, retry-for-performance or best-of selection."
-  ]
+    "Fixed three rounds only; no timing threshold, retry-for-performance or best-of selection.",
+    "Additional recorder-only run includes actual Recorder.observe, producer push,4-lane drain and profile off/on; only one Render record resident, other lanes empty. No genuine lifecycle completion or recorder.finish attempted. Earlier family benchmarks were not rerun for this extension."
+  ],
+  "family_benchmark_source_sha256": "ef86f75edb357923604dc3cbd48c363219382bf369c9c813ef92b3ce9c092a3e",
+  "current_source_sha256": "1ad5d2f1497f0d5ae565bc4d85a1e86297ebb4401f58857a4ebbfd9334eff0f1",
+  "recorder": [
+    {
+      "profiling": false,
+      "push_drain_ns": [
+        66140991,
+        65178031,
+        63780056
+      ],
+      "median_ns": 65178031,
+      "exact_frame_projection": true,
+      "observe": true,
+      "producer_push_included": true,
+      "other_roles_empty": true,
+      "peak_queued_records": 1,
+      "finish_called": false
+    },
+    {
+      "profiling": true,
+      "push_drain_ns": [
+        72627590,
+        81013208,
+        74366949
+      ],
+      "median_ns": 74366949,
+      "exact_frame_projection": true,
+      "observe": true,
+      "producer_push_included": true,
+      "other_roles_empty": true,
+      "peak_queued_records": 1,
+      "finish_called": false
+    }
+  ],
+  "recorder_profile_median_delta_ns": 9188918,
+  "recorder_profile_median_delta_percent": 14.098182867782551
 }

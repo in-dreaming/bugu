@@ -1,0 +1,50 @@
+{
+  "profile": 9,
+  "wire_version": 4,
+  "pacing": "notified_v1",
+  "admission": "ordered_job_scans",
+  "fresh_replay_verified": true,
+  "matched_control": 203005,
+  "matched_worker": 186559,
+  "matched_render": 80792,
+  "matched_ui": 5216,
+  "submitted_samples": 70144,
+  "discarded_pending_samples": 0,
+  "discarded_generated_samples": 512,
+  "command_accepted": 2,
+  "command_terminal": 2,
+  "host_joined": true,
+  "host_destroyed": true,
+  "eof": true,
+  "scope": "Frozen old wire4 regression only; NOT wire5 qualification",
+  "source_tree": "1521f609dd10e4eaa53fd4f494121647c0f1489f",
+  "elf_sha256": "6337a8084b3aadb8a6c3e9bc3858ac871adad9fc85c605ab03b5b3d3de5d9c8a",
+  "history_sha256": "430288a33c0c7299ff53db888dc49efad8775f16a77c5e875d7e6a0e63169613",
+  "pcm_reference_negative": {
+    "expected": "ReplayMismatch",
+    "observed": "ReplayMismatch",
+    "role": "render",
+    "occurrence": 3159,
+    "family": "pcm",
+    "byte_offset": 2083,
+    "host_joined": true,
+    "host_destroyed": true,
+    "retained": false,
+    "provider_opened": 16,
+    "provider_closed": 16,
+    "provider_live": 0,
+    "sample_leases": 0
+  },
+  "pacing_negative": {
+    "expected": "WrongLaunch",
+    "observed": "WrongLaunch",
+    "owner_effects_started": false,
+    "matched": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "retained": false
+  }
+}

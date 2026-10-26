@@ -2,5 +2,5 @@
     .schema_version = 1,
     .task_id = "TASK-030",
     .modules = .{.{ .name = "sme-live-semantic-joint-schedule", .root_source_file = "tools/sme_authoring/core/live_semantic_joint_schedule.zig" }},
-    .checks = .{ .{ .name = "sme-live-semantic-joint-gate-check", .tests = .{"tests/sme/live_semantic_joint_gate_test.zig"} }, .{ .name = "sme-live-semantic-joint-schedule-check", .tests = .{"tests/sme/live_semantic_joint_schedule_test.zig"} } },
+    .checks = .{ .{ .name = "sme-live-semantic-joint-replay-check", .tests = .{"tests/sme/live_semantic_joint_replay_test.zig"} }, .{ .name = "sme-live-semantic-joint-gate-check", .tests = .{"tests/sme/live_semantic_joint_gate_test.zig"} }, .{ .name = "sme-live-semantic-joint-schedule-check", .tests = .{"tests/sme/live_semantic_joint_schedule_test.zig"} } },
 }

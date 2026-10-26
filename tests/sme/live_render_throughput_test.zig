@@ -3,6 +3,7 @@
 const std = @import("std");
 const audio = @import("bugu_audio");
 const codec = @import("sme-live-codec");
+const recording = @import("sme-author-live-owner").semantic_recording;
 const f = codec.format;
 const t = std.testing;
 const a = t.allocator;
@@ -218,7 +219,8 @@ test "recorded Render canonical roundtrip and fixed encode copy measurements" {
         try t.expectEqual(r.native.first_len, popped.first_len);
     }
     std.debug.print("RENDER_CORPUS records={d} complete_all_roles={any} sealed={} excluded_tail={d} caller={s} codec={s} hash_backend={s} roundtrip=true native_original=false\n", .{ records.items.len, ordinals, sealed, end - offset, @tagName(@import("builtin").mode), @tagName(codec.compilation_mode), @tagName(f.IntegrityHash.backendMode()) });
-    for (counts, 0..) |count, family| {
+    const recorder_only = std.process.Environ.getPosix(t.environ, "SME_RENDER_RECORDER_ONLY") != null;
+    if (!recorder_only) for (counts, 0..) |count, family| {
         if (count == 0) continue;
         var selected: std.ArrayList(Record) = .empty;
         defer selected.deinit(a);
@@ -250,13 +252,13 @@ test "recorded Render canonical roundtrip and fixed encode copy measurements" {
             try t.expectEqual(native_bytes[family], copied_bytes);
         }
         std.debug.print("RENDER_FAMILY family={d} count={d} native_bytes={d} wire_bytes={d} encode_ns={any} push_pop_ns={any}\n", .{ family, count, native_bytes[family], wire_bytes[family], encode_ns, copy_ns });
-    }
+    };
     var append_bytes: usize = f.header_size;
     for (records.items) |r| append_bytes += r.frame.len;
     const storage = try a.alloc(u8, append_bytes);
     defer a.free(storage);
     var append_ns: [3]u64 = undefined;
-    for (0..3) |round| {
+    if (!recorder_only) for (0..3) |round| {
         var sink: Sink = .{ .bytes = storage };
         var writer = try f.StreamingWriter.init(.{ .context = &sink, .write = Sink.write }, bound, identity, codec.validate);
         const start = std.Io.Clock.awake.now(t.io);
@@ -269,6 +271,49 @@ test "recorded Render canonical roundtrip and fixed encode copy measurements" {
             try t.expectEqualSlices(u8, r.frame, storage[cursor..][0..r.frame.len]);
             cursor += r.frame.len;
         }
+    };
+    if (!recorder_only) std.debug.print("RENDER_APPEND frames_bytes={d} append_ns={any} exact_frame_projection=true\n", .{ append_bytes - f.header_size, append_ns });
+    if (recorder_only) {
+        const recorder = try a.create(recording.Recorder);
+        defer a.destroy(recorder);
+        const profile = try a.create(recording.collector_profile.Profile);
+        defer a.destroy(profile);
+        inline for (.{ false, true }) |profiling| {
+            var full_ns: [3]u64 = undefined;
+            for (0..3) |round| {
+                recorder.address = null;
+                recorder.session = .{};
+                profile.* = .init(t.io);
+                var sink: Sink = .{ .bytes = storage };
+                try recorder.initStreaming(identity, .{ .context = &sink, .write = Sink.write }, bound, storage.len + @sizeOf(Sink) + @sizeOf(recording.collector_profile.Profile));
+                if (profiling) recorder.test_collector_profile = profile;
+                const start = std.Io.Clock.awake.now(t.io);
+                // One-record injection bounds occupancy without changing capacity.
+                // Includes producer push and4-lane drain; other roles remain empty.
+                for (records.items) |r| {
+                    if (!recorder.capture.lane(.render).push(r.native.family, r.native.class, r.native.first(), r.native.second())) return error.QueueRejected;
+                    if (!try recorder.drainStreaming()) return error.QueueEmpty;
+                }
+                full_ns[round] = try elapsed(start);
+                try t.expect(recorder.healthy());
+                try t.expect(recorder.session.host == null);
+                try t.expectEqual(append_bytes, sink.used);
+                try t.expectEqualSlices(u8, bytes[0..f.header_size], storage[0..f.header_size]);
+                var cursor: usize = f.header_size;
+                for (records.items) |r| {
+                    try t.expectEqualSlices(u8, r.frame, storage[cursor..][0..r.frame.len]);
+                    cursor += r.frame.len;
+                }
+                const stats = recorder.capture.lane(.render).finalStats();
+                try t.expectEqual(records.items.len, stats.produced);
+                try t.expectEqual(records.items.len, stats.consumed);
+                try t.expectEqual(@as(u64, 0), stats.queued_bytes);
+                if (profiling) {
+                    try t.expectEqual(records.items.len, profile.report.roles[2].metrics.appended_records);
+                    try t.expectEqual(@as(u64, 0), profile.report.failed_passes);
+                }
+            }
+            std.debug.print("RENDER_RECORDER profiling={} push_drain_ns={any} exact_frame_projection=true observe=true queue_peak_records=1 other_roles_empty=true finish_called=false\n", .{ profiling, full_ns });
+        }
     }
-    std.debug.print("RENDER_APPEND frames_bytes={d} append_ns={any} exact_frame_projection=true\n", .{ append_bytes - f.header_size, append_ns });
 }
