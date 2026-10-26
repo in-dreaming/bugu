@@ -1,0 +1,55 @@
+{
+  "schema": "bugu.joint-service-adapter-results/v1",
+  "source": "d9441b3fb55168d61c3576e84b1335c988e2fb27",
+  "tree": "fa935986001365670dfed19f79537e9bb82c3523",
+  "production_base": "c963aec1c6b74e17da52ce553520aa7c0e4b5e2f",
+  "scope": "Real Service/Ring, deterministic synchronous test-hook interleavings; no Host/device/Windows/production replay",
+  "modes": [
+    {
+      "mode": "Debug engine / existing ReleaseSafe codec and hash",
+      "steps_passed": 6,
+      "steps_total": 6,
+      "tests_passed": 2,
+      "tests_total": 2,
+      "test_seconds": 7
+    },
+    {
+      "mode": "ReleaseSafe",
+      "steps_passed": 6,
+      "steps_total": 6,
+      "tests_passed": 2,
+      "tests_total": 2,
+      "test_seconds": 1
+    }
+  ],
+  "earlier_failures": [
+    {
+      "phase": "cache",
+      "tests_run": 0,
+      "reason": "Default cache not writable; explicit writable cache selected"
+    },
+    {
+      "phase": "first compilation",
+      "tests_run": 0,
+      "reason": "Test incorrectly used try on optional pollVisibility"
+    },
+    {
+      "phase": "first execution",
+      "pass": 0,
+      "failed": 1,
+      "crashed": 1,
+      "reason": "Test used detached-only acceptCompleted while runtime attached; pending cleanup panicked. Crossfade test missing required release_profile."
+    }
+  ],
+  "independent_review": "Passed bounded scope after fixes; production tree unchanged outside 2 test files",
+  "not_proven": [
+    "native thread scheduling",
+    "general weak memory",
+    "joint tape extraction/admission solver",
+    "fresh Service plan replay",
+    "global deadlock freedom",
+    "original failed tape replay",
+    "Render throughput repair"
+  ],
+  "public_status": "not pushed; destination confirmation blocker reported separately"
+}

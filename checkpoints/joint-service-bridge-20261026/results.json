@@ -1,0 +1,46 @@
+{
+  "schema": "bugu.joint-service-bridge-results/v1",
+  "source": "4b5910bb84cc8e18a7af3837d58ef90b0d8b9eb2",
+  "tree": "1521f609dd10e4eaa53fd4f494121647c0f1489f",
+  "production_base": "c963aec1c6b74e17da52ce553520aa7c0e4b5e2f",
+  "modes": [
+    {
+      "mode": "Debug",
+      "steps_passed": 9,
+      "steps_total": 9,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "service_seconds": 8,
+      "bridge_seconds": 9
+    },
+    {
+      "mode": "ReleaseSafe",
+      "steps_passed": 9,
+      "steps_total": 9,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "service_seconds": 2,
+      "bridge_seconds": 2
+    }
+  ],
+  "bridge_scene": "one stream, one job, one consumed PCM frame; passive witness capture, declarative checker/topological frozen plan, fresh Service",
+  "injection": "Only raw external Worker clock inputs. No internal read, elapsed, throughput or PCM result injection.",
+  "native_clock": "Linux monotonic available, error-free, strictly increasing capture",
+  "independent_review": "PASS for bounded single-scene scope; reviewer did not repeat compile",
+  "earlier_bridge_failures": [
+    "enum literal runtime type compilation failure",
+    "startup prefix test expectation omitted four actual asset-prepare points",
+    "stale error precedence assertion after stronger startup validation"
+  ],
+  "not_proven": [
+    "arbitrary witness feasibility",
+    "general constraint extraction",
+    "native role threads or gate scheduler",
+    "weak memory",
+    "global deadlock freedom",
+    "original failed tape replay",
+    "full PCM stream equivalence",
+    "Render overflow repair"
+  ],
+  "public_status": "not pushed; exact external destination authorization pending"
+}

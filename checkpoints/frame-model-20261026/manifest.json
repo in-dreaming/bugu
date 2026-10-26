@@ -1,0 +1,37 @@
+{
+  "status": "FINAL limited-model PASS; production joint feasibility UNPROVEN",
+  "source_commit": "c963aec1c6b74e17da52ce553520aa7c0e4b5e2f",
+  "source_tree": "123baa533e50ffcaa3210ec00b4d977e94ef7b29",
+  "source_clean": true,
+  "python": "3.12.14",
+  "files": {
+    "README.md": {
+      "bytes": 6344,
+      "sha256": "a578772e49188ed4a190f468bed874cd155c8f65382231325b3d29b0df91c6c1"
+    },
+    "SOURCE_AUDIT.md": {
+      "bytes": 6561,
+      "sha256": "c2a39d98cd8c1bc833c11c07b1e3debbf4c4697cc54770dd238d6ee71e470003"
+    },
+    "example_schedule.json": {
+      "bytes": 2636,
+      "sha256": "6a08edc077bd3efed84befdce49d8b8984cc68459deb64a9cccfe1f104b5dd2e"
+    },
+    "frame_model.py": {
+      "bytes": 8070,
+      "sha256": "fc09305c125d26b288b4d989d2f01a8b482066480534e011bc81c50ca82f0e05"
+    },
+    "oracle.py": {
+      "bytes": 2041,
+      "sha256": "fc1951893b67bd33850bf208dcdc87bc9ca1781703dc8333c65eba4bae31f808"
+    },
+    "results.json": {
+      "bytes": 1709,
+      "sha256": "acce93db7cf072ccb5ea17ab0e240fdc2f3c972c04baee9e9444c0c36315b829"
+    },
+    "run_tests.py": {
+      "bytes": 9783,
+      "sha256": "d72b97e569e454f5310ce380a7d3bf6fafdea6739f7e668de6611f2bf336904a"
+    }
+  }
+}

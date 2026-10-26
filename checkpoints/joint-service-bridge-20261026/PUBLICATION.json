@@ -1,0 +1,91 @@
+{
+  "status": "Source published; this delivery checkpoint carries model and bounded test evidence, not full production qualification",
+  "source_remote_commit": "f4f9efdcd6f638eaf7d6e1a4b58a1170753b4b3f",
+  "source_tree": "1521f609dd10e4eaa53fd4f494121647c0f1489f",
+  "local_test_commit": "4b5910bb84cc8e18a7af3837d58ef90b0d8b9eb2",
+  "mapping": "Exact final tree preserved as one publication checkpoint; local intermediate commit IDs are historical and not remote commits.",
+  "historical_results": "public_status fields in captured results preserve their pre-publication state; this receipt supersedes those publication-status fields only. Prior model and service-stage next-step statements are historical, superseded by the bridge README.",
+  "limits": [
+    "Render overflow remains unresolved",
+    "No arbitrary tape solver or general replay repair",
+    "No native concurrent gate or weak-memory proof",
+    "No latest Windows regression"
+  ],
+  "files": [
+    {
+      "path": "checkpoints/frame-model-20261026/README.md",
+      "bytes": 6344,
+      "sha256": "a578772e49188ed4a190f468bed874cd155c8f65382231325b3d29b0df91c6c1"
+    },
+    {
+      "path": "checkpoints/frame-model-20261026/SOURCE_AUDIT.md",
+      "bytes": 6561,
+      "sha256": "c2a39d98cd8c1bc833c11c07b1e3debbf4c4697cc54770dd238d6ee71e470003"
+    },
+    {
+      "path": "checkpoints/frame-model-20261026/example_schedule.json",
+      "bytes": 2636,
+      "sha256": "6a08edc077bd3efed84befdce49d8b8984cc68459deb64a9cccfe1f104b5dd2e"
+    },
+    {
+      "path": "checkpoints/frame-model-20261026/frame_model.py",
+      "bytes": 8070,
+      "sha256": "fc09305c125d26b288b4d989d2f01a8b482066480534e011bc81c50ca82f0e05"
+    },
+    {
+      "path": "checkpoints/frame-model-20261026/manifest.json",
+      "bytes": 1209,
+      "sha256": "6144e535ea8e34bc7d8047c25d994281400fb7c5d7a12e977923d17dce22e925"
+    },
+    {
+      "path": "checkpoints/frame-model-20261026/oracle.py",
+      "bytes": 2041,
+      "sha256": "fc1951893b67bd33850bf208dcdc87bc9ca1781703dc8333c65eba4bae31f808"
+    },
+    {
+      "path": "checkpoints/frame-model-20261026/results.json",
+      "bytes": 1709,
+      "sha256": "acce93db7cf072ccb5ea17ab0e240fdc2f3c972c04baee9e9444c0c36315b829"
+    },
+    {
+      "path": "checkpoints/frame-model-20261026/run_tests.py",
+      "bytes": 9783,
+      "sha256": "d72b97e569e454f5310ce380a7d3bf6fafdea6739f7e668de6611f2bf336904a"
+    },
+    {
+      "path": "checkpoints/joint-service-bridge-20261026/README.md",
+      "bytes": 4929,
+      "sha256": "e73763e7dd0dff3752c159fdd5c84040c62ebe9987453315b1e635c0a9e1da69"
+    },
+    {
+      "path": "checkpoints/joint-service-bridge-20261026/REVIEW.md",
+      "bytes": 802,
+      "sha256": "8839564657614bdf36370367b7509a643e7a79cd1322dd366fa7e6710e7eabda"
+    },
+    {
+      "path": "checkpoints/joint-service-bridge-20261026/results.json",
+      "bytes": 1699,
+      "sha256": "c75a3f001940d20276867fea0d1c46230c53e171fe1f680528c523168194a2bd"
+    },
+    {
+      "path": "checkpoints/joint-service-bridge-20261026/service-stage-README.md",
+      "bytes": 5723,
+      "sha256": "f82fea23c879ebd474936a8ef7d126006532ac3922ca5396b5f68d8480cb167a"
+    },
+    {
+      "path": "checkpoints/joint-service-bridge-20261026/service-stage-REVIEW.md",
+      "bytes": 467,
+      "sha256": "a7523839191fecee51e296e1c8488efbfd94ef4b4acc68a0a823f3d64cc105e1"
+    },
+    {
+      "path": "checkpoints/joint-service-bridge-20261026/service-stage-results.json",
+      "bytes": 1761,
+      "sha256": "55682e661762d97eebc2a47d2235042f18ddadaa0767646c2bf370c6b6688bfc"
+    },
+    {
+      "path": "checkpoints/joint-service-bridge-20261026/source-manifest.json",
+      "bytes": 5085,
+      "sha256": "42ef1f32ec2e24831355b718dc6596d4a009e63c18a4cdb23c28422e9b04e140"
+    }
+  ]
+}

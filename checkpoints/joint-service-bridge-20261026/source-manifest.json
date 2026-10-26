@@ -1,0 +1,129 @@
+{
+  "base": "d2ea6c7cb4b20580688e00d6331dca3dbaaeb871",
+  "target": "4b5910bb84cc8e18a7af3837d58ef90b0d8b9eb2",
+  "tree": "1521f609dd10e4eaa53fd4f494121647c0f1489f",
+  "status": "Test-only bounded joint bridge qualified; overall production recording/replay NOT qualified",
+  "files": [
+    {
+      "path": "build_support/sme_steps.zig",
+      "blob": "2406f752218a95f2b3577c89065b39c7422292e8",
+      "size": 33776,
+      "sha256": "5fde78d1d788248e29d7ac5b8a3f071bf99ac7fc749bea4580b0571cb9226f40"
+    },
+    {
+      "path": "build_support/sme_tasks/task-011.zon",
+      "blob": "677f66148c8885b8a4bf5d80123db254987474d5",
+      "size": 655,
+      "sha256": "b9b179579aad33ee195cc6c1139373cbf16787015f352f691aea2ea80404915c"
+    },
+    {
+      "path": "build_support/sme_tasks/task-017.zon",
+      "blob": "e63bbfc4f763751454800289ae7569275f96434b",
+      "size": 4388,
+      "sha256": "421265d9d67fb6a4a11d586c429329e8a106d99d1d58e52c0bbb891898524307"
+    },
+    {
+      "path": "build_support/sme_tasks/task-028.zon",
+      "blob": "1f9db62cae83204a9869ab1d44f99efc3d059571",
+      "size": 1469,
+      "sha256": "10d529f22731292891afe86a54b0b160e9ff81559d852763353b6724596ef61a"
+    },
+    {
+      "path": "build_support/sme_tasks/task-029.zon",
+      "blob": "9045fcf49882384f4d3acaab30eaca9fd08981eb",
+      "size": 274,
+      "sha256": "6d4bd7288be6d2bf9937fabf10077d0c3ec7926ca485da048557adda72f6cb37"
+    },
+    {
+      "path": "src/music/live_semantic_encoder.zig",
+      "blob": "2af18d80ab14e3c2855dc04971e4a9d123760adb",
+      "size": 1437,
+      "sha256": "4d497e2aaeee22481f23af08e27b2fdb2637431a13ad5f9238de6991384b87db"
+    },
+    {
+      "path": "src/music/live_semantic_format.zig",
+      "blob": "6e69bdcb73d2c45ac7ed7bbb495d15c61af10331",
+      "size": 31219,
+      "sha256": "9baad66b0986c4f4549957df5a56581f8f6bdfb1cf78109fbe423613a9ec84cf"
+    },
+    {
+      "path": "src/streaming/music_stream.zig",
+      "blob": "4307ff1d4cdff01c7a5ff72b4d6c68921e8e4244",
+      "size": 194350,
+      "sha256": "ba78856dd6929fca1f72b6bcb637052e75998d63258224eb436d9671bdaaecfb"
+    },
+    {
+      "path": "tests/sme/author_live_worker_burst_test.zig",
+      "blob": "235cb6ac591d25d2b63bf3850ce64d4af648c406",
+      "size": 3281,
+      "sha256": "5788b0100587e995e2921de64cb497fcdce66136eb92ec623825f0b013373ca8"
+    },
+    {
+      "path": "tests/sme/joint_frame_bridge_test.zig",
+      "blob": "ac344cd91ccf435ca277271895bd6a8402c3694a",
+      "size": 23291,
+      "sha256": "8168e105fe4c8573e6cbcb6a643ead9443965ea2d4cd3bd79d748e5b8bd09827"
+    },
+    {
+      "path": "tests/sme/joint_frame_service_test.zig",
+      "blob": "6103b2b94dade27b6257c3e1d2e60d46252bc6d9",
+      "size": 15763,
+      "sha256": "97c458c31644303712a3210a80716011a0e2fc349033e01412177a372c7072ab"
+    },
+    {
+      "path": "tests/sme/live_codec_mode_test.zig",
+      "blob": "c32810bbee2375ced5e5b5f5a74d440f0c71c949",
+      "size": 2849,
+      "sha256": "d9c535acd6a1719c8ba077dd795375bb5f0084ec9d0cafb7e10f2cf3e7de4cd9"
+    },
+    {
+      "path": "tests/sme/live_supply_hash_test.zig",
+      "blob": "cb0ce88cb559006d689c6f4141eacef655bb59a6",
+      "size": 7759,
+      "sha256": "7f561658e3d6abaa3ec3adb7092f6d84bb7bbf6252048220eff8619145e93d65"
+    },
+    {
+      "path": "tools/sme_authoring/core/live_owner.zig",
+      "blob": "6a4276b34d112a67d8885e56fb538d58ee6603f6",
+      "size": 120116,
+      "sha256": "2ecf6330f979ab3c09cebbb2951ec970d919741196a0f6ab73f6b18e23b44dc2"
+    },
+    {
+      "path": "tools/sme_authoring/core/live_semantic.zig",
+      "blob": "214ead4a7cf481e3f27d246c1f7e3d5c6e317bd5",
+      "size": 13522,
+      "sha256": "397aafce4b492520e682028077fd3cb964e68daf1167d7bffd26ab6fe015075e"
+    },
+    {
+      "path": "tools/sme_authoring/core/live_semantic_codec.zig",
+      "blob": "4bb1619d96ad150a8e4460c9bf4aa9d9ff832712",
+      "size": 132124,
+      "sha256": "f12328d20e6e2735928309cd408643c810f772ebb5c4bc52a875ad8173946218"
+    },
+    {
+      "path": "tools/sme_authoring/core/live_semantic_job_gate.zig",
+      "blob": "6d6cdcef0fdc16c2d326c18274f55d3a59cb9e5d",
+      "size": 22549,
+      "sha256": "13964e9da38a4c771f15aedb55ef1e4ef0302842933f6c5e848b3b5406325207"
+    },
+    {
+      "path": "tools/sme_authoring/core/live_semantic_recording.zig",
+      "blob": "f173325ea9e3949b5ff30244702d0454bd84defe",
+      "size": 44325,
+      "sha256": "2b7e004d0dc10f615259489b8e40b4421d823cd39ece347232c4b6bf5f186b92"
+    },
+    {
+      "path": "tools/sme_authoring/core/live_semantic_replay.zig",
+      "blob": "5362fd611d7fed0f0a1804ca88246fa74b590bec",
+      "size": 93275,
+      "sha256": "12469d83d6c98d51da2acc1a46f2326d42285eb0e7e013539d19fc25efcd6350"
+    },
+    {
+      "path": "tools/sme_authoring/core/preview_source.zig",
+      "blob": "b9ceab279207f170ef20239251056b19645e2206",
+      "size": 10657,
+      "sha256": "f404903748ebd8b2b5a0b9773fafb2d7b909ca74be9b709dec0aead224fe88e8"
+    }
+  ],
+  "disclosure": "Task source/tests/build glue only; no secrets, personal paths, raw logs, audio, compiled binaries. Production relative to c963aec unchanged."
+}
