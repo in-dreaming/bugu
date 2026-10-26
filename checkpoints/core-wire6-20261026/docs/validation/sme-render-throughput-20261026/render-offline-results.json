@@ -1,0 +1,212 @@
+{
+  "records": 11702,
+  "observed_render_families": 8,
+  "sealed_framing": true,
+  "semantic_admission": false,
+  "semantic_rejection": "UnsupportedOverlap (parent baseline result)",
+  "exact_native_copy": true,
+  "exact_payload_roundtrip": true,
+  "exact_append_frame_projection": true,
+  "excluded_tail": 0,
+  "tape_sha256": "7f3ae119336221664140194dc9e0ef585376428817305c43452168709f38e0e5",
+  "families": [
+    {
+      "family": 2,
+      "count": 2256,
+      "native_bytes": 72192,
+      "wire_bytes": 108288,
+      "encode_ns": [
+        497891,
+        533864,
+        455537
+      ],
+      "push_pop_ns": [
+        617020,
+        635658,
+        626084
+      ],
+      "median_encode_ns": 497891,
+      "median_push_pop_ns": 626084
+    },
+    {
+      "family": 8,
+      "count": 140,
+      "native_bytes": 2240,
+      "wire_bytes": 2100,
+      "encode_ns": [
+        32349,
+        26791,
+        26931
+      ],
+      "push_pop_ns": [
+        40671,
+        40050,
+        40411
+      ],
+      "median_encode_ns": 26931,
+      "median_push_pop_ns": 40411
+    },
+    {
+      "family": 9,
+      "count": 2818,
+      "native_bytes": 45088,
+      "wire_bytes": 50724,
+      "encode_ns": [
+        791543,
+        515887,
+        731222
+      ],
+      "push_pop_ns": [
+        912115,
+        945144,
+        945384
+      ],
+      "median_encode_ns": 731222,
+      "median_push_pop_ns": 945144
+    },
+    {
+      "family": 11,
+      "count": 1835,
+      "native_bytes": 3180710,
+      "wire_bytes": 884876,
+      "encode_ns": [
+        16939486,
+        17036461,
+        17688554
+      ],
+      "push_pop_ns": [
+        1192597,
+        1431187,
+        1195532
+      ],
+      "median_encode_ns": 17036461,
+      "median_push_pop_ns": 1195532
+    },
+    {
+      "family": 102,
+      "count": 2256,
+      "native_bytes": 108288,
+      "wire_bytes": 119568,
+      "encode_ns": [
+        704071,
+        678793,
+        1044434
+      ],
+      "push_pop_ns": [
+        790722,
+        768107,
+        840697
+      ],
+      "median_encode_ns": 704071,
+      "median_push_pop_ns": 790722
+    },
+    {
+      "family": 113,
+      "count": 421,
+      "native_bytes": 70728,
+      "wire_bytes": 32749,
+      "encode_ns": [
+        170827,
+        166481,
+        181513
+      ],
+      "push_pop_ns": [
+        163877,
+        160282,
+        159911
+      ],
+      "median_encode_ns": 170827,
+      "median_push_pop_ns": 160282
+    },
+    {
+      "family": 114,
+      "count": 141,
+      "native_bytes": 294408,
+      "wire_bytes": 294267,
+      "encode_ns": [
+        1622345,
+        1515163,
+        1660953
+      ],
+      "push_pop_ns": [
+        79650,
+        63957,
+        66269
+      ],
+      "median_encode_ns": 1622345,
+      "median_push_pop_ns": 66269
+    },
+    {
+      "family": 115,
+      "count": 1835,
+      "native_bytes": 4451526,
+      "wire_bytes": 1060101,
+      "encode_ns": [
+        24508382,
+        22941290,
+        23192128
+      ],
+      "push_pop_ns": [
+        1758320,
+        1705550,
+        1795556
+      ],
+      "median_encode_ns": 23192128,
+      "median_push_pop_ns": 1758320
+    }
+  ],
+  "append_ns": [
+    9147014,
+    9836964,
+    14225732
+  ],
+  "sum_family_median_encode_ns": 43981876,
+  "sum_family_median_push_pop_ns": 5582764,
+  "median_append_ns": 9836964,
+  "isolated_sum_ns": 59401604,
+  "qualifications": [
+    "Canonical native representatives, not original native padding/producer timing.",
+    "Render-only test does not measure other lanes, Recorder.observe, sink file I/O, scheduling, live concurrent queue contention or producer packet assembly.",
+    "Queue timing sequentially pushes then pops one record, not original backlog trajectory.",
+    "Sum of stage medians is an isolated-work estimate, not concurrent end-to-end capacity.",
+    "No admitted recording or replay success claimed.",
+    "Fixed three rounds only; no timing threshold, retry-for-performance or best-of selection.",
+    "Additional recorder-only run includes actual Recorder.observe, producer push,4-lane drain and profile off/on; only one Render record resident, other lanes empty. No genuine lifecycle completion or recorder.finish attempted. Earlier family benchmarks were not rerun for this extension."
+  ],
+  "family_benchmark_source_sha256": "ef86f75edb357923604dc3cbd48c363219382bf369c9c813ef92b3ce9c092a3e",
+  "current_source_sha256": "1ad5d2f1497f0d5ae565bc4d85a1e86297ebb4401f58857a4ebbfd9334eff0f1",
+  "recorder": [
+    {
+      "profiling": false,
+      "push_drain_ns": [
+        66140991,
+        65178031,
+        63780056
+      ],
+      "median_ns": 65178031,
+      "exact_frame_projection": true,
+      "observe": true,
+      "producer_push_included": true,
+      "other_roles_empty": true,
+      "peak_queued_records": 1,
+      "finish_called": false
+    },
+    {
+      "profiling": true,
+      "push_drain_ns": [
+        72627590,
+        81013208,
+        74366949
+      ],
+      "median_ns": 74366949,
+      "exact_frame_projection": true,
+      "observe": true,
+      "producer_push_included": true,
+      "other_roles_empty": true,
+      "peak_queued_records": 1,
+      "finish_called": false
+    }
+  ],
+  "recorder_profile_median_delta_ns": 9188918,
+  "recorder_profile_median_delta_percent": 14.098182867782551
+}

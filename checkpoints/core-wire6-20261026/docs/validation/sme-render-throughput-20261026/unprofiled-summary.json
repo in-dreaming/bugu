@@ -1,0 +1,45 @@
+{
+  "source_tree": "1521f609dd10e4eaa53fd4f494121647c0f1489f",
+  "scope": "Single predefined unprofiled counterpart to profiled baseline; no further live repetitions",
+  "process_exit": 0,
+  "tests_passed": 12,
+  "record_result": {
+    "profile": 9,
+    "wire_version": 4,
+    "pacing": "notified_v1",
+    "admission": "ordered_job_scans",
+    "framing_complete": true,
+    "semantic_admitted": true,
+    "fresh_replay_verified": false,
+    "controlled_cross_frame": false,
+    "submitted_frames": 35072,
+    "generated_frames": 35328,
+    "multi_frame_ticks": 20,
+    "corpus_bytes": 27742449,
+    "capture_allocation_bytes": 19302352,
+    "occurrences": 476472,
+    "control_joined": true,
+    "worker_joined": true,
+    "peak_records": [
+      1615,
+      906,
+      228,
+      44
+    ],
+    "peak_bytes": [
+      588980,
+      223948,
+      150612,
+      5056
+    ],
+    "source_opened": 16,
+    "source_closed": 16
+  },
+  "observed_host_active_wall_s": 0.8640845099998842,
+  "observed_collector_coordinator_cpu_s": 0.56,
+  "sampling_note": "10ms sampler,100Hz CPU ticks; approximate bounds,not deadline guarantee",
+  "history_bytes": 27742449,
+  "history_sha256": "430288a33c0c7299ff53db888dc49efad8775f16a77c5e875d7e6a0e63169613",
+  "runner_sha256": "6337a8084b3aadb8a6c3e9bc3858ac871adad9fc85c605ab03b5b3d3de5d9c8a",
+  "conclusion": "Current profile and unprofiled cases did not reproduce historical Render overflow. Earlier failed capture retained; no causal attribution or universal recording guarantee. Fresh replay belongs to integration acceptance."
+}

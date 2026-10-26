@@ -1,0 +1,259 @@
+{
+  "repository": "in-dreaming/bugu",
+  "branch": "source/sme-headless-notified-20261022",
+  "remote_parent": "9063fc15623a5bbc3d27e3af375fcf57cff96186",
+  "remote_parent_tree": "83782c9c43c825f365b35d6900f03f114359a44a",
+  "local_target": "103ec1607de252a09ff838357f5e669840c5c1f3",
+  "target_tree": "980e38fc08da1c43050cd67f2de3a65aac3251d5",
+  "claim": "Bounded headless runtime qualification, not full SME product completion. Render overflow not causally repaired.",
+  "files": [
+    {
+      "path": "build_support/sme_tasks/task-027.zon",
+      "bytes": 1364,
+      "blob": "5400cc7332b2b82607a4890f24834d6e31a814e0",
+      "sha256": "6037f3419bb9d5e3ac3fb99baf7b9b9b881ed7b33e52feebc441a556c9b1e14e",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "build_support/sme_tasks/task-030.zon",
+      "bytes": 566,
+      "blob": "228965bc3abf8dd44b936f6ce6173a92ecc67580",
+      "sha256": "8d8f7f7ca369b1e32f3cb8c7dafdf76a234ea4f7c4f319e6e897f97d45504c70",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "build_support/sme_tasks/task-031.zon",
+      "bytes": 292,
+      "blob": "3d10751812931c0356a55106fc2c7df03bb52a9c",
+      "sha256": "5662043d42a1e349d2a17660d3e7ae22944f036aaf187dbcb15b6b1979b29f0e",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "docs/validation/sme-joint-wire5/PLAN.md",
+      "bytes": 5063,
+      "blob": "bf0385fae9ee3f118b6486808025c5b104582d7e",
+      "sha256": "705c1b3fec55a9082df9efaee39ea9402a2c910f06f959a781a2ece2144ccc26",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "docs/validation/sme-joint-wire6/PLAN.md",
+      "bytes": 3641,
+      "blob": "7314a66fccab9959521fba70b2425a75d6cd5a7b",
+      "sha256": "a667cdf08c3f8269667aaad07d1f31f6f121772f371fb7d23adb93c2f77a98d0",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "docs/validation/sme-joint-wire6/RESULTS.md",
+      "bytes": 5414,
+      "blob": "c7275a068e50598616570e3a06da85aee5f6a68f",
+      "sha256": "c31714415bb0544e823011cbfcb50d857eda33e76215be58521b56e8af004135",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "docs/validation/sme-render-throughput-20261026/README.md",
+      "bytes": 5566,
+      "blob": "372223f69aacd6fdb87ec68f22a8425a83a2ffa0",
+      "sha256": "ac0d8088bef9325012673527248318f7d7d02f481d99910a7d63eaa439d8a368",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "docs/validation/sme-render-throughput-20261026/old-wire4-replay-results.json",
+      "bytes": 1342,
+      "blob": "937301f26c6b9b764ed78043783c171472831368",
+      "sha256": "c356d1adf9754b8b8197dfbfcddf5be88df16b9cee5a901cc02185b8a8b96c01",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "docs/validation/sme-render-throughput-20261026/producer-cost-results.json",
+      "bytes": 3368,
+      "blob": "fc0fd65186373394ab1fa8c3fc1378c7b2cbf4db",
+      "sha256": "6a461c6e4715e13ac2cd995f3cb44d5a4ac71231bfb40ac938686e97ba82154b",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "docs/validation/sme-render-throughput-20261026/render-offline-results.json",
+      "bytes": 5262,
+      "blob": "2b4d6617e0cc8a8f18b4246d4e032e0463226732",
+      "sha256": "13a7ff26fd081b048dec19fe2f5c1210c19d21748634754439fbb7cf6ca7e400",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "docs/validation/sme-render-throughput-20261026/unprofiled-summary.json",
+      "bytes": 1563,
+      "blob": "065b2bfa86f6cd08a46fc15dd821213aca497f96",
+      "sha256": "5de3cd437fcbc2649c88c730f679b1b44805171e625d88682d2c7e5cb9131824",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "src/music/live_semantic_format.zig",
+      "bytes": 31283,
+      "blob": "18aa039c06513f4c87c263fe97e220c719f67a5a",
+      "sha256": "c57ca554a29032158899c963dd0a6576567e491b976e8f7111d47bad2ef9b5f1",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "src/runtime/capture_order.zig",
+      "bytes": 51467,
+      "blob": "0ebbc833984c3031c7112e35fb35cd1e5874a026",
+      "sha256": "408bdd06db3cae3fd9bb2c43d211d298f1e92fd43e0017f3c7e947443ee2c0fe",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "src/streaming/music_stream.zig",
+      "bytes": 195487,
+      "blob": "289c56ebfe286d71e6707ec87a3af00702b88a5e",
+      "sha256": "cbdadd1943f06176916039ed869040c9a61c76229803dea83100c89ce54add74",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tests/sme/joint_frame_service_test.zig",
+      "bytes": 18960,
+      "blob": "73b32f77238fd6e340404fcfa7334417029f057e",
+      "sha256": "28d30730e8628fe504c53fb5c1954cb9c45d0fa148a6069015fa33bdc2cdb2a6",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tests/sme/live_render_producer_cost_test.zig",
+      "bytes": 8588,
+      "blob": "0aa5e766684006e5af86200ba2a82b4e08ce3d5d",
+      "sha256": "fa7147e1206fa5abceffa07e3545d36496b1678b2f5c54709aa08e3e7a12df71",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tests/sme/live_render_throughput_test.zig",
+      "bytes": 17014,
+      "blob": "4e23884114bc12bdd524ff64cb0e107d8636d8af",
+      "sha256": "1ad5d2f1497f0d5ae565bc4d85a1e86297ebb4401f58857a4ebbfd9334eff0f1",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tests/sme/live_semantic_codec_test.zig",
+      "bytes": 175297,
+      "blob": "63bd0193fe1f5ad00fb2e044b05f351f4fde5cb2",
+      "sha256": "01566288f548c3c7d0982b7a5328bce03f30ee90a15abce7fcac806417931383",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tests/sme/live_semantic_format_test.zig",
+      "bytes": 29309,
+      "blob": "2e9634839c499ce135c06550255501f6cedfae00",
+      "sha256": "1a051c252a5e7278332ef6e27cbbb63c4344d6c4be2162ecdf68318a52b1ff93",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tests/sme/live_semantic_joint_gate_test.zig",
+      "bytes": 2481,
+      "blob": "4bf940358acb72340ee6b27e2a8b2da495691f6d",
+      "sha256": "53f77b25c7276bf87d1ad6dd724c4bfa951d0a0cbdfb20a45add845e64f59777",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tests/sme/live_semantic_joint_replay_test.zig",
+      "bytes": 31043,
+      "blob": "9d53b9d6363a1017ed76091925bf97f039007297",
+      "sha256": "d1c1402372d60a8f25bb0b853efbbb5d11bf359d39fc66cdf3ff92cbcb7a2480",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tests/sme/live_semantic_joint_schedule_test.zig",
+      "bytes": 28514,
+      "blob": "bc406422c863b1f3bc65f20fd8e4b93aeed74609",
+      "sha256": "cc6dbc97b856d7ffbee5b881a7e04620ce6f6ccb60d7390d08d6434f0fb635f2",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tests/sme/live_semantic_legacy_rejection_test.zig",
+      "bytes": 6031,
+      "blob": "385d1c781fddfaddae5c020fda7bdab6191084bb",
+      "sha256": "1599e292dc1cd19f667725ea19cf7410437425310c27765b5ffba404908bafaf",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tests/sme/live_semantic_payload_overlap_test.zig",
+      "bytes": 3598,
+      "blob": "fae3b83255743415a7dd88e02a07e12535769c61",
+      "sha256": "5c87473e55e07e534250813c99fe853bd7935cc2e62cd6d0430721393f588642",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tests/sme/semantic_live_process_test.zig",
+      "bytes": 89528,
+      "blob": "a38348479c84ba318a7658ebb6ef532222b3854d",
+      "sha256": "46d4423fdf5ab2f98aa17648a147fc522b7d03c09e30f6b860c5d3fd8b4d3c84",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tools/sme_authoring/core/live_history_cli.zig",
+      "bytes": 46906,
+      "blob": "92d09d91483d21f171f52b0db6fc836d897e05e0",
+      "sha256": "46663d7e6ca96beec8c36a3dba612bd2c6942694aff5ca3bb4852b98120258cd",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tools/sme_authoring/core/live_semantic_codec.zig",
+      "bytes": 143149,
+      "blob": "d2fbf869f9df94a758a2ac780a7140f70f4ec16f",
+      "sha256": "49a83e0bf9c1f66aea79c0442f637a527f2b5e681a85927f8e121d0a46e47082",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tools/sme_authoring/core/live_semantic_joint_gate.zig",
+      "bytes": 8703,
+      "blob": "a4aed5d01bc8f707257495291fb7e94407a6e818",
+      "sha256": "5856612ba2cea59b453e8a296dd633fc629976853cb94c672fe34c784c36b729",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tools/sme_authoring/core/live_semantic_joint_schedule.zig",
+      "bytes": 13953,
+      "blob": "5867a2465968f5b04c97b1f3ab71369f779ead43",
+      "sha256": "b36026a982da478e6043c256f8cdaae3ec336465e70489f0de082d70daac4065",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tools/sme_authoring/core/live_semantic_payload_overlap.zig",
+      "bytes": 3393,
+      "blob": "47ed4e72324de2839cc0286bfb39ae7043a07c9f",
+      "sha256": "19386c7707b11c91004a192423a3dc86f117a5d50868fdedf728c4effa6e3ac7",
+      "mode": "100644",
+      "type": "blob"
+    },
+    {
+      "path": "tools/sme_authoring/core/live_semantic_replay.zig",
+      "bytes": 98865,
+      "blob": "689ebc1a9df5ea83b17f0b99b907e367c40349f8",
+      "sha256": "19cac8f7a634b0ff226b7a165b896fd0c5daf35b97dfc24ca522faea37f1bd7b",
+      "mode": "100644",
+      "type": "blob"
+    }
+  ]
+}

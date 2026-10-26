@@ -1,0 +1,152 @@
+{
+  "test": "sme-live-render-producer-cost-check",
+  "passed": true,
+  "source_sha256": "fa7147e1206fa5abceffa07e3545d36496b1678b2f5c54709aa08e3e7a12df71",
+  "trials": [
+    {
+      "slots": 4,
+      "opened": 4,
+      "spans": 128,
+      "points_per_span": 30,
+      "PacketInput": 40,
+      "PacketReference": 56,
+      "Lane": 4718656,
+      "plain_ns": [
+        57536,
+        56075,
+        56575
+      ],
+      "plain_ns_median": 56575,
+      "counted_ns": [
+        270368,
+        396327,
+        269235
+      ],
+      "counted_ns_median": 270368,
+      "captured_producer_ns": [
+        1257885,
+        1271176,
+        1062923
+      ],
+      "captured_producer_ns_median": 1257885,
+      "collector_ns": [
+        4137355,
+        3863393,
+        3343246
+      ],
+      "collector_ns_median": 3863393,
+      "native_bytes": [
+        394436,
+        394436,
+        394436
+      ],
+      "wire_bytes": [
+        198205,
+        198205,
+        198205
+      ],
+      "records": [
+        1288,
+        1288,
+        1288
+      ]
+    },
+    {
+      "slots": 48,
+      "opened": 4,
+      "spans": 128,
+      "points_per_span": 118,
+      "PacketInput": 40,
+      "PacketReference": 56,
+      "Lane": 4718656,
+      "plain_ns": [
+        286111,
+        176105,
+        273002
+      ],
+      "plain_ns_median": 273002,
+      "counted_ns": [
+        1098444,
+        1100948,
+        1327420
+      ],
+      "counted_ns_median": 1100948,
+      "captured_producer_ns": [
+        4098544,
+        3845115,
+        3850144
+      ],
+      "captured_producer_ns_median": 3850144,
+      "collector_ns": [
+        9595432,
+        9136641,
+        12037089
+      ],
+      "collector_ns_median": 9595432,
+      "native_bytes": [
+        1475780,
+        1475780,
+        1475780
+      ],
+      "wire_bytes": [
+        446003,
+        446003,
+        446003
+      ],
+      "records": [
+        1288,
+        1288,
+        1288
+      ]
+    },
+    {
+      "slots": 48,
+      "opened": 48,
+      "spans": 128,
+      "points_per_span": 294,
+      "PacketInput": 40,
+      "PacketReference": 56,
+      "Lane": 4718656,
+      "plain_ns": [
+        522377,
+        2501709,
+        1712450
+      ],
+      "plain_ns_median": 1712450,
+      "counted_ns": [
+        4122534,
+        3806674,
+        2732666
+      ],
+      "counted_ns_median": 3806674,
+      "captured_producer_ns": [
+        8898626,
+        12979483,
+        12044471
+      ],
+      "captured_producer_ns_median": 12044471,
+      "collector_ns": [
+        22379864,
+        25900163,
+        41805202
+      ],
+      "collector_ns_median": 25900163,
+      "native_bytes": [
+        3638468,
+        3638468,
+        3638468
+      ],
+      "wire_bytes": [
+        984335,
+        984335,
+        984335
+      ],
+      "records": [
+        1288,
+        1288,
+        1288
+      ]
+    }
+  ],
+  "scope": "Single-thread actual Service.endRenderSpan; fresh Service per phase, 128 spans; probe installed before setup, recorder forwarding enabled after opens. No Host/audio/decode; timer includes callback forwarding; per-span clock overhead differs from plain/counted bulk timers. Collector uses byte-count-only sink. Final synthetic boundary flush excluded from timing but included in counts. No finish, replay or realtime qualification. Callback counts and queue health checked; no independent point wire oracle."
+}
