@@ -11,6 +11,7 @@ pub const format = codec.format;
 pub const mailbox_schedule = @import("live_semantic_mailbox_schedule.zig");
 pub const exclusion_schedule = @import("live_semantic_exclusion_schedule.zig");
 pub const job_gate = @import("live_semantic_job_gate.zig");
+pub const joint_gate = @import("live_semantic_joint_gate.zig");
 const semantic = codec.semantic;
 const cuts = codec.cuts;
 const stream = codec.stream;
@@ -111,6 +112,8 @@ pub const Driver = struct {
     exclusion_calendar: exclusion_schedule.Scheduler = .{},
     job_calendar: job_gate.Gate(codec.JobOperationCursor) = .{},
     ordered_jobs: bool = false,
+    joint_calendar: joint_gate.Gate(codec.JointOperationCursor) = .{},
+    joint_reads: bool = false,
     turn: std.atomic.Value(u64) = .init(1),
     failed: std.atomic.Value(bool) = .init(false),
     failure_claimed: std.atomic.Value(bool) = .init(false),
@@ -152,6 +155,7 @@ pub const Driver = struct {
             self.lanes[field.value] = .{ .input = codec.InputCursor.init(reader, role), .comparison = .{ .cursor = codec.ComparisonCursor.init(reader, role) } };
         }
         try self.initConsumedReads(reader);
+        self.joint_reads = policy == .joint_service_reads;
         try self.initPublicationCalendar(reader);
         try self.initExclusionCalendar(reader);
         self.ordered_jobs = policy == .ordered_job_scans;
@@ -159,6 +163,11 @@ pub const Driver = struct {
             audio.runtime.streaming.release_profile.job_capacity,
             .{ codec.JobOperationCursor.init(reader, .control), codec.JobOperationCursor.init(reader, .worker) },
             preflight.job_schedule_operations,
+        );
+        if (self.joint_reads) try self.joint_calendar.init(
+            audio.runtime.streaming.release_profile.job_capacity,
+            .{ codec.JointOperationCursor.init(reader, .control), codec.JointOperationCursor.init(reader, .worker), codec.JointOperationCursor.init(reader, .render) },
+            preflight.joint_schedule_operations,
         );
         self.address = self;
         try self.clock.init(self, onClock);
@@ -193,6 +202,7 @@ pub const Driver = struct {
         self.publication_calendar.abort();
         self.exclusion_calendar.abort();
         self.job_calendar.abort();
+        self.joint_calendar.abort();
         self.clock.abort();
         // Session.poison is idempotent: this path may be reached either from a
         // native invalidation or as the callback of our own failure poisoning.
@@ -203,6 +213,7 @@ pub const Driver = struct {
         self.publication_calendar.abort();
         self.exclusion_calendar.abort();
         self.job_calendar.abort();
+        self.joint_calendar.abort();
         self.session.poison(); // aborts raw clock before releasing all waiters
         self.failed.store(true, .release);
     }
@@ -374,7 +385,7 @@ pub const Driver = struct {
             }
             if (pending != null) return error.Incomplete;
         }
-        try self.initServiceSequenceCalendar(reader);
+        if (!self.joint_reads) try self.initServiceSequenceCalendar(reader);
         try self.initWorkerGateCalendar(reader);
         try self.initRuntimePublicationCalendar(reader);
         try self.publication_calendar.seal();
@@ -780,18 +791,38 @@ pub const Driver = struct {
         const self = from(raw);
         if (self.failed.load(.acquire)) return;
         const role = codec.wireRole(value.role);
-        const sequence_read = role == .control and codec.serviceSequenceRead(value.site);
-        const sequence_publication = role == .render and codec.serviceSequencePublication(value.site);
+        const sequence_read = !self.joint_reads and role == .control and codec.serviceSequenceRead(value.site);
+        const sequence_publication = !self.joint_reads and role == .render and codec.serviceSequencePublication(value.site);
         const runtime_read = if (role == .control) codec.runtimePublicationRead(value.site) else null;
         const runtime_publication = if (role == .render) codec.runtimePublicationStore(value.site) else null;
         const busy_claim = codec.exclusionClaim(role, value.site);
         const busy_release = codec.exclusionRelease(role, value.site);
+        const joint_kind = if (self.joint_reads) codec.jointOperationKind(role, value.site) else null;
         const job_kind = if (self.ordered_jobs) codec.jobOperationKind(role, value.site) else null;
         const job_eligible = codec.jobObservedEligibility(value) catch |err| {
             self.fail(.{ .reason = err, .role = role, .occurrence = self.turn.load(.acquire), .family = .cut_fact });
             return;
         };
         var expected_after: ?u64 = null;
+        if (value.edge == .after) if (joint_kind) |kind| {
+            const is_job = codec.jobOperationKind(role, value.site) != null;
+            expected_after = self.joint_calendar.completed(
+                switch (role) {
+                    .control => .control,
+                    .worker => .worker,
+                    .render => .render,
+                    .ui => unreachable,
+                },
+                kind,
+                if (is_job) value.index else 0,
+                if (is_job) value.generation else 0,
+                job_eligible,
+                if (is_job) null else value.value,
+            ) catch |err| {
+                self.fail(.{ .reason = err, .role = role, .occurrence = self.turn.load(.acquire), .family = .cut_fact });
+                return;
+            };
+        };
         // The original atomic has already run. Publish only its validated real
         // completion before waiting for the later global AFTER marker. Otherwise
         // the other actor could be held at an intervening BEFORE marker forever.
@@ -888,6 +919,20 @@ pub const Driver = struct {
         }
         // Advance the global marker before waiting, so the opposite native
         // actor can reach the exact publication required by this actual load.
+        if (value.edge == .before and joint_kind != null) {
+            while (!self.failed.load(.acquire)) {
+                if (self.joint_calendar.ready(switch (role) {
+                    .control => .control,
+                    .worker => .worker,
+                    .render => .render,
+                    .ui => unreachable,
+                }, occurrence) catch |err| {
+                    self.fail(.{ .reason = err, .role = role, .occurrence = occurrence, .family = .cut_fact });
+                    return;
+                }) return;
+                self.wait();
+            }
+        }
         if (role == .control and codec.rawConsumedRead(value.site) and value.edge == .before) self.waitConsumedRead(value, occurrence);
         if (value.edge == .before and (busy_claim or busy_release)) {
             while (!self.failed.load(.acquire)) {
@@ -1359,6 +1404,7 @@ pub const Driver = struct {
             self.report.terminal_acknowledged != self.report.command_submitted)
             return error.Incomplete;
         if (self.ordered_jobs) try self.job_calendar.finish();
+        if (self.joint_reads) try self.joint_calendar.finish();
         self.report.eof = true;
         return self.report;
     }

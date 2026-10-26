@@ -9,9 +9,10 @@ pub const IntegrityHasher = IntegrityHash.Sha256;
 const Sha256 = IntegrityHasher;
 
 pub const profile_id: u16 = 9;
-// v4 adds explicit native job-scan eligibility INPUT. Older tapes require
+// v5 adds explicit native Service frame observation INPUT, alongside v4 job
+// eligibility. Older tapes require
 // their original matching tools; missing inputs are never inferred/upgraded.
-pub const wire_version: u16 = 4;
+pub const wire_version: u16 = 5;
 pub const magic = "SMELSB01";
 pub const header_size: usize = 192;
 pub const frame_header_size: usize = 64;

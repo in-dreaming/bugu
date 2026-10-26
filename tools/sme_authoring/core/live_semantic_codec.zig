@@ -11,8 +11,9 @@ pub const stream = audio.runtime.streaming.stream;
 pub const source = @import("sme-author-preview-v1").source;
 pub const payload_overlap = @import("live_semantic_payload_overlap.zig");
 pub const job_schedule = @import("sme-live-semantic-job-schedule");
-pub const Error = format.Error || payload_overlap.Error || job_schedule.Error || error{ UnsupportedValue, BorrowedValue, InvalidEnum, InvalidBoolean, ErrorInput, CrossedScan };
-pub const schema_version: u16 = 4;
+pub const joint_schedule = @import("sme-live-semantic-joint-schedule");
+pub const Error = joint_schedule.Error || format.Error || payload_overlap.Error || job_schedule.Error || error{ UnsupportedValue, BorrowedValue, InvalidEnum, InvalidBoolean, ErrorInput, CrossedScan };
+pub const schema_version: u16 = 5;
 pub const Family = enum(u16) {
     cut = 1,
     boundary = 2,
@@ -181,14 +182,42 @@ pub fn runtimePublicationStore(site: cuts.Site) ?RuntimePublicationDomain {
 pub fn rawConsumedRead(site: cuts.Site) bool {
     return site == .ring_consumed or site == .service_initial_entry_consumed;
 }
+/// Wire5 input is copied from the original AFTER observation, not references.
+pub fn serviceFrameRead(site: cuts.Site) bool {
+    return switch (site) {
+        .service_availability_readiness_frame, .service_availability_acceptance_frame, .service_readiness_frame => true,
+        else => false,
+    };
+}
+pub fn serviceFramePublication(site: cuts.Site) bool {
+    return site == .service_stream_observation_frame;
+}
+pub fn jointOperationKind(role: format.Role, site: cuts.Site) ?joint_schedule.Kind {
+    if (jobOperationKind(role, site)) |kind| return switch (kind) {
+        .scan => .scan,
+        .queued => .queued,
+        .running => .running,
+        .completed => .completed,
+        .free => .free,
+    };
+    if (role == .control) {
+        if (serviceFrameRead(site)) return .frame_read;
+        if (serviceSequenceRead(site)) return .sequence_read;
+    } else if (role == .render) {
+        if (serviceFramePublication(site)) return .frame_store;
+        if (site == .service_render_sequence_odd) return .sequence_odd;
+        if (site == .service_render_sequence_even) return .sequence_even;
+    }
+    return null;
+}
 pub fn publicationPrefixPoint(role: format.Role, site: cuts.Site, edge: cuts.Edge) bool {
     if (edge != .after) return false;
-    return (role == .control and (rawConsumedRead(site) or serviceSequenceRead(site) or runtimePublicationRead(site) != null)) or
-        (role == .render and (serviceSequencePublication(site) or runtimePublicationStore(site) != null));
+    return (role == .control and (rawConsumedRead(site) or serviceSequenceRead(site) or serviceFrameRead(site) or runtimePublicationRead(site) != null)) or
+        (role == .render and (serviceSequencePublication(site) or serviceFramePublication(site) or runtimePublicationStore(site) != null));
 }
 pub fn validatePublicationPrefix(role: format.Role, site: cuts.Site, edge: cuts.Edge, prefix: u64) Error!void {
-    if (((rawConsumedRead(site) or serviceSequenceRead(site) or runtimePublicationRead(site) != null) and role != .control) or
-        ((serviceSequencePublication(site) or runtimePublicationStore(site) != null) and role != .render)) return error.UnsupportedValue;
+    if (((rawConsumedRead(site) or serviceSequenceRead(site) or serviceFrameRead(site) or runtimePublicationRead(site) != null) and role != .control) or
+        ((serviceSequencePublication(site) or serviceFramePublication(site) or runtimePublicationStore(site) != null) and role != .render)) return error.UnsupportedValue;
     if (!publicationPrefixPoint(role, site, edge) and prefix != 0) return error.Noncanonical;
 }
 /// The finite Service worker_busy exclusion has one Control claimant and two
@@ -1558,6 +1587,7 @@ pub const InputPreflight = struct {
     unresolved_scalar_overlaps: u64 = 0,
     /// Full strict INPUT witness cardinality; zero under native_attempt.
     job_schedule_operations: u64 = 0,
+    joint_schedule_operations: u64 = 0,
     events: u64 = 0,
     control_calls: u64 = 0,
     worker_calls: u64 = 0,
@@ -1701,6 +1731,9 @@ pub const AdmissionPolicy = enum {
     /// Prove INPUT-only job scheduling before owners; all other conflict
     /// domains retain their original rejection and canonical checks.
     ordered_job_scans,
+    /// Explicit wire5 observed Service frame/sequence/job joint schedule.
+    /// Unsupported consumed/guard and Scheduler overlaps still reject.
+    joint_service_reads,
 };
 
 pub fn validateInputs(reader: *const format.Reader, identity: format.Identity) Error!InputPreflight {
@@ -1990,10 +2023,10 @@ pub fn validateInputsWithPolicy(reader: *const format.Reader, identity: format.I
     // Scheduler scans remain pre-owner rejection cases under both policies.
     var intervals: ScanIntervals = .{
         .allow_unresolved_job_reads = policy == .native_attempt,
-        .defer_job_reads_to_planner = policy == .ordered_job_scans,
+        .defer_job_reads_to_planner = policy != .native_attempt,
     };
     var grammar: ServiceScanGrammar = .{};
-    var payload_intervals: payload_overlap.Validator = .{};
+    var payload_intervals: payload_overlap.Validator = .{ .defer_frame_to_joint = policy == .joint_service_reads };
     var ui_invocation_active = false;
     while (true) {
         var selected: ?usize = null;
@@ -2041,6 +2074,7 @@ pub fn validateInputsWithPolicy(reader: *const format.Reader, identity: format.I
     // planner runs only after global occurrence uniqueness, full grammar and
     // every other conflict domain have passed, and requires final free slots.
     if (policy == .ordered_job_scans) summary.job_schedule_operations = try validateJobSchedule(reader);
+    if (policy == .joint_service_reads) summary.joint_schedule_operations = try validateJointSchedule(reader);
     summary.unresolved_scalar_overlaps = intervals.unresolved_scalar_overlaps;
     return summary;
 }
@@ -2127,6 +2161,68 @@ pub const JobOperationCursor = struct {
         return null;
     }
 };
+
+/// Three-role INPUT-only cursor for the jointly scheduled atomic domains.
+pub const JointOperationCursor = struct {
+    input: InputCursor,
+    role: format.Role,
+    last_occurrence: u64 = 0,
+    pub fn init(reader: *const format.Reader, role: format.Role) JointOperationCursor {
+        return .{ .input = InputCursor.init(reader, role), .role = role };
+    }
+    pub fn next(self: *JointOperationCursor) Error!?joint_schedule.Operation {
+        const role: joint_schedule.Role = switch (self.role) {
+            .control => .control,
+            .worker => .worker,
+            .render => .render,
+            else => return error.UnsupportedValue,
+        };
+        const slots = try jobSlotCount();
+        var before: ?Native(Cut) = null;
+        while (try nextOrderedEvent(&self.input)) |event| {
+            if (event.role != self.role or event.occurrence <= self.last_occurrence) return error.InvalidOrder;
+            self.last_occurrence = event.occurrence;
+            const cut = event.cut orelse {
+                if (before != null) return error.InvalidOrder;
+                continue;
+            };
+            if (cut.role != self.role) return error.InvalidOrder;
+            try validateJobInput(cut.role, cut.site, cut.edge, cut.job_scan_eligible);
+            const kind = jointOperationKind(cut.role, cut.site) orelse {
+                if (before != null) return error.InvalidOrder;
+                continue;
+            };
+            const job = jobOperationKind(cut.role, cut.site) != null;
+            if (job and cut.index >= slots) return error.InvalidSlot;
+            if (kind == .scan) {
+                if (cut.generation != 0) return error.InvalidGeneration;
+            } else if (job and (cut.generation == 0 or cut.generation == std.math.maxInt(u64))) return error.InvalidGeneration;
+            if (cut.edge == .before) {
+                if (before != null) return error.InvalidOrder;
+                before = .{ .occurrence = event.occurrence, .value = cut };
+            } else {
+                const begin = before orelse return error.InvalidOrder;
+                var expected = begin.value;
+                expected.edge = .after;
+                expected.job_scan_eligible = cut.job_scan_eligible;
+                expected.publication_prefix = cut.publication_prefix;
+                if (!std.meta.eql(expected, cut)) return error.InvalidOrder;
+                return .{
+                    .role = role,
+                    .kind = kind,
+                    .before = begin.occurrence,
+                    .after = event.occurrence,
+                    .index = if (job) cut.index else 0,
+                    .generation = if (job) cut.generation else 0,
+                    .value = if (job) null else cut.publication_prefix,
+                    .eligible = cut.job_scan_eligible,
+                };
+            }
+        }
+        if (before != null) return error.Incomplete;
+        return null;
+    }
+};
 fn jobSlotCount() Error!usize {
     const slots: usize = audio.runtime.streaming.release_profile.job_capacity;
     if (slots == 0 or slots > job_schedule.hard_slot_cap) return error.UnsupportedSlots;
@@ -2142,6 +2238,30 @@ pub fn validateJobSchedule(reader: *const format.Reader) Error!u64 {
     var inputs = [_]JobOperationCursor{ JobOperationCursor.init(reader, .control), JobOperationCursor.init(reader, .worker) };
     var need_head = [_]bool{ true, true };
     var eof = [_]bool{ false, false };
+    while (true) {
+        for (&inputs, 0..) |*input, role| {
+            if (!need_head[role] or eof[role]) continue;
+            if (try input.next()) |op| {
+                try planner.push(op);
+                need_head[role] = false;
+            } else {
+                try planner.roleEOF(@enumFromInt(role));
+                eof[role] = true;
+            }
+        }
+        const selected = try planner.next() orelse break;
+        need_head[@intFromEnum(selected.op.role)] = true;
+    }
+    try planner.finish();
+    return planner.next_ordinal;
+}
+
+pub fn validateJointSchedule(reader: *const format.Reader) Error!u64 {
+    var planner: joint_schedule.Scheduler = .{};
+    try planner.init(try jobSlotCount());
+    var inputs = [_]JointOperationCursor{ JointOperationCursor.init(reader, .control), JointOperationCursor.init(reader, .worker), JointOperationCursor.init(reader, .render) };
+    var need_head = [_]bool{ true, true, true };
+    var eof = [_]bool{ false, false, false };
     while (true) {
         for (&inputs, 0..) |*input, role| {
             if (!need_head[role] or eof[role]) continue;

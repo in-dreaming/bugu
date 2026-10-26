@@ -376,7 +376,7 @@ fn record(allocator: std.mem.Allocator, io: std.Io, opt: Options, launch: live.L
 }
 pub fn run(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, output: *std.Io.Writer) !void {
     if (args.len == 0 or (args.len == 1 and std.mem.eql(u8, args[0], "--help"))) {
-        try output.writeAll("sme-live-history record --bank FILE --state U64 --script JSON --out FILE [--action-cap 256 --file-cap BYTES --capture-cap BYTES --deadline-ms 60000 --frame-limit FRAMES --admission native_attempt|ordered_job_scans --pacing legacy_poll|notified_v1]\nsme-live-history replay --bank FILE --state U64 --tape FILE [--file-cap BYTES --admission native_attempt|ordered_job_scans --pacing legacy_poll|notified_v1]\nFixed supported null-device configuration:48000Hz, stereo,256 frames. One Host per process; replay requires the identical executable and explicit matching pacing (default legacy_poll). Wire v2/v3 need their original matching tools; this tool accepts v4 only.\n");
+        try output.writeAll("sme-live-history record --bank FILE --state U64 --script JSON --out FILE [--action-cap 256 --file-cap BYTES --capture-cap BYTES --deadline-ms 60000 --frame-limit FRAMES --admission native_attempt|ordered_job_scans|joint_service_reads --pacing legacy_poll|notified_v1]\nsme-live-history replay --bank FILE --state U64 --tape FILE [--file-cap BYTES --admission native_attempt|ordered_job_scans|joint_service_reads --pacing legacy_poll|notified_v1]\nFixed supported null-device configuration:48000Hz, stereo,256 frames. One Host per process; replay requires the identical executable and explicit matching pacing (default legacy_poll). Wire v2/v3/v4 need their original matching tools; this tool accepts v5 only.\n");
         return;
     }
     const opt = try options(args);
@@ -746,7 +746,7 @@ test "live history admission policy is explicit with compatible defaults" {
     const t = std.testing;
     inline for (.{ &cli_test_record, &cli_test_replay }) |base| {
         try t.expectEqual(codec.AdmissionPolicy.native_attempt, (try options(base)).admission);
-        inline for (.{ "native_attempt", "ordered_job_scans" }) |name| {
+        inline for (.{ "native_attempt", "ordered_job_scans", "joint_service_reads" }) |name| {
             try t.expectEqual(std.meta.stringToEnum(codec.AdmissionPolicy, name).?, (try cliTestOptions(base, &.{ "--admission", name })).admission);
         }
         try t.expectError(error.InvalidAdmissionPolicy, cliTestOptions(base, &.{ "--admission", "strict" }));

@@ -350,7 +350,7 @@ test "Service sequence publication coordinates have finite site role and edge sh
             }
         }
     }
-    for ([_]codec.cuts.Site{ .service_availability_readiness_frame, .service_availability_readiness_control_consumed, .service_availability_readiness_produced, .service_stream_observation_frame, .service_render_consumed, .ring_produced }) |site| {
+    for ([_]codec.cuts.Site{ .service_availability_readiness_control_consumed, .service_availability_readiness_produced, .service_render_consumed, .ring_produced }) |site| {
         try t.expect(!codec.serviceSequenceRead(site));
         try t.expect(!codec.serviceSequencePublication(site));
         for ([_]f.Role{ .control, .worker, .render, .ui }) |role| {
@@ -841,7 +841,7 @@ fn launchDescriptorFixture() codec.LaunchDescriptor {
 }
 
 test "v4 launch pacing roundtrips both canonical INPUT and independent started reference" {
-    try t.expectEqual(@as(u16, 4), codec.schema_version);
+    try t.expectEqual(@as(u16, 5), codec.schema_version);
     try t.expectEqual(f.wire_version, codec.schema_version);
     try t.expectEqual(codec.semantic.PacingMode.legacy_poll, launchDescriptorFixture().pacing);
     inline for (.{ codec.semantic.PacingMode.legacy_poll, codec.semantic.PacingMode.notified_v1 }) |pacing| {
@@ -2509,5 +2509,20 @@ test "strict full admission proves crossed job scans only after all finite valid
                 } else try t.expectError(error.Incomplete, codec.validateInputsWithPolicy(&reader, contract, .ordered_job_scans));
             }
         }
+    }
+}
+
+test "wire5 Service frame observations are explicit AFTER inputs with closed roles" {
+    const sites = [_]codec.cuts.Site{ .service_availability_readiness_frame, .service_availability_acceptance_frame, .service_readiness_frame, .service_stream_observation_frame };
+    for (sites) |site| {
+        const owner: f.Role = if (site == .service_stream_observation_frame) .render else .control;
+        try t.expect(codec.publicationPrefixPoint(owner, site, .after));
+        try t.expect(!codec.publicationPrefixPoint(owner, site, .before));
+        try codec.validatePublicationPrefix(owner, site, .after, 0);
+        try codec.validatePublicationPrefix(owner, site, .after, 256);
+        try t.expectError(error.Noncanonical, codec.validatePublicationPrefix(owner, site, .before, 256));
+        for ([_]f.Role{ .control, .worker, .render, .ui }) |role| if (role != owner) {
+            try t.expectError(error.UnsupportedValue, codec.validatePublicationPrefix(role, site, .after, 0));
+        };
     }
 }
