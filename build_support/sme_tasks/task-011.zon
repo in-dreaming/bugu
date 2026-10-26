@@ -2,7 +2,7 @@
     .schema_version = 1,
     .task_id = "TASK-011",
     .modules = .{
-        .{ .name = "sme-streaming", .root_source_file = "src/streaming/root.zig", .imports = .{ .{ .name = "sme-live-semantic", .module = "sme-live-semantic" }, .{ .name = "sme-capture-order", .module = "sme-capture-order" }, .{ .name = "sme-opus", .module = "sme-opus" }, .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-stream-index", .module = "sme-stream-index" }, .{ .name = "sme-trace", .module = "sme-trace" } } },
+        .{ .name = "sme-streaming", .root_source_file = "src/streaming/root.zig", .imports = .{ .{ .name = "music", .module = "music" }, .{ .name = "sme-live-semantic", .module = "sme-live-semantic" }, .{ .name = "sme-capture-order", .module = "sme-capture-order" }, .{ .name = "sme-opus", .module = "sme-opus" }, .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-stream-index", .module = "sme-stream-index" }, .{ .name = "sme-trace", .module = "sme-trace" } } },
     },
     .audio_imports = .{
         .{ .name = "sme-streaming", .module = "sme-streaming" },

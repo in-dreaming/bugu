@@ -6,7 +6,7 @@
 const std = @import("std");
 const audio = @import("bugu_audio");
 pub const host = @import("live_owner.zig");
-pub const codec = @import("live_semantic_codec.zig");
+pub const codec = @import("sme-live-codec");
 pub const format = codec.format;
 pub const mailbox_schedule = @import("live_semantic_mailbox_schedule.zig");
 pub const exclusion_schedule = @import("live_semantic_exclusion_schedule.zig");

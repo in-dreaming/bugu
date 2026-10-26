@@ -124,7 +124,7 @@ pub const Provider = struct {
         };
         if (self.semantic) |sink| {
             var digest: [32]u8 = undefined;
-            std.crypto.hash.sha2.Sha256.hash(destination, &digest, .{});
+            music.LiveSemanticFormat.IntegrityHasher.hash(destination, &digest, .{});
             sink.emit(sink.context, .{ .result = .{ .call = id, .value = .{ .read_hash = digest } } });
         }
         failure = false;

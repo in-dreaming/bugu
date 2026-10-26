@@ -4,11 +4,12 @@
     .modules = .{
         .{ .name = "sme-author-live-admission", .root_source_file = "tools/sme_authoring/core/live_admission.zig", .imports = .{ .{ .name = "bugu_audio", .module = "bugu_audio" }, .{ .name = "sme-bank", .module = "sme-bank" } } },
         .{ .name = "sme-author-live-mailbox", .root_source_file = "tools/sme_authoring/core/live_mailbox.zig" },
-        .{ .name = "sme-author-live-owner", .root_source_file = "tools/sme_authoring/core/live_owner.zig", .imports = .{ .{ .name = "sme-author-preview-v1", .module = "sme-author-preview-v1" }, .{ .name = "bugu_audio", .module = "bugu_audio" }, .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-author-live-mailbox", .module = "sme-author-live-mailbox" }, .{ .name = "sme-author-live-admission", .module = "sme-author-live-admission" } } },
+        .{ .name = "sme-author-live-owner", .root_source_file = "tools/sme_authoring/core/live_owner.zig", .imports = .{ .{ .name = "sme-author-live-semantic", .module = "sme-author-live-semantic" }, .{ .name = "sme-live-codec", .module = "sme-live-codec" }, .{ .name = "sme-live-semantic-job-schedule", .module = "sme-live-semantic-job-schedule" }, .{ .name = "sme-author-preview-v1", .module = "sme-author-preview-v1" }, .{ .name = "bugu_audio", .module = "bugu_audio" }, .{ .name = "sme-bank", .module = "sme-bank" }, .{ .name = "sme-author-live-mailbox", .module = "sme-author-live-mailbox" }, .{ .name = "sme-author-live-admission", .module = "sme-author-live-admission" } } },
         .{ .name = "sme-author-preview-v1", .root_source_file = "tools/sme_authoring/core/preview_v1.zig", .imports = .{ .{ .name = "bugu_audio", .module = "bugu_audio" }, .{ .name = "sme-bank", .module = "sme-bank" } } },
         .{ .name = "sme-live-history-cli", .root_source_file = "tools/sme_authoring/core/live_history_cli.zig", .imports = .{.{ .name = "sme-author-live-owner", .module = "sme-author-live-owner" }} },
     },
     .checks = .{
+        .{ .name = "sme-author-live-worker-burst-test", .tests = .{"tests/sme/author_live_worker_burst_test.zig"} },
         .{ .name = "sme-live-acceptance-retry-test", .tests = .{"tests/sme/live_acceptance_retry_test.zig"} },
         .{ .name = "sme-live-background-supply-test", .tests = .{"tests/sme/live_background_supply_test.zig"} },
         .{ .name = "sme-live-initial-entry-supply-test", .tests = .{"tests/sme/live_initial_entry_supply_test.zig"} },

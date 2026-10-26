@@ -4,7 +4,7 @@
 //! completed(), after the original atomic and its actual-result check, advances
 //! the shared execution ordinal. No expected predicate becomes engine data.
 const std = @import("std");
-const job_schedule = @import("live_semantic_job_schedule.zig");
+const job_schedule = @import("sme-live-semantic-job-schedule");
 
 pub const Role = job_schedule.Role;
 pub const Kind = job_schedule.Kind;

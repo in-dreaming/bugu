@@ -3,10 +3,11 @@
 //! finish only after genuine Host.join and Host.destroy. Framing completion is
 //! NOT semantic replay admission; no expected value is a runtime input here.
 const std = @import("std");
+pub const compilation_mode = @import("builtin").mode;
 const builtin = @import("builtin");
 pub const collector_profile = @import("live_semantic_collector_profile.zig");
 const audio = @import("bugu_audio");
-pub const codec = @import("live_semantic_codec.zig");
+pub const codec = @import("sme-live-codec");
 pub const semantic = codec.semantic;
 pub const format = codec.format;
 const cuts = codec.cuts;

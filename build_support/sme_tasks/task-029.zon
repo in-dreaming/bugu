@@ -1,0 +1,5 @@
+.{
+    .schema_version = 1,
+    .task_id = "TASK-029",
+    .checks = .{ .{ .name = "sme-joint-frame-bridge-check", .tests = .{"tests/sme/joint_frame_bridge_test.zig"} }, .{ .name = "sme-joint-frame-service-check", .tests = .{"tests/sme/joint_frame_service_test.zig"} } },
+}

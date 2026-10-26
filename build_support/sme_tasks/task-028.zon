@@ -1,0 +1,11 @@
+.{
+    .schema_version = 1,
+    .task_id = "TASK-028",
+    .modules = .{
+        .{ .name = "sme-live-wire-encoder", .root_source_file = "src/music/live_semantic_encoder.zig", .optimize = .ReleaseSafe },
+        .{ .name = "sme-author-live-semantic", .root_source_file = "tools/sme_authoring/core/live_semantic.zig", .imports = .{ .{ .name = "bugu_audio", .module = "bugu_audio" }, .{ .name = "sme-author-live-mailbox", .module = "sme-author-live-mailbox" }, .{ .name = "sme-author-preview-v1", .module = "sme-author-preview-v1" } } },
+        .{ .name = "sme-live-codec", .root_source_file = "tools/sme_authoring/core/live_semantic_codec.zig", .optimize = .ReleaseSafe, .imports = .{ .{ .name = "sme-author-live-mailbox", .module = "sme-author-live-mailbox" }, .{ .name = "bugu_audio", .module = "bugu_audio" }, .{ .name = "sme-author-live-semantic", .module = "sme-author-live-semantic" }, .{ .name = "sme-author-preview-v1", .module = "sme-author-preview-v1" }, .{ .name = "sme-live-semantic-job-schedule", .module = "sme-live-semantic-job-schedule" } } },
+    },
+    .checks = .{ .{ .name = "sme-codec-source-check", .tests = .{"tools/sme_authoring/core/live_semantic_codec.zig"} }, .{ .name = "sme-codec-mode-check", .tests = .{"tests/sme/live_codec_mode_test.zig"} }, .{ .name = "sme-live-supply-hash-check", .tests = .{"tests/sme/live_supply_hash_test.zig"} } },
+    .music_imports = .{.{ .name = "sme-live-wire-encoder", .module = "sme-live-wire-encoder" }},
+}

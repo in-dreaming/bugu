@@ -2,6 +2,7 @@
 //! and Opus decoding. Only acceptCompleted publishes PCM. Renderer borrows a
 //! stable SPSC Ring and never enters this service's worker/control methods.
 const std = @import("std");
+const SupplyHasher = @import("music").LiveSemanticFormat.IntegrityHasher;
 const order = @import("sme-capture-order");
 pub const live_semantic = @import("sme-live-semantic");
 const opus = @import("sme-opus");
@@ -1700,7 +1701,7 @@ pub const Service = struct {
             return err;
         };
         fact.edge = .after;
-        std.crypto.hash.sha2.Sha256.hash(destination, &fact.bytes_hash, .{});
+        SupplyHasher.hash(destination, &fact.bytes_hash, .{});
         sink.emit(sink.context, fact);
     }
     fn verifiedRead(context: *anyopaque, offset: u64, destination: []u8) opus.Error!void {
@@ -1734,7 +1735,7 @@ pub const Service = struct {
                 };
                 self.workerFact(.{ .source_read = .{ .asset = slot.asset.sound.key.id, .asset_hash = slot.asset.sound.audio_hash, .slot = slot_index, .generation = slot.generation, .offset = chunk.byte_offset, .length = @intCast(bytes.len), .error_code = 0 } });
                 var hash: [32]u8 = undefined;
-                std.crypto.hash.sha2.Sha256.hash(bytes, &hash, .{});
+                SupplyHasher.hash(bytes, &hash, .{});
                 if (!std.mem.eql(u8, &hash, &chunk.hash)) {
                     self.source_failure = .hash;
                     return error.InvalidContainer;

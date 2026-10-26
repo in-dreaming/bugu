@@ -6,7 +6,7 @@ const music = audio.music;
 pub const admission = @import("sme-author-live-admission");
 pub const mailbox = @import("sme-author-live-mailbox");
 pub const source = @import("sme-author-preview-v1").source;
-pub const semantic = @import("live_semantic.zig");
+pub const semantic = @import("sme-author-live-semantic");
 pub const semantic_recording = @import("live_semantic_recording.zig");
 pub const semantic_file = @import("live_semantic_file.zig");
 pub const semantic_replay = @import("live_semantic_replay.zig");
@@ -62,7 +62,7 @@ pub const TestWaitPoint = struct {
     mode: PacingMode = .legacy_poll,
     role: enum { control, worker },
     edge: enum { before, after },
-    reason: enum { startup, burst_budget, claim_deferred, park, gate_error, control_turn },
+    reason: enum { startup, burst_budget, claim_deferred, park, gate_error, control_turn, idle },
     calls: u8 = 0,
     /// Normal workerStep returns of true; never the catch fallback.
     worked: u8 = 0,
@@ -72,6 +72,14 @@ pub const TestWaitPoint = struct {
     requested_ms: u8,
 };
 pub const TestWaitObserver = struct { context: *anyopaque, call: *const fn (*anyopaque, TestWaitPoint) void };
+const worker_burst_limit = 4;
+
+// Only a normal no-work return proves that another scan in this burst is
+// unnecessary. Error fallbacks must not be mistaken for that result.
+fn endWorkerBurst(mode: PacingMode, worked: bool, deferred: bool, step_failed: bool, completion_failed: bool) bool {
+    return deferred or (mode == .notified_v1 and !worked and !step_failed and !completion_failed);
+}
+
 const WaitProgress = struct {
     value: if (@import("builtin").is_test) TestWaitPoint else void = if (@import("builtin").is_test) .{ .role = .worker, .edge = .before, .reason = .burst_budget, .requested_ms = 1 } else {},
     inline fn reason(self: *WaitProgress, value: @FieldType(TestWaitPoint, "reason")) void {
@@ -385,6 +393,11 @@ pub const Host = struct {
     pub fn acknowledgeClosed(self: *Host) !void {
         try self.channel.acknowledgeClosed();
     }
+    /// The production burst decision, exposed only to deterministic tests.
+    pub const WorkerBurstTests = if (@import("builtin").is_test) struct {
+        pub const limit = worker_burst_limit;
+        pub const endAfterCall = endWorkerBurst;
+    } else struct {};
     /// Isolated custody tests exercise the same park/scope/resume helpers;
     /// they never fabricate an engine drain result in a real Host.
     pub const SnapshotBoundaryTests = if (@import("builtin").is_test) struct {
@@ -718,7 +731,7 @@ pub const Host = struct {
         while (true) {
             if (self.pacingMode() == .notified_v1) self.worker_wake.beginTurn();
             var wait_progress: WaitProgress = .{};
-            for (0..4) |_| {
+            for (0..worker_burst_limit) |_| {
                 if (self.options.semantic) |session| session.emitWorker(.gate_poll);
                 const action = self.gate.workerAction(self.launch_identity.epoch) catch |err| {
                     if (@import("builtin").is_test) if (self.options.test_capture) |capture| capture.workerGate(.{ .action = err });
@@ -758,7 +771,9 @@ pub const Host = struct {
                     },
                     .work => {
                         var deferred = false;
+                        var step_failed = false;
                         const worked = self.workerStep(owner, &deferred) catch |err| blk: {
+                            step_failed = true;
                             wait_progress.failed();
                             if (@import("builtin").is_test and self.worker_error.load(.acquire) == 0) {
                                 std.debug.print("live Worker first error: {s}\n", .{@errorName(err)});
@@ -789,7 +804,13 @@ pub const Host = struct {
                         // A failed initial Service claim did no job work. End
                         // this actual call before yielding to the usual sleep;
                         // don't spend the rest of this burst retrying its CAS.
-                        if (deferred) break;
+                        if (endWorkerBurst(self.pacingMode(), worked, deferred, step_failed, completion_failure != null)) {
+                            if (!deferred) wait_progress.reason(.idle);
+                            // beginTurn already cleared the previous hint before
+                            // checking work. Do not clear here: a notification
+                            // racing with this empty scan must survive into wait.
+                            break;
+                        }
                     },
                 }
             }

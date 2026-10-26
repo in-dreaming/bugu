@@ -22,6 +22,7 @@ pub const Module = struct {
     root_source_file: []const u8,
     imports: []const Import = &.{},
     native: NativeInputs = .{},
+    optimize: ?std.builtin.OptimizeMode = null,
 };
 pub const Target = struct {
     name: []const u8,
@@ -112,6 +113,7 @@ fn loadModuleGraph(b: *std.Build, target: std.Build.ResolvedTarget, optimize: st
     // Link the object itself so production archives contain the implementation.
     const integrity_object = b.addObject(.{
         .name = "sme-live-integrity-sha256",
+        .use_llvm = true,
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/music/live_integrity_hash_backend.zig"),
             .target = target,
@@ -142,7 +144,7 @@ fn loadModuleGraph(b: *std.Build, target: std.Build.ResolvedTarget, optimize: st
             if (modules.contains(module.name)) return error.DuplicateSmeModule;
             const source_entry = try module_sources.getOrPut(module.root_source_file);
             if (source_entry.found_existing) return error.DuplicateSmeModuleSource;
-            const m = b.createModule(.{ .root_source_file = b.path(module.root_source_file), .target = target, .optimize = optimize });
+            const m = b.createModule(.{ .root_source_file = b.path(module.root_source_file), .target = target, .optimize = module.optimize orelse optimize });
             try applyNative(b, m, module.native);
             try modules.put(module.name, m);
         }
@@ -189,6 +191,7 @@ fn add(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.Op
         while (serial_modules.next()) |entry| serial_root.addImport(entry.key_ptr.*, entry.value_ptr.*);
         const serial_runner = b.addTest(.{
             .name = "sme-semantic-serial-runner",
+            .use_llvm = true,
             .root_module = serial_root,
             .filters = &.{"semantic serial independent process bounded recipe entry"},
         });
@@ -225,7 +228,8 @@ fn add(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.Op
     var test_runs: std.StringHashMap(*std.Build.Step) = .init(b.allocator);
     var test_modules: std.StringHashMap(*std.Build.Module) = .init(b.allocator);
     var partitioned_test_runs: std.StringHashMap(*std.Build.Step) = .init(b.allocator);
-    const test_use_llvm = b.option(bool, "sme-test-use-llvm", "Explicit LLVM backend for named SME test roots; unset preserves the default backend");
+    const test_use_llvm = b.option(bool, "sme-test-use-llvm", "LLVM is required for the mixed-mode SME codec graph") orelse true;
+    if (!test_use_llvm) return error.MixedModeRequiresLLVM;
     const partitioned_test_filter = b.option([]const u8, "sme-partitioned544-test-filter", "Compile only matching tests in named partitioned544 checks; default checks are unchanged");
     var resource_roots: std.StringHashMap(void) = .init(b.allocator);
     for (fragments) |fragment| for (fragment.checks) |check| {
@@ -283,6 +287,12 @@ fn add(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.Op
         try test_modules.put(path, root);
     }
 
+    if (test_modules.get("tests/sme/semantic_live_process_test.zig")) |process_root| {
+        const runner = b.addTest(.{ .name = "sme-semantic-live-process-runner", .root_module = process_root, .use_llvm = true });
+        const install = b.addInstallArtifact(runner, .{});
+        b.step("sme-semantic-live-process-build", "Build independent actual record/replay process runner without running it").dependOn(&install.step);
+    }
+
     // Ordinary Host compatibility only. Keep all original test bodies and the
     // full legacy target unchanged; exclude the two private forensic captures.
     if (test_modules.get("tests/sme/author_live_owner_test.zig")) |ordinary_owner_root| {
@@ -297,7 +307,6 @@ fn add(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.Op
         const ordinary_owner_run = b.addRunArtifact(ordinary_owner);
         b.step(ordinary_owner_name, "Run the eight ordinary Host compatibility tests without private forensic captures")
             .dependOn(&ordinary_owner_run.step);
-
     }
 
     // Build-only compatibility artifact: the external launcher owns distinct
@@ -313,7 +322,6 @@ fn add(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.Op
         const lifecycle_install = b.addInstallArtifact(lifecycle_runner, .{});
         b.step("sme-live-lifecycle-process-build", "Build only the retained lifecycle process compatibility test")
             .dependOn(&lifecycle_install.step);
-
     }
 
     // Clone only after canonical test imports are complete. All defaults keep
@@ -371,8 +379,8 @@ fn add(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.Op
             };
             try applyImports(root, item.imports, target_modules);
             const artifact = switch (item.kind) {
-                .executable => b.addExecutable(.{ .name = item.name, .root_module = root }),
-                .static_library => b.addLibrary(.{ .name = item.name, .linkage = .static, .root_module = root }),
+                .executable => b.addExecutable(.{ .name = item.name, .root_module = root, .use_llvm = true }),
+                .static_library => b.addLibrary(.{ .name = item.name, .linkage = .static, .root_module = root, .use_llvm = true }),
             };
             // Preserve an actual production-check archive for independent
             // downstream integrity-object linkage qualification (no install).

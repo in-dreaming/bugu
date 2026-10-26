@@ -2,14 +2,15 @@
 //! The exact build identity binds enum codes and this field-order schema. Only
 //! the non-RT consumer encodes; execution decoders reject error-valued inputs.
 const std = @import("std");
+pub const compilation_mode = @import("builtin").mode;
 const audio = @import("bugu_audio");
-pub const semantic = @import("live_semantic.zig");
+pub const semantic = @import("sme-author-live-semantic");
 pub const format = audio.music.LiveSemanticFormat;
 pub const cuts = audio.runtime.live_semantic;
 pub const stream = audio.runtime.streaming.stream;
 pub const source = @import("sme-author-preview-v1").source;
 pub const payload_overlap = @import("live_semantic_payload_overlap.zig");
-pub const job_schedule = @import("live_semantic_job_schedule.zig");
+pub const job_schedule = @import("sme-live-semantic-job-schedule");
 pub const Error = format.Error || payload_overlap.Error || job_schedule.Error || error{ UnsupportedValue, BorrowedValue, InvalidEnum, InvalidBoolean, ErrorInput, CrossedScan };
 pub const schema_version: u16 = 4;
 pub const Family = enum(u16) {

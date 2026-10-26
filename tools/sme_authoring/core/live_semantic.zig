@@ -6,6 +6,7 @@
 //! replay-owned threads at these boundaries, never return expected outcomes.
 //! Capture failure invalidates evidence, never native work.
 const std = @import("std");
+pub const compilation_mode = @import("builtin").mode;
 const audio = @import("bugu_audio");
 const music = audio.music;
 const mailbox = @import("sme-author-live-mailbox");

@@ -3,6 +3,7 @@
 //! The Host must separately validate the finite semantic schema and lifecycle.
 //! No legacy profile, test fixture, runtime, IO, or allocator is imported here.
 const std = @import("std");
+pub const compilation_mode = @import("builtin").mode;
 pub const IntegrityHash = @import("live_integrity_hash.zig");
 pub const IntegrityHasher = IntegrityHash.Sha256;
 const Sha256 = IntegrityHasher;
@@ -28,30 +29,7 @@ pub const Class = enum(u8) { input = 0, reference = 1 };
 /// Must be a bounded, pure finite-schema check. It runs on the producer.
 pub const Validator = *const fn (family: u16, class: Class) bool;
 pub const Identity = struct { build: Hash, bank: Hash, config: Hash, source: Hash };
-pub const Error = error{
-    Poisoned,
-    Closed,
-    Overflow,
-    CounterOverflow,
-    InvalidOrder,
-    UnsupportedFamily,
-    BufferTooSmall,
-    InvalidLength,
-    UnsupportedProfile,
-    UnsupportedVersion,
-    Noncanonical,
-    HashMismatch,
-    WrongBuild,
-    WrongBank,
-    WrongConfig,
-    WrongSource,
-    Incomplete,
-    NotDrained,
-    CountMismatch,
-    AlreadySealed,
-    Truncated,
-    TrailingBytes,
-};
+pub const Error = @import("sme-live-wire-encoder").Error;
 pub const Poison = enum(u8) {
     none = 0,
     overflow = 1,
@@ -300,26 +278,7 @@ comptime {
 
 /// Explicit scalar methods only: no struct reflection or native padding dump.
 /// For PCM use f32Bits with the raw u32 bits copied out of native storage.
-pub const Encoder = struct {
-    bytes: []u8,
-    offset: usize = 0,
-    pub fn int(self: *Encoder, comptime T: type, value: T) Error!void {
-        if (self.offset > self.bytes.len or self.bytes.len - self.offset < @sizeOf(T)) return error.BufferTooSmall;
-        std.mem.writeInt(T, self.bytes[self.offset..][0..@sizeOf(T)], value, .little);
-        self.offset += @sizeOf(T);
-    }
-    pub fn raw(self: *Encoder, bytes: []const u8) Error!void {
-        if (self.offset > self.bytes.len or self.bytes.len - self.offset < bytes.len) return error.BufferTooSmall;
-        @memcpy(self.bytes[self.offset..][0..bytes.len], bytes);
-        self.offset += bytes.len;
-    }
-    pub fn f32Bits(self: *Encoder, bits: u32) Error!void {
-        try self.int(u32, bits);
-    }
-    pub fn result(self: Encoder) []const u8 {
-        return self.bytes[0..self.offset];
-    }
-};
+pub const Encoder = @import("sme-live-wire-encoder").Encoder;
 pub const Decoder = struct {
     bytes: []const u8,
     offset: usize = 0,
